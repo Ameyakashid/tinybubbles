@@ -15,7 +15,7 @@ function usage() {
   return [
     'Usage: node scripts/migration/csv-to-quickadd-text.mjs <tasks.csv> [options]',
     '',
-    'Converts a simple CSV export into one Mindwtr quick-add task per line.',
+    'Converts a simple CSV export into one Tiny Bubbles quick-add task per line.',
     '',
     'Options:',
     '  --output <file>     Write lines to a .txt file instead of stdout',

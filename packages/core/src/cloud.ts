@@ -80,7 +80,7 @@ export class CloudHttpError extends Error {
 }
 
 const cloudHttpError = (label: string, res: Response): CloudHttpError => {
-    const hint = res.status === 405 ? ' — this URL may not be a Mindwtr sync server (check host and port)' : '';
+    const hint = res.status === 405 ? ' — this URL may not be a Tiny Bubbles sync server (check host and port)' : '';
     return new CloudHttpError(`${label} failed (${res.status}): ${res.statusText}${hint}`, res.status);
 };
 
@@ -166,7 +166,7 @@ export async function cloudGetJson<T>(
     } catch (error) {
         if (/^\s*(?:<!doctype\s+html|<html\b)/i.test(text)) {
             throw new Error(
-                'Cloud GET failed: server returned HTML instead of Mindwtr sync data — check the Self-Hosted URL, host, and port',
+                'Cloud GET failed: server returned HTML instead of Tiny Bubbles sync data — check the Self-Hosted URL, host, and port',
             );
         }
         throw new Error(`Cloud GET failed: invalid JSON (${(error as Error).message})`);

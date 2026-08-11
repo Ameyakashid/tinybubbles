@@ -88,9 +88,9 @@ vi.mock('react-native', async () => {
     };
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => ({
-    resolveReviewStepSession: (await importOriginal<typeof import('@mindwtr/core')>()).resolveReviewStepSession,
-    buildQuickAddParseOptions: (await importOriginal<typeof import('@mindwtr/core')>()).buildQuickAddParseOptions,
+vi.mock('@tinybubbles/core', async (importOriginal) => ({
+    resolveReviewStepSession: (await importOriginal<typeof import('@tinybubbles/core')>()).resolveReviewStepSession,
+    buildQuickAddParseOptions: (await importOriginal<typeof import('@tinybubbles/core')>()).buildQuickAddParseOptions,
     useTaskStore: Object.assign(() => storeState, { getState: () => storeState }),
     shallow: vi.fn((a, b) => a === b),
     normalizeClockTimeInput: vi.fn(() => null),

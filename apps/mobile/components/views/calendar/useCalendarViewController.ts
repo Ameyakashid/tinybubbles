@@ -45,7 +45,7 @@ import {
   type ExternalCalendarSubscription,
   type Task,
   useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
   executeComposerSave,
   openComposerAt,
@@ -61,19 +61,19 @@ import {
   type CalendarComposerError,
   type CalendarComposerMode,
   type CalendarComposerState,
-} from '@mindwtr/core/calendar-composer';
+} from '@tinybubbles/core/calendar-composer';
 import {
   buildCalendarDayItems,
   getTaskCompletionInstant,
   isCompletedCalendarTask,
   isSchedulableCalendarTask,
-} from '@mindwtr/core/calendar-day-items';
+} from '@tinybubbles/core/calendar-day-items';
 
 import { useTheme } from '../../../contexts/theme-context';
 import { useToast } from '../../../contexts/toast-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { useLanguage } from '../../../contexts/language-context';
 import { canOpenExternalCalendarEvent, fetchExternalCalendarEvents, openExternalCalendarEvent } from '../../../lib/external-calendar';
 import { logError } from '../../../lib/app-log';

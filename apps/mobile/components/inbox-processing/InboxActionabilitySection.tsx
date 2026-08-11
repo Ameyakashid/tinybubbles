@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { BookOpen, CheckCircle2, Clock3, Cloud, Trash2, type LucideIcon } from 'lucide-react-native';
-import type { QuickDatePreset } from '@mindwtr/core';
+import type { QuickDatePreset } from '@tinybubbles/core';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 
 import { styles } from '../inbox-processing-modal.styles';

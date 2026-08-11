@@ -5,7 +5,7 @@ Status: Superseded by ADR 0007
 
 ## Context
 
-Mindwtr is local-first and syncs across multiple devices and providers. Sync conflicts must converge deterministically without central coordination, while still preserving deletes safely.
+Tiny Bubbles is local-first and syncs across multiple devices and providers. Sync conflicts must converge deterministically without central coordination, while still preserving deletes safely.
 
 Pure timestamp-based last-write-wins is not sufficient on its own because:
 
@@ -13,7 +13,7 @@ Pure timestamp-based last-write-wins is not sufficient on its own because:
 - deletes must not disappear during merges
 - equal timestamps still need deterministic resolution
 
-This ADR captures the original delete-vs-live ambiguity rule that shipped before Mindwtr 0.8.2. ADR 0007 supersedes the delete-vs-live winner rule while keeping the rest of the revision-aware merge approach in place.
+This ADR captures the original delete-vs-live ambiguity rule that shipped before Tiny Bubbles 0.8.2. ADR 0007 supersedes the delete-vs-live winner rule while keeping the rest of the revision-aware merge approach in place.
 
 ## Decision
 

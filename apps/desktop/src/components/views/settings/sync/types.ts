@@ -1,4 +1,4 @@
-import type { AppSettings, SettingsSyncPreferences, SyncBackend } from '@mindwtr/core';
+import type { AppSettings, SettingsSyncPreferences, SyncBackend } from '@tinybubbles/core';
 
 export type SettingsSyncLabels = {
     backup: string;
@@ -30,8 +30,8 @@ export type SettingsSyncLabels = {
     importDgtDesc: string;
     importOmniFocus: string;
     importOmniFocusDesc: string;
-    importMindwtrCsv: string;
-    importMindwtrCsvDesc: string;
+    importTinyBubblesCsv: string;
+    importTinyBubblesCsvDesc: string;
     diagnostics: string;
     diagnosticsDesc: string;
     analyticsHeartbeat: string;
@@ -259,7 +259,7 @@ export type TransferAction =
     | 'import:ticktick'
     | 'import:dgt'
     | 'import:omnifocus'
-    | 'import:mindwtr-csv';
+    | 'import:tinybubbles-csv';
 
 export type SettingsDataTransferProps = {
     transferAction: TransferAction;
@@ -270,7 +270,7 @@ export type SettingsDataTransferProps = {
     onImportTickTick: () => Promise<void> | void;
     onImportDgt: () => Promise<void> | void;
     onImportOmniFocus: () => Promise<void> | void;
-    onImportMindwtrCsv: () => Promise<void> | void;
+    onImportTinyBubblesCsv: () => Promise<void> | void;
 };
 
 export type SettingsAttachmentsProps = {

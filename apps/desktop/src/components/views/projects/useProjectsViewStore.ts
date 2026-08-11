@@ -1,4 +1,4 @@
-import { shallow, useTaskStore } from '@mindwtr/core';
+import { shallow, useTaskStore } from '@tinybubbles/core';
 
 // Store reads ProjectsView needs for its own rendering (sidebar, area manager,
 // project/area DnD, creation). Task/section slices the workspace consumes now

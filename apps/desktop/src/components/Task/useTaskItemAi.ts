@@ -8,7 +8,7 @@ import {
     createAIProvider,
     generateUUID,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { buildAIConfig, buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
 import { logWarn } from '../../lib/app-log';
 

@@ -1,4 +1,4 @@
-// MindwtrService documents 28 method signatures but no semantics. This suite is where the
+// TinyBubblesService documents 28 method signatures but no semantics. This suite is where the
 // semantics actually live: one fixture table, run through BOTH real adapters (the local
 // SQLite path in queries.ts and the cloud REST path in cloud-service.ts), asserting the same
 // result. Adding a new sort/filter rule to the contract means adding a row here, not a
@@ -9,11 +9,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 
 import { createCloudService } from './cloud-service.js';
 import type { ListTasksInput, Task } from './queries.js';
-import { createService, type MindwtrService } from './service.js';
+import { createService, type TinyBubblesService } from './service.js';
 
 const iso = (day: string): string => `2026-03-${day}T00:00:00.000Z`;
 
@@ -116,17 +116,17 @@ const sharedCases: ConformanceCase[] = [
   },
 ];
 
-describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
-  let local: MindwtrService;
-  let cloud: MindwtrService;
+describe('TinyBubblesService conformance: local SQLite vs cloud REST', () => {
+  let local: TinyBubblesService;
+  let cloud: TinyBubblesService;
   let tempDir = '';
 
   beforeAll(async () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'mindwtr-mcp-conformance-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'tinybubbles-mcp-conformance-'));
     writeFileSync(join(tempDir, 'data.json'), JSON.stringify(fixtureData));
-    local = createService({ dbPath: join(tempDir, 'mindwtr.db'), readonly: false });
+    local = createService({ dbPath: join(tempDir, 'tinybubbles.db'), readonly: false });
     cloud = createCloudService({
-      url: 'https://mindwtr.example.com',
+      url: 'https://tinybubbles.example.com',
       token: 'conformance-test-token',
       fetcher: async () => new Response(JSON.stringify(fixtureData), { status: 200 }),
     });
@@ -171,7 +171,7 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
   });
 
   // core-adapter.ts used to throw a plain Error for a missing id on update/delete/rename,
-  // which fell through getMindwtrToolErrorCode to 'internal_error' — while cloud-service.ts's
+  // which fell through getTinyBubblesToolErrorCode to 'internal_error' — while cloud-service.ts's
   // mapCloudError already mapped its own 404s to NotFoundError ('not_found'). Same user
   // mistake (editing a task that doesn't exist), two different reported codes. This pins both
   // adapters returning the same code now.
@@ -183,7 +183,7 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
 
     test('cloud: updating a missing task yields code not_found', async () => {
       const notFoundCloud = createCloudService({
-        url: 'https://mindwtr.example.com',
+        url: 'https://tinybubbles.example.com',
         token: 'conformance-test-token',
         fetcher: async () => new Response(JSON.stringify({ error: 'Task not found' }), { status: 404 }),
       });
@@ -204,7 +204,7 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
 
     test('cloud: addTask with a nonexistent areaId yields code validation_error', async () => {
       const invalidAreaCloud = createCloudService({
-        url: 'https://mindwtr.example.com',
+        url: 'https://tinybubbles.example.com',
         token: 'conformance-test-token',
         fetcher: async () => new Response(JSON.stringify({ error: 'Area not found' }), { status: 400 }),
       });
@@ -220,15 +220,15 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
   // must land correctly through BOTH the local core adapter and the cloud adapter. Uses its
   // own services (not the shared `local`/`cloud` above) so writing a task here can't leak
   // state into the read-only listTasks fixtures elsewhere in this file.
-  describe('mindwtr_add_task write-surface: checklist + areaId + reviewAt reach both adapters', () => {
+  describe('tinybubbles_add_task write-surface: checklist + areaId + reviewAt reach both adapters', () => {
     let writeTempDir = '';
-    let writeLocal: MindwtrService;
+    let writeLocal: TinyBubblesService;
 
     beforeAll(() => {
-      writeTempDir = mkdtempSync(join(tmpdir(), 'mindwtr-mcp-write-fixture-'));
+      writeTempDir = mkdtempSync(join(tmpdir(), 'tinybubbles-mcp-write-fixture-'));
       const seedData: AppData = { tasks: [], projects: [], sections: [], areas: [], people: [], settings: {} };
       writeFileSync(join(writeTempDir, 'data.json'), JSON.stringify(seedData));
-      writeLocal = createService({ dbPath: join(writeTempDir, 'mindwtr.db'), readonly: false });
+      writeLocal = createService({ dbPath: join(writeTempDir, 'tinybubbles.db'), readonly: false });
     });
 
     afterAll(async () => {
@@ -255,7 +255,7 @@ describe('MindwtrService conformance: local SQLite vs cloud REST', () => {
     test('cloud: forwards checklist, areaId, and reviewAt in the POST /tasks props bag', async () => {
       let capturedBody: { title?: string; props?: Record<string, unknown> } | undefined;
       const writeCloud = createCloudService({
-        url: 'https://mindwtr.example.com',
+        url: 'https://tinybubbles.example.com',
         token: 'conformance-test-token',
         fetcher: async (_input, init) => {
           if ((init?.method ?? 'GET') !== 'POST') return new Response(JSON.stringify(fixtureData), { status: 200 });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AppData, Person, Project, Task } from '@mindwtr/core';
+import type { AppData, Person, Project, Task } from '@tinybubbles/core';
 
 const fileSystemMocks = vi.hoisted(() => ({
     documentDirectory: 'file:///data/Documents/',

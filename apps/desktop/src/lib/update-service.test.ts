@@ -35,17 +35,17 @@ describe("update-service channel selection", () => {
           results: [
             {
               version: "1.1.0",
-              trackViewUrl: "https://apps.apple.com/app/mindwtr/id6758597144",
+              trackViewUrl: "https://github.com/tinybubbles-app/tinybubbles/releases",
             },
           ],
         });
       }
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.9.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.9.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.9.0",
           body: "latest notes",
           assets: [],
         });
@@ -71,11 +71,11 @@ describe("update-service channel selection", () => {
         return jsonResponse({}, 500);
       }
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.2.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.2.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.2.0",
           body: "latest notes",
           assets: [],
         });
@@ -96,15 +96,15 @@ describe("update-service channel selection", () => {
   it("keeps homebrew installs on homebrew version even if github is newer", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("formulae.brew.sh/api/cask/mindwtr.json")) {
+      if (url.includes("formulae.brew.sh/api/cask/tinybubbles.json")) {
         return jsonResponse({ version: "1.1.0" });
       }
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.9.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.9.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.9.0",
           body: "latest notes",
           assets: [],
         });
@@ -123,22 +123,22 @@ describe("update-service channel selection", () => {
     expect(result.sourceFallback).toBe(false);
   });
 
-  it("checks mindwtr AUR package for source installs", async () => {
+  it("checks tinybubbles AUR package for source installs", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (
-        /aur\.archlinux\.org\/rpc\/\?v=5&type=info&arg%5B%5D=mindwtr(?:$|&)/.test(
+        /aur\.archlinux\.org\/rpc\/\?v=5&type=info&arg%5B%5D=tinybubbles(?:$|&)/.test(
           url,
         )
       ) {
         return jsonResponse({ results: [{ Version: "1.2.0-2" }] });
       }
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.9.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.9.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.9.0",
           body: "latest notes",
           assets: [],
         });
@@ -154,27 +154,27 @@ describe("update-service channel selection", () => {
     expect(result.hasUpdate).toBe(true);
     expect(result.source).toBe("aur");
     expect(result.releaseUrl).toBe(
-      "https://aur.archlinux.org/packages/mindwtr",
+      "https://aur.archlinux.org/packages/tinybubbles",
     );
     expect(result.latestVersion).toBe("1.2.0");
   });
 
-  it("checks mindwtr-bin AUR package for binary installs", async () => {
+  it("checks tinybubbles-bin AUR package for binary installs", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (
-        /aur\.archlinux\.org\/rpc\/\?v=5&type=info&arg%5B%5D=mindwtr-bin(?:$|&)/.test(
+        /aur\.archlinux\.org\/rpc\/\?v=5&type=info&arg%5B%5D=tinybubbles-bin(?:$|&)/.test(
           url,
         )
       ) {
         return jsonResponse({ results: [{ Version: "1.3.0-1" }] });
       }
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.9.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.9.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.9.0",
           body: "latest notes",
           assets: [],
         });
@@ -188,7 +188,7 @@ describe("update-service channel selection", () => {
     expect(result.hasUpdate).toBe(true);
     expect(result.source).toBe("aur");
     expect(result.releaseUrl).toBe(
-      "https://aur.archlinux.org/packages/mindwtr-bin",
+      "https://aur.archlinux.org/packages/tinybubbles-bin",
     );
     expect(result.latestVersion).toBe("1.3.0");
   });
@@ -204,11 +204,11 @@ describe("update-service channel selection", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.9.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.9.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.9.0",
           body: "latest notes",
           assets: [],
         });
@@ -231,16 +231,16 @@ describe("update-service channel selection", () => {
       const url = String(input);
       if (url.includes("community.chocolatey.org/api/v2/Packages()")) {
         return new Response(
-          "<feed><entry><id>http://community.chocolatey.org/api/v2/Packages(Id='mindwtr',Version='1.1.0')</id></entry></feed>",
+          "<feed><entry><id>http://community.chocolatey.org/api/v2/Packages(Id='tinybubbles',Version='1.1.0')</id></entry></feed>",
           { status: 200 },
         );
       }
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.9.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.9.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.9.0",
           body: "latest notes",
           assets: [],
         });
@@ -257,7 +257,7 @@ describe("update-service channel selection", () => {
     expect(result.source).toBe("chocolatey");
     expect(result.latestVersion).toBe("1.1.0");
     expect(result.releaseUrl).toBe(
-      "https://community.chocolatey.org/packages/mindwtr",
+      "https://community.chocolatey.org/packages/tinybubbles",
     );
   });
 
@@ -276,22 +276,22 @@ describe("update-service channel selection", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v1.2.0",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v1.2.0",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v1.2.0",
           body: "latest notes",
           assets: [
             {
-              name: "mindwtr_1.2.0_x64-setup.exe",
+              name: "tinybubbles_1.2.0_x64-setup.exe",
               browser_download_url:
-                "https://example.com/mindwtr_1.2.0_x64-setup.exe",
+                "https://example.com/tinybubbles_1.2.0_x64-setup.exe",
             },
             {
-              name: "mindwtr_1.2.0_windows_x64_portable.zip",
+              name: "tinybubbles_1.2.0_windows_x64_portable.zip",
               browser_download_url:
-                "https://example.com/mindwtr_1.2.0_windows_x64_portable.zip",
+                "https://example.com/tinybubbles_1.2.0_windows_x64_portable.zip",
             },
           ],
         });
@@ -305,7 +305,7 @@ describe("update-service channel selection", () => {
     });
 
     expect(result.downloadUrl).toBe(
-      "https://example.com/mindwtr_1.2.0_windows_x64_portable.zip",
+      "https://example.com/tinybubbles_1.2.0_windows_x64_portable.zip",
     );
     expect(normalizeInstallSource("portable")).toBe("portable");
   });
@@ -314,11 +314,11 @@ describe("update-service channel selection", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (
-        url.includes("api.github.com/repos/dongdongbh/Mindwtr/releases/latest")
+        url.includes("api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest")
       ) {
         return jsonResponse({
           tag_name: "v9.9.9",
-          html_url: "https://github.com/dongdongbh/Mindwtr/releases/tag/v9.9.9",
+          html_url: "https://github.com/tinybubbles-app/tinybubbles/releases/tag/v9.9.9",
           body: "github notes",
           assets: [],
         });
@@ -350,13 +350,13 @@ describe("update-service channel selection", () => {
 
   it("prefers explicitly windows-named portable assets when multiple portable zips exist", () => {
     const asset = findPortableZipAsset([
-      { name: "mindwtr_1.2.0_portable.zip", url: "https://example.com/generic.zip" },
+      { name: "tinybubbles_1.2.0_portable.zip", url: "https://example.com/generic.zip" },
       {
-        name: "mindwtr_1.2.0_windows_x64_portable.zip",
+        name: "tinybubbles_1.2.0_windows_x64_portable.zip",
         url: "https://example.com/windows.zip",
       },
     ]);
 
-    expect(asset?.name).toBe("mindwtr_1.2.0_windows_x64_portable.zip");
+    expect(asset?.name).toBe("tinybubbles_1.2.0_windows_x64_portable.zip");
   });
 });

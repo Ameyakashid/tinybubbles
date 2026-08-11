@@ -1,4 +1,4 @@
-import { useTaskStore, type AppSettings } from '@mindwtr/core';
+import { useTaskStore, type AppSettings } from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { invokeNative } from './tauri-invoke';
 

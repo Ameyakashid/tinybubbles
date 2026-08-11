@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 import { TaskListView, type TaskListViewProps } from './task-list-view';
 

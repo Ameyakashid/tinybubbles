@@ -75,7 +75,7 @@ const STUB_UNIT_TRANSLATIONS: Record<string, string> = {
 const stubT = (key: string): string => STUB_UNIT_TRANSLATIONS[key] ?? key;
 
 describe('calendar scheduling helpers', () => {
-    it('maps Mindwtr time estimates to calendar minutes', () => {
+    it('maps Tiny Bubbles time estimates to calendar minutes', () => {
         expect(timeEstimateToMinutes('5min')).toBe(5);
         expect(timeEstimateToMinutes('1hr')).toBe(60);
         expect(timeEstimateToMinutes('4hr+')).toBe(240);
@@ -84,7 +84,7 @@ describe('calendar scheduling helpers', () => {
         expect(timeEstimateToMinutes('2hr', { enabled: false })).toBe(30);
     });
 
-    it('maps calendar minutes back to exact Mindwtr time estimates', () => {
+    it('maps calendar minutes back to exact Tiny Bubbles time estimates', () => {
         expect(minutesToTimeEstimate(15)).toBe('15min');
         expect(minutesToTimeEstimate(45)).toBe('custom:45');
         expect(minutesToTimeEstimate(241)).toBe('custom:241');
@@ -458,12 +458,12 @@ describe('buildCalendarPushEventFields (#743)', () => {
         expect(result.notes).toContain('Link: https://example.com/doc');
     });
 
-    it('drops internal mindwtr:// links that do not resolve in external calendars', () => {
+    it('drops internal tinybubbles:// links that do not resolve in external calendars', () => {
         const result = buildCalendarPushEventFields(
-            task({ attachments: [linkAttachment('mindwtr://task/abc')] }),
+            task({ attachments: [linkAttachment('tinybubbles://task/abc')] }),
         );
         expect(result.url).toBeNull();
-        expect(result.notes).not.toContain('mindwtr://');
+        expect(result.notes).not.toContain('tinybubbles://');
     });
 
     it('prepends a leading note ahead of metadata and description', () => {

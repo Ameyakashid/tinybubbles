@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getStatusColor, type TaskStatus } from '@mindwtr/core';
+import { getStatusColor, type TaskStatus } from '@tinybubbles/core';
 import { resolveStatusColors } from './use-status-colors';
 
 const STATUSES: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'reference', 'done', 'archived'];

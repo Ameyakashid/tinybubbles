@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { createEvent, fireEvent, render, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { useTaskStore, type Task } from '@mindwtr/core';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 import { ChecklistField, reorderChecklistItems } from './ChecklistField';
 
 const initialTaskState = useTaskStore.getState();

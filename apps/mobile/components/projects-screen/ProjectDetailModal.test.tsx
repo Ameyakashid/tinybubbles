@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, Dimensions, Keyboard, KeyboardAvoidingView, Modal, Platform, TextInput } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Project, Section, Task } from '@mindwtr/core';
+import type { Project, Section, Task } from '@tinybubbles/core';
 
 const mockScrollTo = vi.hoisted(() => vi.fn());
 const mockScrollToOffset = vi.hoisted(() => vi.fn());
@@ -98,8 +98,8 @@ const storeActions = vi.hoisted(() => ({
     updateSection: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@tinybubbles/core')>();
     const useTaskStore = Object.assign(
         (selector?: (state: typeof storeActions) => unknown) => (selector ? selector(storeActions) : storeActions),
         { getState: () => storeActions, subscribe: () => () => {} },

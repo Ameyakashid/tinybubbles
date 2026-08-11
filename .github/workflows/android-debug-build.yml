@@ -77,7 +77,7 @@ jobs:
           ARCHS: ${{ inputs.archs }}
           EXPO_NO_TELEMETRY: "1"
           DONATION_PROMPT_ENABLED: "true"
-          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
 
       - name: Prepare debug artifacts
         run: |
@@ -85,7 +85,7 @@ jobs:
           mkdir -p android-debug-artifacts
           cp apps/mobile/build/*-debug.apk android-debug-artifacts/
           {
-            echo "Mindwtr Android debug APK"
+            echo "Tiny Bubbles Android debug APK"
             echo "Commit: ${GITHUB_SHA}"
             echo "ABIs: ${{ inputs.archs }}"
             echo

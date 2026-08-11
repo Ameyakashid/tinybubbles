@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 type UseTaskEditPreviewParams = {
     editedProjectId?: string;

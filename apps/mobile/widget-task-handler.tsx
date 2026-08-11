@@ -1,7 +1,7 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerWidgetTaskHandler, type WidgetTaskHandler } from 'react-native-android-widget';
-import { type AppData } from '@mindwtr/core';
+import { type AppData } from '@tinybubbles/core';
 
 import { buildTasksWidgetTree } from './components/TasksWidget';
 import {

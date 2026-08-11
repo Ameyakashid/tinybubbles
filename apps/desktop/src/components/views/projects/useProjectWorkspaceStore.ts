@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AREA_FILTER_NONE, shallow, useTaskStore, type Area, type Task } from '@mindwtr/core';
+import { AREA_FILTER_NONE, shallow, useTaskStore, type Area, type Task } from '@tinybubbles/core';
 
 const EMPTY_PROJECT_TASKS: readonly Task[] = [];
 

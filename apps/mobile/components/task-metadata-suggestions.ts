@@ -1,4 +1,4 @@
-import { getPersonSuggestionNames, type Person, type Task } from '@mindwtr/core';
+import { getPersonSuggestionNames, type Person, type Task } from '@tinybubbles/core';
 
 export const getAssignedToSuggestions = (
   tasks: Task[],

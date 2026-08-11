@@ -1,6 +1,6 @@
 # Performance Budgets
 
-Mindwtr uses generated large-store tests to catch performance regressions before users hit them. The suite collects no user telemetry.
+Tiny Bubbles uses generated large-store tests to catch performance regressions before users hit them. The suite collects no user telemetry.
 
 ## Command
 

@@ -67,7 +67,7 @@ describe('cloud sync http helpers', () => {
     it('explains HTML responses from the wrong self-hosted endpoint', async () => {
         const fetcher = vi.fn(async () => okResponse('<!doctype html><html></html>'));
         await expect(cloudGetJson('https://example.com/v1/data', { fetcher })).rejects.toThrow(
-            'server returned HTML instead of Mindwtr sync data — check the Self-Hosted URL, host, and port',
+            'server returned HTML instead of Tiny Bubbles sync data — check the Self-Hosted URL, host, and port',
         );
     });
 
@@ -137,7 +137,7 @@ describe('cloud sync http helpers', () => {
     it('appends a wrong-server hint on 405 for cloud GET', async () => {
         const fetcher = vi.fn(async () => errorResponse(405, 'Method Not Allowed'));
         await expect(cloudGetJson('https://example.com/v1/data', { fetcher })).rejects.toThrow(
-            'Cloud GET failed (405): Method Not Allowed — this URL may not be a Mindwtr sync server (check host and port)',
+            'Cloud GET failed (405): Method Not Allowed — this URL may not be a Tiny Bubbles sync server (check host and port)',
         );
     });
 
@@ -146,7 +146,7 @@ describe('cloud sync http helpers', () => {
         await expect(
             cloudPutJson('https://example.com/v1/data', { hello: 'world' }, { fetcher }),
         ).rejects.toThrow(
-            'Cloud PUT failed (405): Method Not Allowed — this URL may not be a Mindwtr sync server (check host and port)',
+            'Cloud PUT failed (405): Method Not Allowed — this URL may not be a Tiny Bubbles sync server (check host and port)',
         );
     });
 
@@ -156,7 +156,7 @@ describe('cloud sync http helpers', () => {
             'Cloud GET failed (500): Internal Server Error',
         );
         await expect(cloudGetJson('https://example.com/v1/data', { fetcher })).rejects.not.toThrow(
-            /may not be a Mindwtr sync server/,
+            /may not be a Tiny Bubbles sync server/,
         );
     });
 
@@ -305,7 +305,7 @@ describe('calendar feed URLs', () => {
     });
 
     it('keeps a reverse-proxy path prefix', () => {
-        expect(buildCloudCalendarFeedUrl('https://example.com/mindwtr/v1/data', 'abc'))
-            .toBe('https://example.com/mindwtr/v1/calendar/abc.ics');
+        expect(buildCloudCalendarFeedUrl('https://example.com/tinybubbles/v1/data', 'abc'))
+            .toBe('https://example.com/tinybubbles/v1/calendar/abc.ics');
     });
 });

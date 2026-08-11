@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef } from 'react';
 import { FlatList, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import type { Task, TaskStatus } from '@mindwtr/core';
+import type { Task, TaskStatus } from '@tinybubbles/core';
 
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import type { ThemeColors } from '@/hooks/use-theme-colors';

@@ -1,7 +1,7 @@
-import type { TaskSortBy } from '@mindwtr/core';
+import type { TaskSortBy } from '@tinybubbles/core';
 import { DONE_TASK_LIST_SORT_OPTIONS } from '@/lib/task-list-sort';
 
-export const DONE_LIST_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:done:v1';
+export const DONE_LIST_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:done:v1';
 export const DONE_LIST_GROUP_OPTIONS = ['none', 'completedDate', 'area', 'project', 'tag'] as const;
 export type DoneListGroupBy = typeof DONE_LIST_GROUP_OPTIONS[number];
 

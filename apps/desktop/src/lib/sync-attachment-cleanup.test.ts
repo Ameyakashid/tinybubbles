@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LocalSyncAbort, type AppData } from '@mindwtr/core';
+import { LocalSyncAbort, type AppData } from '@tinybubbles/core';
 
 import {
     cleanupOrphanedAttachments,

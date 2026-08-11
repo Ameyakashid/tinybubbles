@@ -8,7 +8,7 @@ import {
   RECURRENCE_INTERVAL_MAX,
   type Recurrence,
   type RelativeStartOffset,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import * as z from 'zod';
 
 import { ValidationError } from './errors.js';
@@ -186,7 +186,7 @@ const isSupportedRRule = (value: string): boolean => {
     if (key === 'WKST' && !['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'].includes(raw.toUpperCase())) return false;
     if (key === 'COUNT' && !isPositiveInteger(raw)) return false;
     if (key === 'UNTIL' && !isValidRRuleUntil(raw)) return false;
-    if (!['FREQ', 'INTERVAL', 'BYDAY', 'BYMONTHDAY', 'WKST', 'COUNT', 'UNTIL', 'X-MINDWTR-SERIES-ID'].includes(key)) return false;
+    if (!['FREQ', 'INTERVAL', 'BYDAY', 'BYMONTHDAY', 'WKST', 'COUNT', 'UNTIL', 'X-TINYBUBBLES-SERIES-ID'].includes(key)) return false;
   }
   const recurrence = normalizeRecurrenceForLoad(value);
   return seen.has('FREQ') && Boolean(recurrence && isCompatibleRecurrence(recurrence));

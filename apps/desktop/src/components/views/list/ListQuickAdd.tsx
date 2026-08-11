@@ -1,5 +1,5 @@
 import type { FormEvent, RefObject } from 'react';
-import type { Area, Project } from '@mindwtr/core';
+import type { Area, Project } from '@tinybubbles/core';
 import { Mic, Plus } from 'lucide-react';
 import { TaskInput } from '../../Task/TaskInput';
 import { cn } from '../../../lib/utils';

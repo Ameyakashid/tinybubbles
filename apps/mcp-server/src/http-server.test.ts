@@ -11,7 +11,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { ValidationError } from './errors.js';
 import { parseArgs } from './flags.js';
 import {
-  createMindwtrHttpServer,
+  createTinyBubblesHttpServer,
   DEFAULT_HTTP_HOST,
   DEFAULT_HTTP_PORT,
   isAuthorizedBearerToken,
@@ -21,8 +21,8 @@ import {
   resolveHttpConfig,
   startHttpServer,
 } from './http-server.js';
-import { createMindwtrMcpServer, resolveServerConfig, type ServerConfig } from './index.js';
-import { createService, type MindwtrService } from './service.js';
+import { createTinyBubblesMcpServer, resolveServerConfig, type ServerConfig } from './index.js';
+import { createService, type TinyBubblesService } from './service.js';
 
 const VALID_TOKEN = 'a'.repeat(32);
 
@@ -68,10 +68,10 @@ describe('resolveHttpConfig', () => {
 
   test('reads host/port/token from env var fallbacks', () => {
     expect(resolveHttpConfig(parseArgs([]), {
-      MINDWTR_MCP_HTTP: 'true',
-      MINDWTR_MCP_HTTP_HOST: '0.0.0.0',
-      MINDWTR_MCP_HTTP_PORT: '9100',
-      MINDWTR_MCP_HTTP_TOKEN: VALID_TOKEN,
+      TINYBUBBLES_MCP_HTTP: 'true',
+      TINYBUBBLES_MCP_HTTP_HOST: '0.0.0.0',
+      TINYBUBBLES_MCP_HTTP_PORT: '9100',
+      TINYBUBBLES_MCP_HTTP_TOKEN: VALID_TOKEN,
     })).toEqual({
       host: '0.0.0.0',
       port: 9100,
@@ -120,24 +120,24 @@ describe('resolveHttpConfig', () => {
 
 describe('resolveServerConfig (http integration)', () => {
   test('has no http field at all when no http flags are set (stdio regression)', () => {
-    const config = resolveServerConfig(parseArgs(['--db', '/tmp/mindwtr.db']), {});
+    const config = resolveServerConfig(parseArgs(['--db', '/tmp/tinybubbles.db']), {});
     expect('http' in config).toBe(false);
     expect(config).toEqual({
       backend: 'local',
-      dbPath: '/tmp/mindwtr.db',
+      dbPath: '/tmp/tinybubbles.db',
       readonly: true,
       keepAlive: true,
     });
   });
 
   test('carries the http config through for the local backend', () => {
-    const config = resolveServerConfig(parseArgs(['--db', '/tmp/mindwtr.db', '--http', '--http-token', VALID_TOKEN]), {});
+    const config = resolveServerConfig(parseArgs(['--db', '/tmp/tinybubbles.db', '--http', '--http-token', VALID_TOKEN]), {});
     expect(config.http).toEqual({ host: DEFAULT_HTTP_HOST, port: DEFAULT_HTTP_PORT, token: VALID_TOKEN });
   });
 
   test('carries the http config through for the cloud backend', () => {
     const config = resolveServerConfig(
-      parseArgs(['--cloud-url', 'https://mindwtr.example.com', '--cloud-token', 'secret', '--http', '--http-token', VALID_TOKEN]),
+      parseArgs(['--cloud-url', 'https://tinybubbles.example.com', '--cloud-token', 'secret', '--http', '--http-token', VALID_TOKEN]),
       {}
     );
     expect(config.backend).toBe('cloud');
@@ -173,11 +173,11 @@ describe('isAuthorizedBearerToken', () => {
 describe('HTTP MCP transport (integration, real listening server)', () => {
   let baseUrl = '';
   let httpServer: Server;
-  let service: MindwtrService;
+  let service: TinyBubblesService;
   let tempDir = '';
 
   beforeAll(async () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'mindwtr-mcp-http-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'tinybubbles-mcp-http-'));
     writeFileSync(
       join(tempDir, 'data.json'),
       JSON.stringify({
@@ -198,12 +198,12 @@ describe('HTTP MCP transport (integration, real listening server)', () => {
       })
     );
 
-    const dbPath = join(tempDir, 'mindwtr.db');
+    const dbPath = join(tempDir, 'tinybubbles.db');
     service = createService({ dbPath, readonly: false });
     const config: ServerConfig = { backend: 'local', dbPath, readonly: false, keepAlive: true };
 
-    httpServer = createMindwtrHttpServer({
-      createServer: () => createMindwtrMcpServer(service, config),
+    httpServer = createTinyBubblesHttpServer({
+      createServer: () => createTinyBubblesMcpServer(service, config),
       token: VALID_TOKEN,
     });
     await startHttpServer(httpServer, { host: '127.0.0.1', port: 0, token: VALID_TOKEN });
@@ -289,7 +289,7 @@ describe('HTTP MCP transport (integration, real listening server)', () => {
     await client.connect(transport);
     try {
       const { tools } = await client.listTools();
-      for (const name of ['mindwtr_add_task', 'mindwtr_update_task']) {
+      for (const name of ['tinybubbles_add_task', 'tinybubbles_update_task']) {
         const tool = tools.find((candidate) => candidate.name === name);
         const properties = (tool?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties;
         expect(Boolean(properties?.recurrence)).toBe(true);
@@ -299,14 +299,14 @@ describe('HTTP MCP transport (integration, real listening server)', () => {
     }
   });
 
-  test('tools/call of mindwtr_list_tasks succeeds over HTTP against a temp local db', async () => {
+  test('tools/call of tinybubbles_list_tasks succeeds over HTTP against a temp local db', async () => {
     const client = new Client({ name: 'test-client', version: '1.0.0' });
     const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
       requestInit: { headers: { Authorization: `Bearer ${VALID_TOKEN}` } },
     });
     await client.connect(transport);
     try {
-      const result = await client.callTool({ name: 'mindwtr_list_tasks', arguments: {} });
+      const result = await client.callTool({ name: 'tinybubbles_list_tasks', arguments: {} });
       expect(Boolean(result.isError)).toBe(false);
       const content = result.content as Array<{ type: string; text?: string }>;
       const payload = JSON.parse(content[0]?.text ?? '{}') as { tasks: Array<{ id: string }> };

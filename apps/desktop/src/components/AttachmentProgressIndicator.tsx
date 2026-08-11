@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { type AttachmentProgress, globalProgressTracker } from '@mindwtr/core';
+import { type AttachmentProgress, globalProgressTracker } from '@tinybubbles/core';
 import { cn } from '../lib/utils';
 
 type AttachmentProgressIndicatorProps = {

@@ -11,7 +11,7 @@ import {
 import { ExternalLink, Megaphone, MessageSquare, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { AppAnnouncement, AppAnnouncementAction } from '@mindwtr/core';
+import type { AppAnnouncement, AppAnnouncementAction } from '@tinybubbles/core';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 

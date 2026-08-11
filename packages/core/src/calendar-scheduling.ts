@@ -474,7 +474,7 @@ export function isSlotFreeForDay(options: IsSlotFreeOptions): boolean {
 // MARK: - Calendar push event content (shared by mobile + desktop push)
 
 // Only external schemes resolve from an external calendar (e.g. Outlook/Exchange);
-// internal `mindwtr://` links are dropped from pushed events.
+// internal `tinybubbles://` links are dropped from pushed events.
 const CALENDAR_PUSH_LINK_SCHEME_RE = /^(?:https?|mailto):/i;
 
 function getCalendarPushLinkUris(attachments: Task['attachments']): string[] {

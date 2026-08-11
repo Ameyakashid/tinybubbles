@@ -5,7 +5,7 @@ const axeSource = readFileSync('node_modules/axe-core/axe.min.js', 'utf8');
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-        window.localStorage.setItem('mindwtr:desktop:first-run-onboarding:v1', 'dismissed');
+        window.localStorage.setItem('tinybubbles:desktop:first-run-onboarding:v1', 'dismissed');
     });
 });
 

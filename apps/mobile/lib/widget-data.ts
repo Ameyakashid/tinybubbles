@@ -13,33 +13,33 @@ import {
     isTaskInActiveProject,
     loadTranslations,
     sortTasksBy,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import type { ColorProp } from 'react-native-android-widget';
 import { THEME_PRESETS, type ThemePresetName } from '../constants/theme-presets';
 
-export const WIDGET_DATA_KEY = 'mindwtr-data';
-export const WIDGET_LANGUAGE_KEY = 'mindwtr-language';
-export const IOS_WIDGET_APP_GROUP = 'group.tech.dongdongbh.mindwtr';
-export const IOS_WIDGET_PAYLOAD_KEY = 'mindwtr-ios-widget-payload';
-export const IOS_WIDGET_PAYLOAD_KEY_SMALL = 'mindwtr-ios-widget-payload-small';
-export const IOS_WIDGET_PAYLOAD_KEY_MEDIUM = 'mindwtr-ios-widget-payload-medium';
-export const IOS_WIDGET_PAYLOAD_KEY_LARGE = 'mindwtr-ios-widget-payload-large';
-export const IOS_WIDGET_PAYLOAD_KEY_EXTRA_LARGE = 'mindwtr-ios-widget-payload-extra-large';
-// Read-only substrate for the "Get Mindwtr Tasks" Shortcuts action and
+export const WIDGET_DATA_KEY = 'tinybubbles-data';
+export const WIDGET_LANGUAGE_KEY = 'tinybubbles-language';
+export const IOS_WIDGET_APP_GROUP = 'group.app.tinybubbles';
+export const IOS_WIDGET_PAYLOAD_KEY = 'tinybubbles-ios-widget-payload';
+export const IOS_WIDGET_PAYLOAD_KEY_SMALL = 'tinybubbles-ios-widget-payload-small';
+export const IOS_WIDGET_PAYLOAD_KEY_MEDIUM = 'tinybubbles-ios-widget-payload-medium';
+export const IOS_WIDGET_PAYLOAD_KEY_LARGE = 'tinybubbles-ios-widget-payload-large';
+export const IOS_WIDGET_PAYLOAD_KEY_EXTRA_LARGE = 'tinybubbles-ios-widget-payload-extra-large';
+// Read-only substrate for the "Get Tiny Bubbles Tasks" Shortcuts action and
 // Spotlight indexing (#980). Written alongside the widget payloads into the
 // same App Group UserDefaults the widget already uses, so the App Intents
 // running in the main app process can read it with the same access pattern
 // -- no second storage mechanism, no live database read from an intent.
-export const IOS_SHORTCUTS_SNAPSHOT_KEY = 'mindwtr-ios-shortcuts-snapshot';
+export const IOS_SHORTCUTS_SNAPSHOT_KEY = 'tinybubbles-ios-shortcuts-snapshot';
 export const SHORTCUTS_SNAPSHOT_ITEM_CAP = 50;
 // Global ceiling on project groups (not just items per group) -- otherwise a
 // library with hundreds of active projects has no bound on snapshot size or
 // how many entities get handed to Spotlight indexing per launch.
 export const SHORTCUTS_SNAPSHOT_PROJECT_CAP = 50;
-export const IOS_WIDGET_KIND = 'MindwtrTasksWidget';
-export const IOS_WIDGET_LOCK_KIND = 'MindwtrFocusLockWidget';
-export const WIDGET_FOCUS_URI = 'mindwtr:///focus';
-export const WIDGET_QUICK_CAPTURE_URI = 'mindwtr:///capture-quick?mode=text';
+export const IOS_WIDGET_KIND = 'TinyBubblesTasksWidget';
+export const IOS_WIDGET_LOCK_KIND = 'TinyBubblesFocusLockWidget';
+export const WIDGET_FOCUS_URI = 'tinybubbles:///focus';
+export const WIDGET_QUICK_CAPTURE_URI = 'tinybubbles:///capture-quick?mode=text';
 type ConcreteThemePresetName = Exclude<ThemePresetName, 'default'>;
 
 export type WidgetSystemColorScheme = 'light' | 'dark' | null | undefined;
@@ -381,7 +381,7 @@ const buildSnapshotItem = (
     };
 };
 
-// Read-only substrate for the "Get Mindwtr Tasks" Shortcuts action and
+// Read-only substrate for the "Get Tiny Bubbles Tasks" Shortcuts action and
 // Spotlight indexing (#980): a capped, per-list + per-project snapshot of
 // task metadata, refreshed on the same cadence as the widget payload. App
 // Intents only ever read this; they never touch the live database.

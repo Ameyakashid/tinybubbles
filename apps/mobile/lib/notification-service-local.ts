@@ -12,7 +12,7 @@ import {
   type Language,
   type ReminderScheduleRequest,
   useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeEventEmitter, NativeModules, PermissionsAndroid, Platform } from 'react-native';
 
@@ -80,10 +80,10 @@ type NativeEmitterSubscription = {
   remove: () => void;
 };
 
-const LOCAL_ALARM_MAP_KEY = 'mindwtr:local:alarms:v1';
-const LOCAL_POMODORO_ALARM_KEY = 'mindwtr:local:pomodoro-alarm:v1';
-const LOCAL_NOTIFICATION_CHANNEL = 'mindwtr_reminders_v2';
-const LOCAL_NOTIFICATION_CHANNEL_NAME = 'Mindwtr reminders';
+const LOCAL_ALARM_MAP_KEY = 'tinybubbles:local:alarms:v1';
+const LOCAL_POMODORO_ALARM_KEY = 'tinybubbles:local:pomodoro-alarm:v1';
+const LOCAL_NOTIFICATION_CHANNEL = 'tinybubbles_reminders_v2';
+const LOCAL_NOTIFICATION_CHANNEL_NAME = 'Tiny Bubbles reminders';
 const LOCAL_NOTIFICATION_COLOR = '#3b82f6';
 const LOCAL_SMALL_ICON = 'ic_launcher';
 const MAX_DUPLICATE_ALARM_RETRIES = 59;

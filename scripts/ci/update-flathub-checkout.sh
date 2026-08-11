@@ -11,14 +11,14 @@ flathub_dir="$2"
 tools_dir="$3"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
-default_analytics_heartbeat_url="https://analytics.mindwtr.app/"
+default_analytics_heartbeat_url=""  # Tiny Bubbles runs no analytics endpoint; empty disables the heartbeat
 analytics_heartbeat_url="${ANALYTICS_HEARTBEAT_URL:-${default_analytics_heartbeat_url}}"
 analytics_release_version="${VITE_ANALYTICS_RELEASE_VERSION:-${ref}}"
 dropbox_app_key="${VITE_DROPBOX_APP_KEY:-}"
 
-manifest_path="${flathub_dir}/tech.dongdongbh.mindwtr.yml"
-node_sources_path="${flathub_dir}/tech.dongdongbh.mindwtr.node-sources.json"
-cargo_sources_path="${flathub_dir}/tech.dongdongbh.mindwtr.cargo-sources.json"
+manifest_path="${flathub_dir}/app.tinybubbles.yml"
+node_sources_path="${flathub_dir}/app.tinybubbles.node-sources.json"
+cargo_sources_path="${flathub_dir}/app.tinybubbles.cargo-sources.json"
 node_generator="${FLATPAK_NODE_GENERATOR:-flatpak-node-generator}"
 shared_modules_dir="${flathub_dir}/shared-modules"
 appindicator_module_path="${shared_modules_dir}/libayatana-appindicator/libayatana-appindicator-gtk3.json"
@@ -29,8 +29,8 @@ required_paths=(
   "packages/core/package.json"
   "packages/core/package-lock.json"
   "apps/desktop/src-tauri/Cargo.lock"
-  "apps/desktop/src-tauri/linux/Mindwtr.metainfo.xml"
-  "apps/desktop/src-tauri/linux/tech.dongdongbh.mindwtr.desktop"
+  "apps/desktop/src-tauri/linux/Tiny Bubbles.metainfo.xml"
+  "apps/desktop/src-tauri/linux/app.tinybubbles.desktop"
 )
 
 for relative_path in "${required_paths[@]}"; do
@@ -96,8 +96,8 @@ lines = updated.splitlines()
 # Flathub rejects this custom single-instance D-Bus name in finish-args, so the
 # updater must scrub any previously injected entries instead of re-adding them.
 blocked_finish_args = {
-    '--talk-name=org.tech_dongdongbh_mindwtr.SingleInstance',
-    '--own-name=org.tech_dongdongbh_mindwtr.SingleInstance',
+    '--talk-name=org.app_tinybubbles.SingleInstance',
+    '--own-name=org.app_tinybubbles.SingleInstance',
 }
 lines = [line for line in lines if line.strip() not in {f'- {value}' for value in blocked_finish_args}]
 
@@ -140,18 +140,18 @@ if modules_line_index is None:
 modules_indent = len(lines[modules_line_index]) - len(lines[modules_line_index].lstrip())
 modules_entry_indent = modules_indent + 2
 modules_block_end_index = find_block_end(modules_line_index, modules_indent)
-mindwtr_module_index = next(
+tinybubbles_module_index = next(
     (
         index
         for index in range(modules_line_index + 1, modules_block_end_index)
-        if lines[index].strip() == '- name: mindwtr'
+        if lines[index].strip() == '- name: tinybubbles'
     ),
     None,
 )
-if mindwtr_module_index is None:
-    raise SystemExit(f"Expected mindwtr module in {manifest_path}")
+if tinybubbles_module_index is None:
+    raise SystemExit(f"Expected tinybubbles module in {manifest_path}")
 
-lines.insert(mindwtr_module_index, f"{' ' * modules_entry_indent}{appindicator_module_entry}")
+lines.insert(tinybubbles_module_index, f"{' ' * modules_entry_indent}{appindicator_module_entry}")
 
 finish_args_line_index = next((index for index, line in enumerate(lines) if line.strip() == 'finish-args:'), None)
 if finish_args_line_index is None:

@@ -337,7 +337,7 @@ describe('omnifocus import', () => {
             projects: [{ name: 'Test project', taskCount: 3 }],
         });
         expect(result.warnings).toContain(
-            '2 nested OmniFocus tasks were flattened because Mindwtr cannot preserve their hierarchy directly.'
+            '2 nested OmniFocus tasks were flattened because Tiny Bubbles cannot preserve their hierarchy directly.'
         );
 
         const parsed = result.parsedData;

@@ -9,34 +9,34 @@ import {
     type AppData,
     type MergeResult,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     parseImportSource,
     runImport,
     type DataTransferBoundaries,
     type ImportPickerSourceId,
     type ImportSourceParseResultMap,
-} from '@mindwtr/core/import-runner';
+} from '@tinybubbles/core/import-runner';
 import {
     type DgtImportExecutionResult,
     type ParsedDgtImportData,
-} from '@mindwtr/core/dgt-import';
+} from '@tinybubbles/core/dgt-import';
 import {
     type OmniFocusImportExecutionResult,
     type ParsedOmniFocusImportData,
-} from '@mindwtr/core/omnifocus-import';
+} from '@tinybubbles/core/omnifocus-import';
 import {
     type ParsedTodoistProject,
     type TodoistImportExecutionResult,
-} from '@mindwtr/core/todoist-import';
+} from '@tinybubbles/core/todoist-import';
 import {
     type ParsedTickTickImportData,
     type TickTickImportExecutionResult,
-} from '@mindwtr/core/ticktick-import';
+} from '@tinybubbles/core/ticktick-import';
 import {
-    type MindwtrCsvImportExecutionResult,
-    type ParsedMindwtrCsvImportData,
-} from '@mindwtr/core/mindwtr-csv-import';
+    type TinyBubblesCsvImportExecutionResult,
+    type ParsedTinyBubblesCsvImportData,
+} from '@tinybubbles/core/tinybubbles-csv-import';
 
 import { SyncService } from './sync-service';
 import { tauriStorage } from './storage-adapter';
@@ -239,7 +239,7 @@ export const inspectDesktopBackup = async (
         accept: '.json,application/json',
         extensions: ['json'],
         mode: 'text',
-        title: 'Mindwtr Backup',
+        title: 'Tiny Bubbles Backup',
     });
     if (!document?.text) return null;
     return parseImportSource('backup', {
@@ -278,10 +278,10 @@ const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescri
         extensions: ['csv', 'json', 'zip'],
         title: 'OmniFocus Export',
     },
-    'mindwtr-csv': {
+    'tinybubbles-csv': {
         accept: '.csv,.zip,text/csv,application/zip',
         extensions: ['csv', 'zip'],
-        title: 'Mindwtr CSV',
+        title: 'TinyBubbles CSV',
     },
 };
 
@@ -311,8 +311,8 @@ export const inspectDesktopDgtImport = (): Promise<ImportSourceParseResultMap['d
 export const inspectDesktopOmniFocusImport = (): Promise<ImportSourceParseResultMap['omnifocus'] | null> =>
     inspectDesktopImportSource('omnifocus');
 
-export const inspectDesktopMindwtrCsvImport = (): Promise<ImportSourceParseResultMap['mindwtr-csv'] | null> =>
-    inspectDesktopImportSource('mindwtr-csv');
+export const inspectDesktopTinyBubblesCsvImport = (): Promise<ImportSourceParseResultMap['tinybubbles-csv'] | null> =>
+    inspectDesktopImportSource('tinybubbles-csv');
 
 const desktopLog = { logInfo, logError };
 
@@ -346,7 +346,7 @@ export const importDesktopOmniFocusData = (
 ): Promise<DesktopTransferResult & { result: OmniFocusImportExecutionResult }> =>
     runImport('omnifocus', parsedData, desktopBoundaries, desktopLog);
 
-export const importDesktopMindwtrCsvData = (
-    parsedData: ParsedMindwtrCsvImportData
-): Promise<DesktopTransferResult & { result: MindwtrCsvImportExecutionResult }> =>
-    runImport('mindwtr-csv', parsedData, desktopBoundaries, desktopLog);
+export const importDesktopTinyBubblesCsvData = (
+    parsedData: ParsedTinyBubblesCsvImportData
+): Promise<DesktopTransferResult & { result: TinyBubblesCsvImportExecutionResult }> =>
+    runImport('tinybubbles-csv', parsedData, desktopBoundaries, desktopLog);

@@ -9,7 +9,7 @@ import {
   type PerformanceLogMeasurementInput,
   type PerformanceOperation,
   type PerformanceRoute,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { logInfo } from './app-log';
 

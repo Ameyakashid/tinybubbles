@@ -1,5 +1,5 @@
 import { ListFilter } from 'lucide-react';
-import { tFallback, type TaskStatus } from '@mindwtr/core';
+import { tFallback, type TaskStatus } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { ToolbarSelect } from '../list/ToolbarSelect';
 

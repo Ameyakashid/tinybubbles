@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr uses soft-delete tombstones so deletions can sync safely across devices and providers. If tombstones disappear too early, an offline client can resurrect deleted records during a later merge. If they are kept forever, local data and sync payloads grow without bound.
+Tiny Bubbles uses soft-delete tombstones so deletions can sync safely across devices and providers. If tombstones disappear too early, an offline client can resurrect deleted records during a later merge. If they are kept forever, local data and sync payloads grow without bound.
 
 The system therefore needs a retention policy that keeps deletes long enough for normal multi-device recovery while still allowing eventual cleanup.
 

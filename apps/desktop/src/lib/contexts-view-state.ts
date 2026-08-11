@@ -1,9 +1,9 @@
-import type { TaskStatus } from '@mindwtr/core';
+import type { TaskStatus } from '@tinybubbles/core';
 import { CONTEXTS_AXES, sanitizeAxis, type ContextsGroupBy } from '../components/views/list/next-grouping';
 
-export const CONTEXTS_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:contexts:v1';
+export const CONTEXTS_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:contexts:v1';
 export const NO_CONTEXT_TOKEN = '__no_context__';
-export const CONTEXTS_TOKEN_SELECTION_EVENT = 'mindwtr:contexts-token-selection';
+export const CONTEXTS_TOKEN_SELECTION_EVENT = 'tinybubbles:contexts-token-selection';
 
 const CONTEXT_STATUS_VALUES: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'reference', 'done'];
 const LEGACY_CONTEXT_STATUS_VALUES: Array<TaskStatus | 'all'> = ['all', ...CONTEXT_STATUS_VALUES];

@@ -2,9 +2,9 @@ import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 
-const APP_ID = 'tech.dongdongbh.mindwtr';
-const APP_DIR = 'mindwtr';
-const DB_FILE_NAME = 'mindwtr.db';
+const APP_ID = 'tech.dongdongbh.tinybubbles';
+const APP_DIR = 'tinybubbles';
+const DB_FILE_NAME = 'tinybubbles.db';
 const DATA_FILE_NAME = 'data.json';
 
 function getLinuxConfigHome() {
@@ -49,7 +49,7 @@ function firstExisting(paths: string[]): string | null {
 }
 
 function getExplicitDbPath(overridePath?: string): string | null {
-  const explicit = overridePath || process.env.MINDWTR_DB_PATH || process.env.MINDWTR_DB;
+  const explicit = overridePath || process.env.TINYBUBBLES_DB_PATH || process.env.TINYBUBBLES_DB;
   return explicit ? resolve(explicit) : null;
 }
 
@@ -76,7 +76,7 @@ function getDefaultStorageDirs(): string[] {
   return dedupe(dirs);
 }
 
-export function resolveMindwtrDataJsonPath(overridePath?: string): string {
+export function resolveTinyBubblesDataJsonPath(overridePath?: string): string {
   const explicitDbPath = getExplicitDbPath(overridePath);
   if (explicitDbPath) {
     return join(dirname(explicitDbPath), DATA_FILE_NAME);
@@ -88,7 +88,7 @@ export function resolveMindwtrDataJsonPath(overridePath?: string): string {
   return firstExisting(candidates) || candidates[0];
 }
 
-export function resolveMindwtrDbPath(overridePath?: string): string {
+export function resolveTinyBubblesDbPath(overridePath?: string): string {
   const explicitDbPath = getExplicitDbPath(overridePath);
   if (explicitDbPath) return explicitDbPath;
   const candidates = getDefaultStorageDirs().map((dir) => join(dir, DB_FILE_NAME));

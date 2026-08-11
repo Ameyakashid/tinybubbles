@@ -8,7 +8,7 @@ import android.os.SystemClock
 import android.os.Trace
 import android.util.Log
 
-private const val STARTUP_TAG = "MindwtrStartup"
+private const val STARTUP_TAG = "TinyBubblesStartup"
 
 fun startupMark(phase: String, extra: String? = null) {
   val uptimeMs = SystemClock.elapsedRealtime()
@@ -19,7 +19,7 @@ fun startupMark(phase: String, extra: String? = null) {
 inline fun <T> startupSection(phase: String, block: () -> T): T {
   startupMark("$phase:start")
   val startMs = SystemClock.elapsedRealtime()
-  Trace.beginSection("Mindwtr.$phase")
+  Trace.beginSection("TinyBubbles.$phase")
   try {
     return block()
   } finally {
@@ -93,7 +93,7 @@ const createNoteIntentFunction = `  private fun normalizeCreateNoteIntent(intent
     }
 
     val builder = Uri.Builder()
-      .scheme("mindwtr")
+      .scheme("tinybubbles")
       .path("capture")
       .appendQueryParameter("title", title)
       .appendQueryParameter("source", "create_note")
@@ -107,8 +107,8 @@ const createNoteIntentFunction = `  private fun normalizeCreateNoteIntent(intent
 
 const contextAutomationIntentFunction = `  private fun normalizeContextAutomationIntent(intent: Intent?) {
     val contextAction = when (intent?.action) {
-      "tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT" -> "activate"
-      "tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT" -> "deactivate"
+      "app.tinybubbles.action.ACTIVATE_CONTEXT" -> "activate"
+      "app.tinybubbles.action.DEACTIVATE_CONTEXT" -> "deactivate"
       else -> return
     }
 
@@ -136,7 +136,7 @@ const contextAutomationIntentFunction = `  private fun normalizeContextAutomatio
 
     intent.action = Intent.ACTION_VIEW
     intent.data = Uri.Builder()
-      .scheme("mindwtr")
+      .scheme("tinybubbles")
       .path("contexts")
       .appendQueryParameter("token", rawContext)
       .appendQueryParameter("contextAction", contextAction)
@@ -247,10 +247,10 @@ const patchMainActivity = (source) => {
     );
   }
 
-  if (!next.includes('import tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenPayloadStore')) {
+  if (!next.includes('import app.tinybubbles.notificationopenintents.NotificationOpenPayloadStore')) {
     next = next.replace(
       'import org.json.JSONObject\n',
-      'import org.json.JSONObject\nimport tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenPayloadStore\n'
+      'import org.json.JSONObject\nimport app.tinybubbles.notificationopenintents.NotificationOpenPayloadStore\n'
     );
   }
 

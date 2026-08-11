@@ -4,7 +4,7 @@ import App from './App.tsx';
 import { QuickAddWindowApp } from './QuickAddWindowApp.tsx';
 import './index.css';
 
-import { consoleLogger, setLogger, setStorageAdapter } from '@mindwtr/core';
+import { consoleLogger, setLogger, setStorageAdapter } from '@tinybubbles/core';
 import { LanguageProvider } from './contexts/language-context';
 import { isTauriRuntime } from './lib/runtime';
 import { invokeNative, preloadNativeTransport } from './lib/tauri-invoke';
@@ -212,7 +212,7 @@ async function bootstrap() {
         // fresh shell with matching chunk names; the guard stops a reload loop
         // when the failure is not staleness.
         window.addEventListener('vite:preloadError', () => {
-            const RELOAD_FLAG = 'mindwtr-chunk-reload-at';
+            const RELOAD_FLAG = 'tinybubbles-chunk-reload-at';
             const lastReload = Number(sessionStorage.getItem(RELOAD_FLAG) || 0);
             if (Date.now() - lastReload < 30_000) return;
             sessionStorage.setItem(RELOAD_FLAG, String(Date.now()));

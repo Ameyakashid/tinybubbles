@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { translateWithFallback, useTaskStore, type PomodoroAutoStartOptions, type PomodoroEvent } from '@mindwtr/core';
+import { translateWithFallback, useTaskStore, type PomodoroAutoStartOptions, type PomodoroEvent } from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import { sendDesktopPomodoroCompletionAlert } from '../lib/pomodoro-alert';
 import { reconcilePomodoroSnapshot, usePomodoroStore } from '../store/pomodoro-store';

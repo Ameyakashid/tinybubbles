@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from './file-system';
 import { Directory as ExpoDirectory, File as ExpoFile } from 'expo-file-system';
-import { AppData, decodeUriSafe, LEGACY_SYNC_FILE_NAME, sleep, SYNC_FILE_NAME } from '@mindwtr/core';
+import { AppData, decodeUriSafe, LEGACY_SYNC_FILE_NAME, sleep, SYNC_FILE_NAME } from '@tinybubbles/core';
 import { Platform } from 'react-native';
 import { logError, logInfo, logWarn } from './app-log';
 import {
@@ -340,7 +340,7 @@ const assertDirectoryWritable = async (
         try {
             testUri = await StorageAccessFramework.createFileAsync(
                 directoryUri,
-                `mindwtr-write-test-${Date.now()}`,
+                `tinybubbles-write-test-${Date.now()}`,
                 'text/plain'
             );
         } catch (error) {
@@ -378,7 +378,7 @@ const assertDirectoryWritable = async (
 const assertIosDirectoryWritable = async (
     directoryUri: string,
 ): Promise<void> => {
-    const testFileUri = buildSyncFileUri(directoryUri, `mindwtr-write-test-${Date.now()}.txt`);
+    const testFileUri = buildSyncFileUri(directoryUri, `tinybubbles-write-test-${Date.now()}.txt`);
     try {
         writeWithModernFileApi(testFileUri, 'ok');
     } catch (error) {
@@ -444,7 +444,7 @@ const pickAndParseIosSyncFolder = async (): Promise<PickResult | null> => {
                     __icloud: isICloudUri(pickedFileUri),
                 };
             } catch {
-                throw new Error('Selected JSON file is not a Mindwtr backup. Please select a Mindwtr backup JSON file in the target folder.');
+                throw new Error('Selected JSON file is not a Tiny Bubbles backup. Please select a Tiny Bubbles backup JSON file in the target folder.');
             }
         }
 
@@ -725,7 +725,7 @@ export const writeSyncFile = async (fileUri: string, data: AppData, options?: Sy
 export const exportData = async (data: AppData): Promise<void> => {
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `mindwtr-backup-${timestamp}.json`;
+        const filename = `tinybubbles-backup-${timestamp}.json`;
         const jsonContent = JSON.stringify(data, null, 2);
 
         // On Android, try SAF to let user pick save location
@@ -780,7 +780,7 @@ export const exportData = async (data: AppData): Promise<void> => {
             await Sharing.shareAsync(fileUri, {
                 UTI: 'public.json',
                 mimeType: 'application/json',
-                dialogTitle: 'Export Mindwtr Data',
+                dialogTitle: 'Export Tiny Bubbles Data',
             });
         } else {
             throw new Error('Sharing is not available on this device');

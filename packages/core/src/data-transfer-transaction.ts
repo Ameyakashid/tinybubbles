@@ -85,7 +85,7 @@ export class DataTransferRefreshError extends Error {
     readonly cause: unknown;
 
     constructor(operation: string, cause: unknown) {
-        super('Data was saved, but Mindwtr could not reload it. Restart Mindwtr before retrying this transfer.');
+        super('Data was saved, but Tiny Bubbles could not reload it. Restart Tiny Bubbles before retrying this transfer.');
         this.name = 'DataTransferRefreshError';
         this.operation = operation;
         this.cause = cause;

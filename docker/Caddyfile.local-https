@@ -1,6 +1,6 @@
 # LAN-only HTTPS setup. Devices must trust Caddy's local root CA before
-# Mindwtr clients will accept this certificate.
-{$MINDWTR_CLOUD_DOMAIN} {
+# Tiny Bubbles clients will accept this certificate.
+{$TINYBUBBLES_CLOUD_DOMAIN} {
 	tls internal
-	reverse_proxy mindwtr-cloud:8787
+	reverse_proxy tinybubbles-cloud:8787
 }

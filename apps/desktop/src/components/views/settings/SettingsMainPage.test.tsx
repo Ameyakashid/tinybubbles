@@ -49,7 +49,7 @@ describe('SettingsMainPage', () => {
         );
 
         expect(getByText('Window Behavior')).toBeInTheDocument();
-        expect(getByText('Start Mindwtr automatically when you sign in to this computer.')).toBeInTheDocument();
+        expect(getByText('Start Tiny Bubbles automatically when you sign in to this computer.')).toBeInTheDocument();
 
         fireEvent.click(getByRole('switch', { name: 'Launch at startup' }));
 
@@ -83,7 +83,7 @@ describe('SettingsMainPage', () => {
         );
 
         expect(getByText('Flatpak custom shortcut command')).toBeInTheDocument();
-        expect(getByText('flatpak run tech.dongdongbh.mindwtr --quick-add')).toBeInTheDocument();
+        expect(getByText('flatpak run app.tinybubbles --quick-add')).toBeInTheDocument();
         expect(getByRole('combobox', { name: 'Global quick add shortcut' })).toBeDisabled();
     });
 

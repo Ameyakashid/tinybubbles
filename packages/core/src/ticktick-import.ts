@@ -26,7 +26,7 @@ const TICKTICK_AREA_FALLBACK = 'TickTick Area';
 const TICKTICK_PROJECT_FALLBACK = 'TickTick Import';
 const TICKTICK_TASK_FALLBACK = 'Imported TickTick Task';
 const TICKTICK_IMPORT_SUFFIX = ' (TickTick)';
-const TICKTICK_IMPORT_ID_NAMESPACE = 'mindwtr:ticktick-import:v1';
+const TICKTICK_IMPORT_ID_NAMESPACE = 'tinybubbles:ticktick-import:v1';
 const TICKTICK_CHECKLIST_UNCHECKED = '▫';
 const TICKTICK_CHECKLIST_CHECKED = '▪';
 

@@ -1,0 +1,15 @@
+# Hidden desktop entry installed as tinybubbles.desktop by the deb/rpm bundles.
+# Wayland compositors match a window's app id against a .desktop file with the
+# same basename, case-sensitively. The app id is the process name (tinybubbles),
+# but tauri-bundler hardcodes the visible entry's filename to the product name
+# (Tiny Bubbles.desktop), so KWin's alt-tab switcher found no icon (#997). This
+# NoDisplay entry exists only to give compositors an exact-name match; the
+# visible menu entry stays Tiny Bubbles.desktop.
+[Desktop Entry]
+Type=Application
+Name=Tiny Bubbles
+Exec=tinybubbles
+Icon=tinybubbles
+Terminal=false
+NoDisplay=true
+StartupWMClass=tinybubbles

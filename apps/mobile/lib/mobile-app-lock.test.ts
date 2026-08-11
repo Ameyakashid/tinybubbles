@@ -30,7 +30,7 @@ describe('mobile app lock authentication', () => {
     getEnrolledLevelAsyncMock.mockResolvedValue(0);
 
     const result = await authenticateWithDeviceLock({
-      promptMessage: 'Unlock Mindwtr',
+      promptMessage: 'Unlock Tiny Bubbles',
       cancelLabel: 'Cancel',
       fallbackLabel: 'Use passcode',
     });
@@ -44,14 +44,14 @@ describe('mobile app lock authentication', () => {
     authenticateAsyncMock.mockResolvedValue({ success: true });
 
     const result = await authenticateWithDeviceLock({
-      promptMessage: 'Unlock Mindwtr',
+      promptMessage: 'Unlock Tiny Bubbles',
       cancelLabel: 'Cancel',
       fallbackLabel: 'Use passcode',
     });
 
     expect(result).toEqual({ success: true });
     expect(authenticateAsyncMock).toHaveBeenCalledWith({
-      promptMessage: 'Unlock Mindwtr',
+      promptMessage: 'Unlock Tiny Bubbles',
       cancelLabel: 'Cancel',
       fallbackLabel: 'Use passcode',
       disableDeviceFallback: false,
@@ -65,7 +65,7 @@ describe('mobile app lock authentication', () => {
     authenticateAsyncMock.mockResolvedValue({ success: false, error: 'user_cancel' });
 
     const result = await authenticateWithDeviceLock({
-      promptMessage: 'Unlock Mindwtr',
+      promptMessage: 'Unlock Tiny Bubbles',
       cancelLabel: 'Cancel',
       fallbackLabel: 'Use passcode',
     });

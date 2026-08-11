@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Project, Task } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
 
 import { shouldShowProjectWorkspaceTask } from './ProjectWorkspace';
 

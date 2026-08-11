@@ -5,8 +5,8 @@ const {
 } = require('@expo/config-plugins');
 
 const APP_THEME = AndroidConfig.Styles.getAppThemeGroup();
-const TEXT_VIEW_STYLE = { name: 'Mindwtr.TextView', parent: 'Widget.AppCompat.TextView' };
-const EDIT_TEXT_STYLE = { name: 'Mindwtr.EditText', parent: 'Widget.AppCompat.EditText' };
+const TEXT_VIEW_STYLE = { name: 'TinyBubbles.TextView', parent: 'Widget.AppCompat.TextView' };
+const EDIT_TEXT_STYLE = { name: 'TinyBubbles.EditText', parent: 'Widget.AppCompat.EditText' };
 
 // Android 15 flips TextView drawing defaults for apps targeting SDK 35+
 // (useBoundsForWidth, elegantTextHeight, locale-preferred minimum line
@@ -50,7 +50,7 @@ const withAndroidLegacyTextMetrics = (config) =>
 
 module.exports = createRunOncePlugin(
   withAndroidLegacyTextMetrics,
-  'mindwtr-android-legacy-text-metrics',
+  'tinybubbles-android-legacy-text-metrics',
   '1.0.0',
 );
 

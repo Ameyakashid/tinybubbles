@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AREA_FILTER_ALL, safeFormatDate, useTaskStore, type Area, type Task } from '@mindwtr/core';
+import { AREA_FILTER_ALL, safeFormatDate, useTaskStore, type Area, type Task } from '@tinybubbles/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 import { GlobalSearch } from './GlobalSearch';
@@ -111,7 +111,7 @@ describe('GlobalSearch', () => {
         );
 
         await act(async () => {
-            window.dispatchEvent(new Event('mindwtr:open-search'));
+            window.dispatchEvent(new Event('tinybubbles:open-search'));
             await vi.advanceTimersByTimeAsync(50);
         });
 
@@ -151,7 +151,7 @@ describe('GlobalSearch', () => {
         );
 
         await act(async () => {
-            window.dispatchEvent(new Event('mindwtr:open-search'));
+            window.dispatchEvent(new Event('tinybubbles:open-search'));
             await vi.advanceTimersByTimeAsync(50);
         });
 
@@ -193,7 +193,7 @@ describe('GlobalSearch', () => {
         );
 
         await act(async () => {
-            window.dispatchEvent(new Event('mindwtr:open-search'));
+            window.dispatchEvent(new Event('tinybubbles:open-search'));
             await vi.advanceTimersByTimeAsync(50);
         });
         fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
@@ -226,7 +226,7 @@ describe('GlobalSearch', () => {
         );
 
         await act(async () => {
-            window.dispatchEvent(new Event('mindwtr:open-search'));
+            window.dispatchEvent(new Event('tinybubbles:open-search'));
             await vi.advanceTimersByTimeAsync(50);
         });
 
@@ -262,7 +262,7 @@ describe('GlobalSearch', () => {
         );
 
         await act(async () => {
-            window.dispatchEvent(new Event('mindwtr:open-search'));
+            window.dispatchEvent(new Event('tinybubbles:open-search'));
             await vi.advanceTimersByTimeAsync(50);
         });
 
@@ -300,7 +300,7 @@ describe('GlobalSearch', () => {
                 </LanguageProvider>
             );
             await act(async () => {
-                window.dispatchEvent(new Event('mindwtr:open-search'));
+                window.dispatchEvent(new Event('tinybubbles:open-search'));
                 await vi.advanceTimersByTimeAsync(50);
             });
             await act(async () => {
@@ -372,7 +372,7 @@ describe('GlobalSearch', () => {
             );
 
             await act(async () => {
-                window.dispatchEvent(new Event('mindwtr:open-search'));
+                window.dispatchEvent(new Event('tinybubbles:open-search'));
                 await vi.advanceTimersByTimeAsync(50);
             });
             await act(async () => {

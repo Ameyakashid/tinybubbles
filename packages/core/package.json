@@ -1,5 +1,5 @@
 {
-  "name": "@mindwtr/core",
+  "name": "@tinybubbles/core",
   "license": "AGPL-3.0-only",
   "version": "1.2.0",
   "main": "src/index.ts",
@@ -28,7 +28,7 @@
     "./ticktick-import": "./src/ticktick-import.ts",
     "./dgt-import": "./src/dgt-import.ts",
     "./omnifocus-import": "./src/omnifocus-import.ts",
-    "./mindwtr-csv-import": "./src/mindwtr-csv-import.ts",
+    "./tinybubbles-csv-import": "./src/tinybubbles-csv-import.ts",
     "./import-runner": "./src/import-runner.ts",
     "./whisper-models": "./src/whisper-models.ts"
   },
@@ -47,7 +47,7 @@
     "lint": "eslint -c ../../eslint.node.config.mjs \"src/**/*.ts\" --ignore-pattern \"src/**/*.test.ts\"",
     "bench": "vitest bench",
     "test": "vitest run",
-    "test:perf": "MINDWTR_PERF_TEST=1 vitest run src/performance-large-store.test.ts"
+    "test:perf": "TINYBUBBLES_PERF_TEST=1 vitest run src/performance-large-store.test.ts"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

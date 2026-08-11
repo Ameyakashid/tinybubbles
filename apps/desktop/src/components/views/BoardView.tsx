@@ -19,22 +19,22 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { TaskItem } from '../TaskItem';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, isSequentialChainStatus, translateWithFallback, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@mindwtr/core';
+import { shallow, useTaskStore, sortTasksBy, sortTasksByBoardOrder, buildProjectOrderMap, compareTasksByProjectThenOrder, getSequentialFirstTaskIds, isSequentialChainStatus, translateWithFallback, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, SAVED_FILTER_NO_PROJECT_ID, tFallback } from '@tinybubbles/core';
 import { resolveBoardDragEnd } from './board-view-dnd';
-import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
+import type { Task, TaskStatus, FilterCriteria } from '@tinybubbles/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Filter, GripVertical } from 'lucide-react';
 import { useUiStore } from '../../store/ui-store';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { isTaskVisibleInArea, projectMatchesAreaFilterSelection } from '@mindwtr/core';
+import { isTaskVisibleInArea, projectMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { useTaskListScope } from './list/task-list-scope';
 import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
 import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
-const BOARD_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:board:v1';
+const BOARD_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:board:v1';
 
 type BoardPersistedViewState = {
     filtersOpen: boolean;
@@ -459,7 +459,7 @@ export function BoardView() {
     const excludedStateLabel = resolveText('filters.excluded', 'Excluded');
 
     const openQuickAdd = (status: TaskStatus) => {
-        window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+        window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
             detail: { initialProps: { status } },
         }));
     };

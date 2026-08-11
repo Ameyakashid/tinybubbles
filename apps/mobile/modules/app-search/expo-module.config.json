@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["tech.dongdongbh.mindwtr.appsearch.MindwtrAppSearchModule"]
+    "modules": ["app.tinybubbles.appsearch.TinyBubblesAppSearchModule"]
   }
 }

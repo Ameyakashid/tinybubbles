@@ -47,7 +47,7 @@ export const useObsidianSettings = ({
     const [vaultPath, setVaultPath] = useState('');
     const [enabled, setEnabled] = useState(false);
     const [scanFoldersText, setScanFoldersText] = useState('/');
-    const [inboxFile, setInboxFile] = useState('Mindwtr/Inbox.md');
+    const [inboxFile, setInboxFile] = useState('Tiny Bubbles/Inbox.md');
     const [taskNotesIncludeArchived, setTaskNotesIncludeArchived] = useState(false);
     const [dataviewMetadataEnabled, setDataviewMetadataEnabled] = useState(false);
     const [newTaskFormat, setNewTaskFormat] = useState<'auto' | 'inline' | 'tasknotes'>('auto');
@@ -116,7 +116,7 @@ export const useObsidianSettings = ({
             setVaultPath('');
             setEnabled(false);
             setScanFoldersText('/');
-            setInboxFile('Mindwtr/Inbox.md');
+            setInboxFile('Tiny Bubbles/Inbox.md');
             setTaskNotesIncludeArchived(false);
             setDataviewMetadataEnabled(false);
             setNewTaskFormat('auto');

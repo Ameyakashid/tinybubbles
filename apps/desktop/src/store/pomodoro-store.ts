@@ -14,10 +14,10 @@ import {
     type PomodoroEvent,
     type PomodoroSessionHistory,
     type PomodoroState,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
-export const DESKTOP_POMODORO_SESSION_STORAGE_KEY = 'mindwtr:pomodoro:session:v1';
-export const DESKTOP_POMODORO_COLLAPSED_STORAGE_KEY = 'mindwtr:pomodoro:collapsed:v1';
+export const DESKTOP_POMODORO_SESSION_STORAGE_KEY = 'tinybubbles:pomodoro:session:v1';
+export const DESKTOP_POMODORO_COLLAPSED_STORAGE_KEY = 'tinybubbles:pomodoro:collapsed:v1';
 
 export type PomodoroSnapshot = {
     durations: PomodoroDurations;

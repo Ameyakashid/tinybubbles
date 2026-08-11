@@ -56,9 +56,9 @@ const applyPackageManifestChanges = (pkg, enableExpoBuildFromSource) => {
     }
   }
 
-  if (pkg.dependencies && pkg.dependencies['@mindwtr/core'] === 'workspace:*') {
-    pkg.dependencies['@mindwtr/core'] = 'file:../../packages/core';
-    changes.push('rewrote @mindwtr/core to file:../../packages/core for npm compatibility');
+  if (pkg.dependencies && pkg.dependencies['@tinybubbles/core'] === 'workspace:*') {
+    pkg.dependencies['@tinybubbles/core'] = 'file:../../packages/core';
+    changes.push('rewrote @tinybubbles/core to file:../../packages/core for npm compatibility');
   }
 
   const expoConfig = ensureObjectProperty(pkg, 'expo');
@@ -122,9 +122,9 @@ const run = () => {
     console.log('[fdroid] no deps to strip');
   }
 
-  const coreDep = pkg.dependencies?.['@mindwtr/core'];
+  const coreDep = pkg.dependencies?.['@tinybubbles/core'];
   if (typeof coreDep === 'string' && coreDep.startsWith('workspace:')) {
-    throw new Error('[fdroid] @mindwtr/core still uses workspace:*; npm install will fail in non-workspace environments');
+    throw new Error('[fdroid] @tinybubbles/core still uses workspace:*; npm install will fail in non-workspace environments');
   }
 };
 

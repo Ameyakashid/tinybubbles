@@ -9,34 +9,34 @@ const {
   withXcodeProject,
 } = require('@expo/config-plugins');
 
-const TARGET_NAME = 'MindwtrWidgets';
+const TARGET_NAME = 'TinyBubblesWidgets';
 const WIDGETS_FOLDER = 'widgets-ios';
 const APP_INTENTS_FOLDER = 'ios-app-intents';
-const APP_GROUP = 'group.tech.dongdongbh.mindwtr';
+const APP_GROUP = 'group.app.tinybubbles';
 const SHORTCUT_URL_KEY = 'url';
-const SIRI_CAPTURE_SHORTCUTS_PROVIDER = 'MindwtrSiriCaptureShortcuts';
-const SPOTLIGHT_INDEXER = 'MindwtrShortcutsSpotlightIndexer';
+const SIRI_CAPTURE_SHORTCUTS_PROVIDER = 'TinyBubblesSiriCaptureShortcuts';
+const SPOTLIGHT_INDEXER = 'TinyBubblesShortcutsSpotlightIndexer';
 const SHORTCUT_ITEMS = [
   {
-    UIApplicationShortcutItemType: 'tech.dongdongbh.mindwtr.add_task',
+    UIApplicationShortcutItemType: 'app.tinybubbles.add_task',
     UIApplicationShortcutItemTitle: 'Add task',
     UIApplicationShortcutItemSubtitle: 'Add task to Inbox',
     UIApplicationShortcutItemIconType: 'UIApplicationShortcutIconTypeCompose',
-    UIApplicationShortcutItemUserInfo: { [SHORTCUT_URL_KEY]: 'mindwtr:///capture-quick?mode=text' },
+    UIApplicationShortcutItemUserInfo: { [SHORTCUT_URL_KEY]: 'tinybubbles:///capture-quick?mode=text' },
   },
   {
-    UIApplicationShortcutItemType: 'tech.dongdongbh.mindwtr.open_focus',
+    UIApplicationShortcutItemType: 'app.tinybubbles.open_focus',
     UIApplicationShortcutItemTitle: 'Focus',
     UIApplicationShortcutItemSubtitle: 'Open Focus view',
     UIApplicationShortcutItemIconType: 'UIApplicationShortcutIconTypeTask',
-    UIApplicationShortcutItemUserInfo: { [SHORTCUT_URL_KEY]: 'mindwtr:///focus' },
+    UIApplicationShortcutItemUserInfo: { [SHORTCUT_URL_KEY]: 'tinybubbles:///focus' },
   },
   {
-    UIApplicationShortcutItemType: 'tech.dongdongbh.mindwtr.open_calendar',
+    UIApplicationShortcutItemType: 'app.tinybubbles.open_calendar',
     UIApplicationShortcutItemTitle: 'Calendar',
     UIApplicationShortcutItemSubtitle: 'Open Calendar view',
     UIApplicationShortcutItemIconType: 'UIApplicationShortcutIconTypeDate',
-    UIApplicationShortcutItemUserInfo: { [SHORTCUT_URL_KEY]: 'mindwtr:///calendar' },
+    UIApplicationShortcutItemUserInfo: { [SHORTCUT_URL_KEY]: 'tinybubbles:///calendar' },
   },
 ];
 
@@ -266,7 +266,7 @@ const addWidgetTargetToXcode = (config) =>
       }
     }
 
-    const runnerBundleId = cfg.ios?.bundleIdentifier || 'tech.dongdongbh.mindwtr';
+    const runnerBundleId = cfg.ios?.bundleIdentifier || 'app.tinybubbles';
     const bundleIdentifier = `${runnerBundleId}.${TARGET_NAME}`;
     const deploymentTarget = '15.1';
     const currentProjectVersion = cfg.ios?.buildNumber || '1';
@@ -433,7 +433,7 @@ const ensureWidgetTargetInPodfile = (config) =>
 
 function withIosWidgetsAndShortcuts(config) {
   const targetName = TARGET_NAME;
-  const bundleIdentifier = `${config.ios?.bundleIdentifier || 'tech.dongdongbh.mindwtr'}.${TARGET_NAME}`;
+  const bundleIdentifier = `${config.ios?.bundleIdentifier || 'app.tinybubbles'}.${TARGET_NAME}`;
   const appExtensions =
     config.extra?.eas?.build?.experimental?.ios?.appExtensions ?? [];
   const alreadyConfigured = appExtensions.some((ext) => ext && ext.targetName === targetName);

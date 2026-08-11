@@ -44,7 +44,7 @@ const storageAdapterMock = vi.hoisted(() => ({
 
 vi.mock('expo-background-task', () => backgroundTaskMock);
 vi.mock('expo-task-manager', () => taskManagerMock);
-vi.mock('@mindwtr/core', () => coreMock);
+vi.mock('@tinybubbles/core', () => coreMock);
 vi.mock('./sync-service', () => syncServiceMock);
 vi.mock('./storage-adapter', () => storageAdapterMock);
 vi.mock('./sync-service-utils', () => ({

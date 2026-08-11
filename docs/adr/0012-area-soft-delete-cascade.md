@@ -11,7 +11,7 @@ Without a sync-level cascade, restored children can keep dangling `areaId` or st
 
 ## Decision
 
-Mindwtr treats area deletion as a soft-delete cascade:
+Tiny Bubbles treats area deletion as a soft-delete cascade:
 
 1. Deleting an area stamps tombstones on the area and its child projects, sections, and tasks.
 2. Restoring an area restores children only when their tombstone belongs to the same cascade timestamp.

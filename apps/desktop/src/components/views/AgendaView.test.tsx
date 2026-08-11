@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
-import { useTaskStore, type Project, type Task } from '@mindwtr/core';
+import { useTaskStore, type Project, type Task } from '@tinybubbles/core';
 import { LanguageProvider } from '../../contexts/language-context';
 import { AgendaView } from './AgendaView';
 import { useUiStore } from '../../store/ui-store';
-import { MINDWTR_NAVIGATE_EVENT } from '../../lib/navigation-events';
+import { TINYBUBBLES_NAVIGATE_EVENT } from '../../lib/navigation-events';
 import { selectToolbarOption } from '../../test/toolbar-select';
 import { expectScrolledEndGap } from '../../test/list-end-gap';
 
@@ -44,7 +44,7 @@ vi.mock('@dnd-kit/sortable', () => ({
 }));
 
 const nowIso = '2026-02-28T12:00:00.000Z';
-const focusViewStateStorageKey = 'mindwtr:view:focus:v1';
+const focusViewStateStorageKey = 'tinybubbles:view:focus:v1';
 
 const focusedTask: Task = {
     id: 'focused-task',
@@ -771,7 +771,7 @@ describe('AgendaView', () => {
             updatedAt: nowIso,
         };
         const onNavigate = vi.fn((event: Event) => (event as CustomEvent).detail);
-        window.addEventListener(MINDWTR_NAVIGATE_EVENT, onNavigate as EventListener);
+        window.addEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
 
         useTaskStore.setState({
             tasks: [],
@@ -792,7 +792,7 @@ describe('AgendaView', () => {
             expect(useUiStore.getState().projectView.selectedProjectId).toBe('review-project');
             expect(onNavigate).toHaveReturnedWith({ view: 'projects' });
         } finally {
-            window.removeEventListener(MINDWTR_NAVIGATE_EVENT, onNavigate as EventListener);
+            window.removeEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
         }
     });
 

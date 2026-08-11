@@ -94,6 +94,9 @@ jobs:
   # Stable releases validate the immutable tag, every committed version manifest,
   # and the CloudKit Production ledger before any platform build can start.
   validate:
+    # Tiny Bubbles fork: releases are disabled until the project publishes builds.
+    # Set repository variable ENABLE_RELEASE_WORKFLOWS=true to re-enable.
+    if: vars.ENABLE_RELEASE_WORKFLOWS == 'true'
     runs-on: ubuntu-latest
     name: Validate Stable Release
     timeout-minutes: 10
@@ -140,8 +143,8 @@ jobs:
             "docs/release-notes/${VERSION}.md"; do
             [ -f "$path" ] || continue
             heading="$(head -n 1 "$path")"
-            if [[ "$heading" != "# Mindwtr ${VERSION}" && "$heading" != "# Mindwtr ${TAG}" ]]; then
-              echo "Stable release notes heading must be '# Mindwtr ${VERSION}' or '# Mindwtr ${TAG}': $path" >&2
+            if [[ "$heading" != "# Tiny Bubbles ${VERSION}" && "$heading" != "# Tiny Bubbles ${TAG}" ]]; then
+              echo "Stable release notes heading must be '# Tiny Bubbles ${VERSION}' or '# Tiny Bubbles ${TAG}': $path" >&2
               exit 1
             fi
             echo "Using release notes at $path"
@@ -287,7 +290,7 @@ jobs:
           USE_PLAY_TRACKS: ${{ github.event_name != 'workflow_dispatch' || inputs.run_android }}
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           LOCAL_CODE=$(jq -r '.expo.android.versionCode' apps/mobile/app.json)
           if [ -z "$LOCAL_CODE" ] || [ "$LOCAL_CODE" = "null" ]; then
             echo "Missing expo.android.versionCode in apps/mobile/app.json" >&2
@@ -396,7 +399,7 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.tag }}
 
-      - name: Import Mindwtr release signing key
+      - name: Import Tiny Bubbles release signing key
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -473,7 +476,7 @@ jobs:
             echo "Missing macOS artifact (*.dmg)." >&2
             missing=1
           fi
-          expected_windows_installer="./release-assets/mindwtr_${VERSION}_x64-setup.exe"
+          expected_windows_installer="./release-assets/tinybubbles_${VERSION}_x64-setup.exe"
           mapfile -d '' -t windows_installers < <(find ./release-assets -maxdepth 1 -type f -name '*.exe' -print0)
           if [ "${#windows_installers[@]}" -ne 1 ]; then
             echo "Expected exactly one Windows installer for ${VERSION}; found ${#windows_installers[@]}." >&2
@@ -543,7 +546,7 @@ jobs:
       - name: Checkout packages repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          repository: dongdongbh/homebrew-mindwtr
+          repository: tinybubbles-app/homebrew-tinybubbles
           token: ${{ secrets.PACKAGES_REPO_TOKEN }}
           path: packages-repo
 
@@ -565,7 +568,7 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           VERSION="${{ steps.version.outputs.version }}"
 
-          URL_EXE="https://github.com/${{ github.repository }}/releases/download/${TAG}/mindwtr_${VERSION}_x64-setup.exe"
+          URL_EXE="https://github.com/${{ github.repository }}/releases/download/${TAG}/tinybubbles_${VERSION}_x64-setup.exe"
 
           echo "Waiting for release assets to become available..."
           for attempt in $(seq 1 10); do
@@ -580,9 +583,9 @@ jobs:
             sleep 15
           done
 
-          curl -fL -o mindwtr.exe "$URL_EXE"
+          curl -fL -o tinybubbles.exe "$URL_EXE"
 
-          SHA_EXE=$(sha256sum mindwtr.exe | awk '{print $1}')
+          SHA_EXE=$(sha256sum tinybubbles.exe | awk '{print $1}')
 
           echo "sha_exe=$SHA_EXE" >> "$GITHUB_OUTPUT"
 
@@ -590,22 +593,22 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           SHA_EXE="${{ steps.hashes.outputs.sha_exe }}"
-          URL_EXE="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/mindwtr_${VERSION}_x64-setup.exe#/dl.7z"
+          URL_EXE="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/tinybubbles_${VERSION}_x64-setup.exe#/dl.7z"
 
-          FILE="packages-repo/bucket/mindwtr.json"
+          FILE="packages-repo/bucket/tinybubbles.json"
           jq --arg v "$VERSION" \
              --arg url "$URL_EXE" \
              --arg hash "$SHA_EXE" \
              '.version = $v
               | .architecture."64bit".url = $url
               | .architecture."64bit".hash = $hash
-             | .autoupdate.architecture."64bit".url = "https://github.com/dongdongbh/Mindwtr/releases/download/v\($v)/mindwtr_\($v)_x64-setup.exe#/dl.7z"' \
+             | .autoupdate.architecture."64bit".url = "https://github.com/tinybubbles-app/tinybubbles/releases/download/v\($v)/tinybubbles_\($v)_x64-setup.exe#/dl.7z"' \
              "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
 
       - name: Check Winget package exists
         id: winget_check
         run: |
-          PKG_ID="dongdongbh.Mindwtr"
+          PKG_ID="tinybubbles-app.TinyBubbles"
           PKG_LOWER="${PKG_ID,,}"
           FIRST="${PKG_LOWER:0:1}"
           URL="https://github.com/microsoft/winget-pkgs/tree/master/manifests/${FIRST}/${PKG_ID//./\/}"
@@ -621,7 +624,7 @@ jobs:
         if: steps.winget_check.outputs.exists == 'true'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          repository: dongdongbh/winget-pkgs
+          repository: tinybubbles-app/winget-pkgs
           token: ${{ secrets.PACKAGES_REPO_TOKEN }}
           path: winget-pkgs
 
@@ -633,14 +636,14 @@ jobs:
           REPO="${{ github.repository }}"
           SHA_EXE="${{ steps.hashes.outputs.sha_exe }}"
           RELEASE_DATE="$(date -u +%Y-%m-%d)"
-          INSTALLER_URL="https://github.com/${REPO}/releases/download/${TAG}/mindwtr_${VERSION}_x64-setup.exe"
-          MANIFEST_DIR="winget-pkgs/manifests/d/dongdongbh/Mindwtr/${VERSION}"
+          INSTALLER_URL="https://github.com/${REPO}/releases/download/${TAG}/tinybubbles_${VERSION}_x64-setup.exe"
+          MANIFEST_DIR="winget-pkgs/manifests/d/tinybubbles-app/Tiny Bubbles/${VERSION}"
 
           mkdir -p "$MANIFEST_DIR"
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/dongdongbh.Mindwtr.installer.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.installer.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
-          PackageIdentifier: dongdongbh.Mindwtr
+          PackageIdentifier: tinybubbles-app.TinyBubbles
           PackageVersion: ${VERSION}
           InstallerLocale: en-US
           InstallerType: nullsoft
@@ -654,13 +657,13 @@ jobs:
             SilentWithProgress: /S /CURRENTUSER
           UpgradeBehavior: install
           Commands:
-            - mindwtr
-          ProductCode: Mindwtr
+            - tinybubbles
+          ProductCode: Tiny Bubbles
           ReleaseDate: ${RELEASE_DATE}
           AppsAndFeaturesEntries:
-            - ProductCode: Mindwtr
+            - ProductCode: Tiny Bubbles
           InstallationMetadata:
-            DefaultInstallLocation: '%LOCALAPPDATA%\\Programs\\Mindwtr'
+            DefaultInstallLocation: '%LOCALAPPDATA%\\Programs\\Tiny Bubbles'
           Installers:
             - Architecture: x64
               InstallerUrl: ${INSTALLER_URL}
@@ -669,25 +672,25 @@ jobs:
           ManifestVersion: 1.10.0
           EOF
 
-          INSTALLER_MANIFEST="$MANIFEST_DIR/dongdongbh.Mindwtr.installer.yaml"
+          INSTALLER_MANIFEST="$MANIFEST_DIR/tinybubbles-app.TinyBubbles.installer.yaml"
           test -s "$INSTALLER_MANIFEST"
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/dongdongbh.Mindwtr.locale.en-US.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.locale.en-US.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
-          PackageIdentifier: dongdongbh.Mindwtr
+          PackageIdentifier: tinybubbles-app.TinyBubbles
           PackageVersion: ${VERSION}
           PackageLocale: en-US
-          Publisher: dongdongbh
-          PublisherUrl: https://github.com/dongdongbh
-          PublisherSupportUrl: https://github.com/dongdongbh/Mindwtr/issues
-          Author: dongdongbh
-          PackageName: Mindwtr
-          PackageUrl: https://github.com/dongdongbh/Mindwtr
+          Publisher: tinybubbles-app
+          PublisherUrl: https://github.com/tinybubbles-app
+          PublisherSupportUrl: https://github.com/tinybubbles-app/tinybubbles/issues
+          Author: tinybubbles-app
+          PackageName: Tiny Bubbles
+          PackageUrl: https://github.com/tinybubbles-app/tinybubbles
           License: AGPL-3.0
-          LicenseUrl: https://github.com/dongdongbh/Mindwtr/blob/HEAD/LICENSE
+          LicenseUrl: https://github.com/tinybubbles-app/tinybubbles/blob/HEAD/LICENSE
           ShortDescription: A complete Getting Things Done (GTD) productivity system.
           Description: A complete Getting Things Done (GTD) productivity system.
-          Moniker: mindwtr
+          Moniker: tinybubbles
           Tags:
             - cross-platform
             - getting-things-done
@@ -704,22 +707,22 @@ jobs:
           ManifestVersion: 1.10.0
           EOF
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/dongdongbh.Mindwtr.locale.zh-CN.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.locale.zh-CN.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
-          PackageIdentifier: dongdongbh.Mindwtr
+          PackageIdentifier: tinybubbles-app.TinyBubbles
           PackageVersion: ${VERSION}
           PackageLocale: zh-CN
-          Publisher: dongdongbh
-          PublisherUrl: https://github.com/dongdongbh
-          PublisherSupportUrl: https://github.com/dongdongbh/Mindwtr/issues
-          Author: dongdongbh
-          PackageName: Mindwtr
-          PackageUrl: https://github.com/dongdongbh/Mindwtr
+          Publisher: tinybubbles-app
+          PublisherUrl: https://github.com/tinybubbles-app
+          PublisherSupportUrl: https://github.com/tinybubbles-app/tinybubbles/issues
+          Author: tinybubbles-app
+          PackageName: Tiny Bubbles
+          PackageUrl: https://github.com/tinybubbles-app/tinybubbles
           License: AGPL-3.0
-          LicenseUrl: https://github.com/dongdongbh/Mindwtr/blob/HEAD/LICENSE
+          LicenseUrl: https://github.com/tinybubbles-app/tinybubbles/blob/HEAD/LICENSE
           ShortDescription: 完整的 GTD（搞定）任务管理系统。
           Description: 完整的 GTD（搞定）任务管理系统。
-          Moniker: mindwtr
+          Moniker: tinybubbles
           Tags:
             - cross-platform
             - getting-things-done
@@ -736,9 +739,9 @@ jobs:
           ManifestVersion: 1.10.0
           EOF
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/dongdongbh.Mindwtr.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
-          PackageIdentifier: dongdongbh.Mindwtr
+          PackageIdentifier: tinybubbles-app.TinyBubbles
           PackageVersion: ${VERSION}
           DefaultLocale: en-US
           ManifestType: version
@@ -751,32 +754,32 @@ jobs:
           GH_TOKEN: ${{ secrets.PACKAGES_REPO_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="mindwtr-${VERSION}"
+          BRANCH="tinybubbles-${VERSION}"
           cd winget-pkgs
           git checkout -b "$BRANCH"
-          git add manifests/d/dongdongbh/Mindwtr/"$VERSION"
+          git add manifests/d/tinybubbles-app/Tiny Bubbles/"$VERSION"
           git config --local user.name "GitHub Actions"
           git config --local user.email "actions@github.com"
-          git commit -m "New version: Mindwtr ${VERSION}"
+          git commit -m "New version: Tiny Bubbles ${VERSION}"
           git push -u origin "$BRANCH"
           gh pr create \
             --repo microsoft/winget-pkgs \
-            --head "dongdongbh:${BRANCH}" \
+            --head "tinybubbles-app:${BRANCH}" \
             --base master \
-            --title "New version: Mindwtr ${VERSION}" \
-            --body "Automated manifest update for Mindwtr ${VERSION}."
+            --title "New version: Tiny Bubbles ${VERSION}" \
+            --body "Automated manifest update for Tiny Bubbles ${VERSION}."
 
       - name: Commit and push
         run: |
           cd packages-repo
           git config --local user.name "GitHub Actions"
           git config --local user.email "actions@github.com"
-          git add bucket/mindwtr.json
+          git add bucket/tinybubbles.json
           if git diff --cached --quiet; then
             echo "No package changes to commit."
             exit 0
           fi
-          git commit -m "update: Mindwtr ${{ steps.version.outputs.version }}"
+          git commit -m "update: Tiny Bubbles ${{ steps.version.outputs.version }}"
           git push
 
   update-flathub:
@@ -808,12 +811,12 @@ jobs:
     with:
       tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
-  # Stable releases also update the AUR beta package so mindwtr-bin-beta users
+  # Stable releases also update the AUR beta package so tinybubbles-bin-beta users
   # pick stable back up after a test cycle without switching packages.
   update-aur-bin-beta:
     needs: [validate, release]
     if: ${{ always() && needs.validate.result == 'success' && !contains(github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name, '-') && ((startsWith(github.ref, 'refs/tags/') && github.event_name == 'push' && needs.release.result == 'success') || (github.event_name == 'workflow_dispatch' && inputs.run_update_aur && (needs.release.result == 'success' || needs.release.result == 'skipped'))) }}
-    name: Prepare AUR Beta Proposal (mindwtr-bin-beta)
+    name: Prepare AUR Beta Proposal (tinybubbles-bin-beta)
     uses: ./.github/workflows/update-aur-beta.yml
     with:
       tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -864,7 +867,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "${{ steps.version.outputs.tag }}"
           $version = "${{ steps.version.outputs.version }}"
-          $url = "https://github.com/${{ github.repository }}/releases/download/$tag/mindwtr_${version}_x64-setup.exe"
+          $url = "https://github.com/${{ github.repository }}/releases/download/$tag/tinybubbles_${version}_x64-setup.exe"
           Write-Host "Waiting for release asset: $url"
           $maxAttempts = 20
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
@@ -880,7 +883,7 @@ jobs:
               Start-Sleep -Seconds 15
             }
           }
-          $outFile = Join-Path $PWD "mindwtr-${version}-setup.exe"
+          $outFile = Join-Path $PWD "tinybubbles-${version}-setup.exe"
           Invoke-WebRequest -Uri $url -OutFile $outFile -MaximumRedirection 10
           $sha = (Get-FileHash -Path $outFile -Algorithm SHA256).Hash.ToLowerInvariant()
           "installer_url=$url" >> $env:GITHUB_OUTPUT
@@ -910,16 +913,16 @@ jobs:
           $toolsDir = Join-Path $pkgRoot "tools"
           New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
 
-          Copy-Item "metadata/chocolatey/mindwtr.nuspec" -Destination (Join-Path $pkgRoot "mindwtr.nuspec") -Force
+          Copy-Item "metadata/chocolatey/tinybubbles.nuspec" -Destination (Join-Path $pkgRoot "tinybubbles.nuspec") -Force
           $template = Get-Content -Raw "metadata/chocolatey/tools/chocolateyInstall.ps1.template"
           $installScript = $template.Replace("__INSTALLER_URL__", $installerUrl).Replace("__CHECKSUM__", $sha)
           Set-Content -Path (Join-Path $toolsDir "chocolateyInstall.ps1") -Value $installScript -Encoding UTF8 -NoNewline
 
           Push-Location $pkgRoot
-          choco pack "mindwtr.nuspec" --version "$version"
+          choco pack "tinybubbles.nuspec" --version "$version"
           Pop-Location
 
-          $nupkg = Get-ChildItem -Path $pkgRoot -Filter "mindwtr.$version.nupkg" | Select-Object -First 1
+          $nupkg = Get-ChildItem -Path $pkgRoot -Filter "tinybubbles.$version.nupkg" | Select-Object -First 1
           if (-not $nupkg) {
             throw "Failed to generate Chocolatey package for version $version."
           }
@@ -932,7 +935,7 @@ jobs:
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
           $pkgRoot = Join-Path $PWD "chocolatey-package"
-          choco install mindwtr --source "$pkgRoot" --force --no-progress -y
+          choco install tinybubbles --source "$pkgRoot" --force --no-progress -y
 
       - name: Push package to Chocolatey
         shell: pwsh
@@ -960,7 +963,7 @@ jobs:
   update-aur:
     needs: [validate, release]
     runs-on: ubuntu-latest
-    name: Prepare AUR Proposal (mindwtr-bin)
+    name: Prepare AUR Proposal (tinybubbles-bin)
     timeout-minutes: 30
     permissions:
       contents: read
@@ -993,12 +996,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf aur-mindwtr-bin
-          git clone https://aur.archlinux.org/mindwtr-bin.git aur-mindwtr-bin
+          rm -rf aur-tinybubbles-bin
+          git clone https://aur.archlinux.org/tinybubbles-bin.git aur-tinybubbles-bin
 
       - name: Sync PKGBUILD into AUR repo
         shell: bash
-        run: cp aur/PKGBUILD aur-mindwtr-bin/PKGBUILD
+        run: cp aur/PKGBUILD aur-tinybubbles-bin/PKGBUILD
 
       - name: Update .SRCINFO and smoke package
         run: |
@@ -1007,7 +1010,7 @@ jobs:
           docker run --rm \
             -e HOST_UID="$HOST_UID" \
             -e HOST_GID="$HOST_GID" \
-            -v "$PWD/aur-mindwtr-bin:/aur" \
+            -v "$PWD/aur-tinybubbles-bin:/aur" \
             -w /aur \
             archlinux:latest \
             bash -lc '
@@ -1028,15 +1031,15 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci/prepare-aur-proposal.sh \
-            aur-mindwtr-bin \
-            mindwtr-bin \
+            aur-tinybubbles-bin \
+            tinybubbles-bin \
             "${{ steps.version.outputs.tag }}" \
             aur-proposal
 
       - name: Preserve exact AUR proposal for reviewed publication
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: aur-proposal-mindwtr-bin-${{ steps.version.outputs.tag }}
+          name: aur-proposal-tinybubbles-bin-${{ steps.version.outputs.tag }}
           path: aur-proposal/
           include-hidden-files: true
           if-no-files-found: error
@@ -1045,7 +1048,7 @@ jobs:
   update-aur-source:
     needs: [validate, release]
     runs-on: ubuntu-latest
-    name: Prepare AUR Proposal (mindwtr)
+    name: Prepare AUR Proposal (tinybubbles)
     timeout-minutes: 60
     permissions:
       contents: read
@@ -1060,8 +1063,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf aur-mindwtr
-          git clone https://aur.archlinux.org/mindwtr.git aur-mindwtr
+          rm -rf aur-tinybubbles
+          git clone https://aur.archlinux.org/tinybubbles.git aur-tinybubbles
 
       - name: Resolve release version
         id: version
@@ -1078,10 +1081,10 @@ jobs:
       - name: Update PKGBUILD version
         id: pkgbuild_version
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          echo "Updating mindwtr PKGBUILD to version $VERSION"
+          echo "Updating tinybubbles PKGBUILD to version $VERSION"
           CURRENT_PKGVER="$(sed -n 's/^pkgver=//p' PKGBUILD | head -n 1)"
           if [ "$CURRENT_PKGVER" != "$VERSION" ]; then
             sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
@@ -1095,7 +1098,7 @@ jobs:
 
       - name: Use release archive for source package
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -1106,33 +1109,33 @@ jobs:
           text = path.read_text(encoding="utf-8")
 
           archive_source = (
-              'source=("$pkgname-$pkgver.tar.gz::https://github.com/dongdongbh/Mindwtr/archive/refs/tags/v$pkgver.tar.gz"\n'
+              'source=("$pkgname-$pkgver.tar.gz::https://github.com/tinybubbles-app/tinybubbles/archive/refs/tags/v$pkgver.tar.gz"\n'
               '        "$pkgname.desktop"\n'
               ')'
           )
           text, replaced = re.subn(
-              r'source=\("git\+https://github\.com/dongdongbh/Mindwtr\.git#tag=v\$pkgver"\s*\n\s*"\$pkgname\.desktop"\s*\)',
+              r'source=\("git\+https://github\.com/tinybubbles-app/Tiny Bubbles\.git#tag=v\$pkgver"\s*\n\s*"\$pkgname\.desktop"\s*\)',
               archive_source,
               text,
               count=1,
           )
           if replaced:
               print("Switched source package from git tag clone to GitHub release archive.")
-          elif "Mindwtr/archive/refs/tags/v$pkgver.tar.gz" in text:
+          elif "Tiny Bubbles/archive/refs/tags/v$pkgver.tar.gz" in text:
               print("Source package already uses the GitHub release archive.")
           else:
-              raise SystemExit("Could not find the expected Mindwtr source entry in PKGBUILD")
+              raise SystemExit("Could not find the expected Tiny Bubbles source entry in PKGBUILD")
 
-          text = text.replace('cd Mindwtr/apps/desktop/src-tauri', 'cd "$srcdir/Mindwtr-$pkgver/apps/desktop/src-tauri"')
-          text = text.replace('cd Mindwtr/apps/desktop', 'cd "$srcdir/Mindwtr-$pkgver/apps/desktop"')
-          text = text.replace('cd Mindwtr', 'cd "$srcdir/Mindwtr-$pkgver"')
+          text = text.replace('cd Tiny Bubbles/apps/desktop/src-tauri', 'cd "$srcdir/TinyBubbles-$pkgver/apps/desktop/src-tauri"')
+          text = text.replace('cd Tiny Bubbles/apps/desktop', 'cd "$srcdir/TinyBubbles-$pkgver/apps/desktop"')
+          text = text.replace('cd Tiny Bubbles', 'cd "$srcdir/TinyBubbles-$pkgver"')
 
           path.write_text(text, encoding="utf-8")
           PY
 
       - name: Sync Tauri compatibility patch
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           set -euo pipefail
           SOURCE_TAURI_CONF="../source/apps/desktop/src-tauri/tauri.conf.json"
@@ -1151,7 +1154,7 @@ jobs:
 
       - name: Normalize desktop test runner for source package
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -1176,7 +1179,7 @@ jobs:
 
       - name: Require Node 22 for prebuilt native modules
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           set -euo pipefail
           NODE_MAJOR="$(sed -n 's/^_nodeversion=//p' PKGBUILD | head -n 1)"
@@ -1193,7 +1196,7 @@ jobs:
 
       - name: Update checksums
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           HOST_UID="$(id -u)"
           HOST_GID="$(id -g)"
@@ -1227,7 +1230,7 @@ jobs:
 
       - name: Validate source package build (clean container)
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           HOST_UID="$(id -u)"
           HOST_GID="$(id -g)"
@@ -1258,7 +1261,7 @@ jobs:
 
       - name: Bump pkgrel for checksum-only changes
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           if [ "${{ steps.pkgbuild_version.outputs.pkgver_changed }}" = "false" ] && ! git diff --quiet -- PKGBUILD; then
             CURRENT_PKGREL="$(sed -n 's/^pkgrel=//p' PKGBUILD | head -n 1)"
@@ -1274,7 +1277,7 @@ jobs:
 
       - name: Update .SRCINFO
         shell: bash
-        working-directory: aur-mindwtr
+        working-directory: aur-tinybubbles
         run: |
           HOST_UID="$(id -u)"
           HOST_GID="$(id -g)"
@@ -1297,15 +1300,15 @@ jobs:
         run: |
           set -euo pipefail
           bash source/scripts/ci/prepare-aur-proposal.sh \
-            aur-mindwtr \
-            mindwtr \
+            aur-tinybubbles \
+            tinybubbles \
             "${{ steps.version.outputs.tag }}" \
             aur-proposal
 
       - name: Preserve exact AUR proposal for reviewed publication
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: aur-proposal-mindwtr-${{ steps.version.outputs.tag }}
+          name: aur-proposal-tinybubbles-${{ steps.version.outputs.tag }}
           path: aur-proposal/
           include-hidden-files: true
           if-no-files-found: error

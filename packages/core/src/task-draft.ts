@@ -59,7 +59,7 @@ export type TaskDraft = {
     assignedTo: string;
     reviewAt: string;
     repeatReminderMinutes: number | undefined;
-    suppressMindwtrReminders: boolean;
+    suppressTinyBubblesReminders: boolean;
 };
 
 export type TaskDraftField = keyof TaskDraft;
@@ -181,9 +181,9 @@ const TASK_DRAFT_FIELDS: { [K in TaskDraftField]: FieldSpec<K> } = {
         fromTask: (task) => task.repeatReminderMinutes,
         isDirty: (value, task) => (value ?? undefined) !== (task.repeatReminderMinutes ?? undefined),
     },
-    suppressMindwtrReminders: {
-        fromTask: (task) => task.suppressMindwtrReminders === true,
-        isDirty: (value, task) => value !== (task.suppressMindwtrReminders === true),
+    suppressTinyBubblesReminders: {
+        fromTask: (task) => task.suppressTinyBubblesReminders === true,
+        isDirty: (value, task) => value !== (task.suppressTinyBubblesReminders === true),
     },
 };
 
@@ -315,7 +315,7 @@ export function taskDraftToUpdatePatch(
         assignedTo: draft.assignedTo.trim() || undefined,
         reviewAt: draft.reviewAt || undefined,
         repeatReminderMinutes: draft.repeatReminderMinutes || undefined,
-        suppressMindwtrReminders: draft.suppressMindwtrReminders ? true : undefined,
+        suppressTinyBubblesReminders: draft.suppressTinyBubblesReminders ? true : undefined,
         ...attachmentsPatch,
     };
 }

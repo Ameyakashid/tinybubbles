@@ -11,7 +11,7 @@ import {
     getUsedTaskTokens,
     tFallback,
     type StoreActionResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { AIResponseAction } from '../ai-response-modal';
 import { buildAIConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
@@ -22,7 +22,7 @@ import {
     getUnknownErrorMessage,
     isActionFailure,
 } from '../store-action-result';
-import { type TaskDraftSetter } from '@mindwtr/core/task-draft';
+import { type TaskDraftSetter } from '@tinybubbles/core/task-draft';
 import {
     type TaskEditDraft,
 } from './task-edit-draft-adapter';

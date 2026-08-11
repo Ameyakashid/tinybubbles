@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
-import { TaskStatus, tFallback } from '@mindwtr/core';
+import { TaskStatus, tFallback } from '@tinybubbles/core';
 import type { ThemeColors } from '../../hooks/use-theme-colors';
 import { useStatusColors } from '../../hooks/use-status-colors';
 import { styles } from './swipeable-task-item.styles';

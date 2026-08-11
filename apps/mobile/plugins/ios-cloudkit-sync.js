@@ -4,7 +4,7 @@ const {
   withPlugins,
 } = require('@expo/config-plugins');
 
-const CLOUDKIT_CONTAINER = 'iCloud.tech.dongdongbh.mindwtr';
+const CLOUDKIT_CONTAINER = 'iCloud.app.tinybubbles';
 
 /**
  * Add iCloud/CloudKit entitlements so the app can use CKContainer

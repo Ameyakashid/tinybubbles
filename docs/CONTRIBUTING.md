@@ -1,6 +1,6 @@
-# Contributing to Mindwtr
+# Contributing to Tiny Bubbles
 
-Thanks for your interest in improving Mindwtr. This guide covers:
+Thanks for your interest in improving Tiny Bubbles. This guide covers:
 
 - Before you begin
 - Code contribution process
@@ -9,7 +9,7 @@ Thanks for your interest in improving Mindwtr. This guide covers:
 - Pull request guidelines
 - Documentation and translation contributions
 
-Mindwtr is a Bun monorepo with:
+Tiny Bubbles is a Bun monorepo with:
 
 - Desktop app (`apps/desktop`): Tauri + React + Vite
 - Mobile app (`apps/mobile`): Expo + React Native
@@ -20,13 +20,13 @@ Mindwtr is a Bun monorepo with:
 
 ### 1) Follow our community standards
 
-- Read and follow the [Code of Conduct](https://github.com/dongdongbh/Mindwtr/blob/main/.github/CODE_OF_CONDUCT.md).
+- Read and follow the [Code of Conduct](https://github.com/tinybubbles-app/tinybubbles/blob/main/.github/CODE_OF_CONDUCT.md).
 - Be respectful in issues, discussions, reviews, and commits.
 
 ### 2) Report security issues privately
 
 - Do not open public issues for security vulnerabilities.
-- Use [SECURITY.md](https://github.com/dongdongbh/Mindwtr/blob/main/SECURITY.md) for responsible disclosure instructions.
+- Use [SECURITY.md](https://github.com/tinybubbles-app/tinybubbles/blob/main/SECURITY.md) for responsible disclosure instructions.
 
 ### 3) Start with an issue for non-trivial changes
 
@@ -42,7 +42,7 @@ When opening an issue, include:
 
 ### 4) Keep product fit in mind
 
-Mindwtr focuses on GTD and practical execution, and is built to be **simple by default and powerful when you need it**: progressive disclosure, less by default, no feature creep. *Don't show me a cockpit when I just want to ride a bike.* Contributions are most likely to be accepted when they:
+Tiny Bubbles focuses on GTD and practical execution, and is built to be **simple by default and powerful when you need it**: progressive disclosure, less by default, no feature creep. *Don't show me a cockpit when I just want to ride a bike.* Contributions are most likely to be accepted when they:
 
 - Keep workflows simple by default
 - Avoid unnecessary UI complexity
@@ -56,7 +56,7 @@ Mindwtr focuses on GTD and practical execution, and is built to be **simple by d
 2. Fork the repository and create a branch in your fork.
 3. Implement the change with focused scope.
 4. Run relevant checks locally.
-5. Open a pull request to `dongdongbh/Mindwtr:main`.
+5. Open a pull request to `tinybubbles-app/tinybubbles:main`.
 6. Link the issue in the PR (example: `Fixes #123`).
 
 Branch naming examples:
@@ -148,19 +148,19 @@ While iterating, the per-area commands below are faster.
 Desktop lint:
 
 ```bash
-bun run --filter mindwtr lint
+bun run --filter tinybubbles lint
 ```
 
 Desktop tests (single pass, non-watch):
 
 ```bash
-bun run --filter mindwtr test -- --run
+bun run --filter tinybubbles test -- --run
 ```
 
 Core tests:
 
 ```bash
-bun run --filter @mindwtr/core test
+bun run --filter @tinybubbles/core test
 ```
 
 Mobile tests:
@@ -197,7 +197,7 @@ Naming:
 
 ## LLM-assisted coding ("vibe coding")
 
-Mindwtr is not strictly against LLM-assisted coding. LLM tools are improving quickly and can be productive when used correctly.
+Tiny Bubbles is not strictly against LLM-assisted coding. LLM tools are improving quickly and can be productive when used correctly.
 
 If you use LLM/coding agents for contributions, follow these rules:
 
@@ -208,7 +208,7 @@ If you use LLM/coding agents for contributions, follow these rules:
 3. Start with a clear implementation goal.
    Define the bug/feature, expected behavior, and intended implementation before prompting.
 4. Avoid over-engineering.
-   Prefer small, maintainable changes that match Mindwtr's "simple by default" philosophy.
+   Prefer small, maintainable changes that match Tiny Bubbles's "simple by default" philosophy.
 5. YOU review the output before opening a non-Draft PR.
    Do not request review until you have read and understood every generated change, run relevant tests, and verified behavior on real devices/platforms. You are responsible for the code you submit, not the tool.
 6. Remove verbosity and blathering.
@@ -250,31 +250,27 @@ Commit style:
   - `feat(core): add date format normalization`
   - `docs: clarify sync troubleshooting`
 
-## Contributor License Agreement
+## Licensing of contributions
 
-Before we can merge your pull request, you'll need to sign our
-[Contributor License Agreement (CLA)](https://gist.github.com/dongdongbh/0446c35e1d5c1a73c344b16cba4aeeaa).
+Tiny Bubbles is free software licensed under AGPL-3.0-only, inherited from upstream
+[Mindwtr](https://github.com/dongdongbh/Mindwtr). By opening a pull request you agree that
+your contribution is licensed under AGPL-3.0-only.
 
-This is a one-time process — CLA Assistant will automatically check
-when you open a PR and prompt you if needed. Signing takes about
-30 seconds via your GitHub account.
+There is **no Contributor License Agreement** for this fork, and no copyright assignment.
+You keep the copyright in your contribution.
 
-### Why a CLA?
-
-Mindwtr is free, open-source, and licensed under AGPL-3.0. The CLA
-ensures the project has the flexibility to explore sustainability
-options (like dual licensing) in the future, so we can keep the
-project alive long-term. You retain full ownership of your
-contributions — the CLA just grants the project a license to use them.
-
-The core of Mindwtr will always remain available under an
-OSI-approved open-source license.
+> Upstream Mindwtr does operate a CLA for contributions to *that* project. If you intend
+> your change to land upstream as well, follow
+> [their contribution process](https://github.com/dongdongbh/Mindwtr) — this fork cannot
+> accept a CLA on their behalf.
 
 ## Documentation contributions
 
-Documentation updates are welcome in the docs site repo, `README.md`, `README_zh.md`, and repository-local docs.
+Documentation updates are welcome in `README.md`, `README_zh.md`, and the repository's `docs/` directory.
 
-Most user-facing documentation should go in the Mindwtr web docs source, which builds the public docs site at https://docs.mindwtr.app/. Use this repository's `docs/` directory for repository-local documentation such as contribution guides, architecture summaries, ADRs, and release notes. The `wiki/` directory holds only the retired GitHub Wiki's landing page, which points readers to the docs site; do not add content pages there.
+Tiny Bubbles has no separate documentation website. All documentation lives in this repository's `docs/` directory — contribution guides, architecture summaries, ADRs, release notes, and user-facing guides alike. The `wiki/` directory holds only the retired GitHub Wiki's landing page; do not add content pages there.
+
+Upstream Mindwtr's documentation site at <https://docs.mindwtr.app/> covers the functionality this fork inherits, and several documents here link to it rather than duplicating it. It documents upstream, not this fork, so keep that distinction clear when you link to it.
 
 When changing docs:
 
@@ -283,12 +279,12 @@ When changing docs:
 - Validate links
 - Update both English and Chinese docs when the content is mirrored
 - Keep `README.md` and `README_zh.md` heading structure aligned; CI runs `bun run docs:check-readme`
-- Prefer updating the [Mindwtr web docs source](https://github.com/dongdongbh/mindwtr-web/tree/main/docs) when the content is public user/developer documentation
+- Put public user/developer documentation in [`docs/`](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs)
 
 Useful references:
 
 - [Official docs](https://docs.mindwtr.app/)
-- [Docs source](https://github.com/dongdongbh/mindwtr-web/tree/main/docs)
+- [Docs source](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs)
 - [Developer Guide](https://docs.mindwtr.app/developers/developer-guide)
 - [Architecture](https://docs.mindwtr.app/developers/architecture)
 
@@ -296,7 +292,7 @@ Useful references:
 
 Most translation strings live in:
 
-- [`packages/core/src/i18n/locales/`](https://github.com/dongdongbh/Mindwtr/tree/main/packages/core/src/i18n/locales/)
+- [`packages/core/src/i18n/locales/`](https://github.com/tinybubbles-app/tinybubbles/tree/main/packages/core/src/i18n/locales/)
 
 When updating translations:
 
@@ -315,4 +311,4 @@ If you are unsure about scope or implementation details:
 - Join community chat on Discord: https://discord.gg/gc4h5t58PR
 - Ask for maintainer feedback before implementing large changes
 
-Thanks again for contributing to Mindwtr.
+Thanks again for contributing to Tiny Bubbles.

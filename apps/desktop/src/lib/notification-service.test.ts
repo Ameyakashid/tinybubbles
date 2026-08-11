@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NotificationSettings, Task } from '@mindwtr/core';
+import type { NotificationSettings, Task } from '@tinybubbles/core';
 
-import { buildReminderSchedule, getNextScheduledAt, useTaskStore } from '@mindwtr/core';
+import { buildReminderSchedule, getNextScheduledAt, useTaskStore } from '@tinybubbles/core';
 
 import {
     buildDesktopTaskNotificationBody,
@@ -117,8 +117,8 @@ describe('resolveDueRepeatToFire', () => {
         expect(resolveDueRepeatToFire(repeatTask, now, undefined, { includeDueDate: false })).toBeNull();
     });
 
-    it('never fires repeat reminders for a task that suppresses Mindwtr reminders (#885)', () => {
-        const suppressed = { ...repeatTask, suppressMindwtrReminders: true };
+    it('never fires repeat reminders for a task that suppresses Tiny Bubbles reminders (#885)', () => {
+        const suppressed = { ...repeatTask, suppressTinyBubblesReminders: true };
         const now = new Date('2026-06-17T09:20:05.000Z');
         expect(resolveDueRepeatToFire(suppressed, now, undefined, opts)).toBeNull();
     });
@@ -151,7 +151,7 @@ describe('resolvePollCatchUpMs', () => {
 // The desktop poll loop schedules task reminders via core's getNextScheduledAt with all
 // three sources enabled. These guard that the loop's inputs honor the per-task opt-out
 // (#885): start/due reminders drop, but review reminders still fire (mobile parity).
-describe('desktop next-reminder scheduling honors suppressMindwtrReminders', () => {
+describe('desktop next-reminder scheduling honors suppressTinyBubblesReminders', () => {
     const allOn = { includeStartTime: true, includeDueDate: true, includeReviewAt: true };
     const now = new Date('2026-06-17T08:00:00.000Z');
 
@@ -164,12 +164,12 @@ describe('desktop next-reminder scheduling honors suppressMindwtrReminders', () 
         expect(getNextScheduledAt(task, now, allOn)).toEqual(new Date('2026-06-17T09:00:00.000Z'));
     });
 
-    it('drops start and due reminders when the task suppresses Mindwtr reminders', () => {
+    it('drops start and due reminders when the task suppresses Tiny Bubbles reminders', () => {
         const task: Task = {
             ...baseTask,
             startTime: '2026-06-17T09:00:00.000Z',
             dueDate: '2026-06-17T17:00:00.000Z',
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         };
         expect(getNextScheduledAt(task, now, allOn)).toBeNull();
     });
@@ -180,7 +180,7 @@ describe('desktop next-reminder scheduling honors suppressMindwtrReminders', () 
             startTime: '2026-06-17T09:00:00.000Z',
             dueDate: '2026-06-17T17:00:00.000Z',
             reviewAt: '2026-06-17T10:00:00.000Z',
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         };
         expect(getNextScheduledAt(task, now, allOn)).toEqual(new Date('2026-06-17T10:00:00.000Z'));
     });

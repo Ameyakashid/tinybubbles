@@ -1,4 +1,4 @@
-import { safeParseDate, type Project } from '@mindwtr/core';
+import { safeParseDate, type Project } from '@tinybubbles/core';
 
 export type ProjectStatusPalette = Record<Project['status'], { text: string; bg: string; border: string }>;
 

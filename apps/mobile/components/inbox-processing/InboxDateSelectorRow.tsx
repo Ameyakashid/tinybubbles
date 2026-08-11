@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { safeFormatDate, type QuickDatePreset } from '@mindwtr/core';
+import { safeFormatDate, type QuickDatePreset } from '@tinybubbles/core';
 
 import { QuickDateChips } from '../QuickDateChips';
 import { styles } from '../inbox-processing-modal.styles';

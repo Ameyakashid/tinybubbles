@@ -6,7 +6,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { JALALI_LOCALE_TAG } from '@mindwtr/core';
+import { JALALI_LOCALE_TAG } from '@tinybubbles/core';
 
 import { Dialog, DialogBody } from './Dialog';
 import { DateField } from './DateField';

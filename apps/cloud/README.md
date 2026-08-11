@@ -1,18 +1,18 @@
-# Mindwtr Cloud
+# Tiny Bubbles Cloud
 
-This package provides the lightweight sync backend used by Mindwtr clients.
+This package provides the lightweight sync backend used by Tiny Bubbles clients.
 
 ## Quick Start
 
 Run from repository root:
 
 ```bash
-bun run --filter mindwtr-cloud dev -- --port 8787
+bun run --filter tinybubbles-cloud dev -- --port 8787
 ```
 
 ## Documentation
 
-Detailed API, deployment, and operations docs are maintained in the public docs site. Source edits belong in the Mindwtr web docs source:
+Detailed API, deployment, and operations docs are maintained in the public docs site. Source edits belong in the Tiny Bubbles web docs source:
 
 - https://docs.mindwtr.app/
 - https://github.com/dongdongbh/mindwtr-web/tree/main/docs

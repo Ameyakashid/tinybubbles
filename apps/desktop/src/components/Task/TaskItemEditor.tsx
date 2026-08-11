@@ -11,7 +11,7 @@ import {
     type TaskDraftSetter,
     type TaskEditorFieldId,
     type TaskEditorSectionId,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { AreaSelector } from '../ui/AreaSelector';
 import { ProjectSelector } from '../ui/ProjectSelector';
 import { SectionSelector } from '../ui/SectionSelector';

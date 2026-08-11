@@ -29,7 +29,7 @@ import {
     type ProjectAreaGroup,
     type ProjectTagFilter,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { useLanguage } from '../../contexts/language-context';
 import { PromptModal } from '../PromptModal';
@@ -85,8 +85,8 @@ type ProjectsViewActiveDrag =
     | { type: 'task'; taskId: string }
     | { type: 'project'; section: ProjectAreaSection };
 
-const COLLAPSED_AREAS_STORAGE_KEY = 'mindwtr:projects:collapsedAreas';
-const PROJECTS_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:projects:v1';
+const COLLAPSED_AREAS_STORAGE_KEY = 'tinybubbles:projects:collapsedAreas';
+const PROJECTS_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:projects:v1';
 const PROJECTS_LAYOUT_SIDEBAR_EXTRA_MULTIPLIER = 3;
 const ALL_TAGS = '__all__';
 const NO_TAGS = '__none__';

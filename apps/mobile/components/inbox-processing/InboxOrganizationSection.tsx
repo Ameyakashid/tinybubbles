@@ -5,7 +5,7 @@ import { styles } from '../inbox-processing-modal.styles';
 import { formatTimeEstimateChipLabel } from '../time-estimate-filter-utils';
 import { InboxSuggestionList } from './InboxSuggestionList';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
-import type { TaskPriority, TaskEnergyLevel, TimeEstimate } from '@mindwtr/core';
+import type { TaskPriority, TaskEnergyLevel, TimeEstimate } from '@tinybubbles/core';
 
 type Props = {
   t: (key: string) => string;

@@ -6,7 +6,7 @@ import {
   recordStoreReviewPromptAttempt,
   shouldAttemptStoreReviewPrompt,
   type UserPromptPlatform,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { logWarn } from '@/lib/app-log';
 import {

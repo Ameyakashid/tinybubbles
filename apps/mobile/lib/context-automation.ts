@@ -5,10 +5,10 @@ import {
   sortFocusNextActions,
   type Project,
   type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
-export const ANDROID_CONTEXT_ACTIVATE_ACTION = 'tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT';
-export const ANDROID_CONTEXT_DEACTIVATE_ACTION = 'tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT';
+export const ANDROID_CONTEXT_ACTIVATE_ACTION = 'app.tinybubbles.action.ACTIVATE_CONTEXT';
+export const ANDROID_CONTEXT_DEACTIVATE_ACTION = 'app.tinybubbles.action.DEACTIVATE_CONTEXT';
 export const CONTEXT_AUTOMATION_NOTIFICATION_KIND = 'context-automation';
 
 export type ContextAutomationAction = 'activate' | 'deactivate';
@@ -90,7 +90,7 @@ export function parseContextAutomationUrl(rawUrl: string): ContextAutomationPayl
   } catch {
     return null;
   }
-  if ((parsed.protocol || '').toLowerCase() !== 'mindwtr:') return null;
+  if ((parsed.protocol || '').toLowerCase() !== 'tinybubbles:') return null;
 
   const segments = normalizeRouteSegments(parsed);
   const route = String(segments[0] ?? '').toLowerCase();
@@ -158,7 +158,7 @@ export function buildContextAutomationNotificationCopy(
   if (count === 0) {
     return {
       title: interpolate(templates.noTasksTitle ?? 'No {{context}} next actions'),
-      message: interpolate(templates.noTasksMessage ?? 'Mindwtr did not find any /next tasks for {{context}}.'),
+      message: interpolate(templates.noTasksMessage ?? 'Tiny Bubbles did not find any /next tasks for {{context}}.'),
     };
   }
 

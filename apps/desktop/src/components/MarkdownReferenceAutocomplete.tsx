@@ -12,7 +12,7 @@ import {
     type MarkdownReferenceSearchResult,
     type MarkdownSelection,
     type MarkdownToolbarResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { cn } from '../lib/utils';
 import {

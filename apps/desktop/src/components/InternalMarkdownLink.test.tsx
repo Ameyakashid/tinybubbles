@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
-import type { Project, Task } from '@mindwtr/core';
-import { useTaskStore } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../contexts/language-context';
-import { MINDWTR_NAVIGATE_EVENT } from '../lib/navigation-events';
+import { TINYBUBBLES_NAVIGATE_EVENT } from '../lib/navigation-events';
 import { useUiStore } from '../store/ui-store';
 import { createInternalMarkdownLinkContext, InternalMarkdownLink } from './InternalMarkdownLink';
 
@@ -68,7 +68,7 @@ describe('InternalMarkdownLink', () => {
             return { success: true, id: restoredTask.id };
         });
         const onNavigate = vi.fn();
-        window.addEventListener(MINDWTR_NAVIGATE_EVENT, onNavigate as EventListener);
+        window.addEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
 
         act(() => {
             useTaskStore.setState((state) => ({
@@ -84,7 +84,7 @@ describe('InternalMarkdownLink', () => {
         try {
             const { getByRole, getByText } = render(
                 <LanguageProvider>
-                    <InternalMarkdownLink href="mindwtr://task/task-1" linkContext={currentLinkContext()}>Deleted task</InternalMarkdownLink>
+                    <InternalMarkdownLink href="tinybubbles://task/task-1" linkContext={currentLinkContext()}>Deleted task</InternalMarkdownLink>
                 </LanguageProvider>
             );
 
@@ -96,7 +96,7 @@ describe('InternalMarkdownLink', () => {
                 expect(onNavigate).toHaveBeenCalled();
             });
         } finally {
-            window.removeEventListener(MINDWTR_NAVIGATE_EVENT, onNavigate as EventListener);
+            window.removeEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
         }
     });
 
@@ -127,7 +127,7 @@ describe('InternalMarkdownLink', () => {
             return { success: true, id: restoredProject.id };
         });
         const onNavigate = vi.fn();
-        window.addEventListener(MINDWTR_NAVIGATE_EVENT, onNavigate as EventListener);
+        window.addEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
 
         act(() => {
             useTaskStore.setState((state) => ({
@@ -141,7 +141,7 @@ describe('InternalMarkdownLink', () => {
         try {
             const { getByRole, getByText } = render(
                 <LanguageProvider>
-                    <InternalMarkdownLink href="mindwtr://project/project-1" linkContext={currentLinkContext()}>Deleted project</InternalMarkdownLink>
+                    <InternalMarkdownLink href="tinybubbles://project/project-1" linkContext={currentLinkContext()}>Deleted project</InternalMarkdownLink>
                 </LanguageProvider>
             );
 
@@ -154,7 +154,7 @@ describe('InternalMarkdownLink', () => {
                 expect(useUiStore.getState().projectView.selectedProjectId).toBe('project-1');
             });
         } finally {
-            window.removeEventListener(MINDWTR_NAVIGATE_EVENT, onNavigate as EventListener);
+            window.removeEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
         }
     });
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert, AppState, Modal, SectionList, Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData, AppSettings, Project, StorageAdapter, Task } from '@mindwtr/core';
+import type { AppData, AppSettings, Project, StorageAdapter, Task } from '@tinybubbles/core';
 
 import FocusScreen from '../app/(drawer)/(tabs)/focus';
 import { SwipeableTaskItem } from '@/components/swipeable-task-item';
@@ -120,8 +120,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   // The real store is selector-based; the shared visible-task context
   // subscribes field by field, so the mock has to honour selectors.
   const useTaskStore = Object.assign(
@@ -764,7 +764,7 @@ describe('FocusScreen', () => {
       node.props.accessibilityLabel === 'Next Actions' && typeof node.props.onPress === 'function'
     );
 
-    expect(asyncStorageMock.getItem).toHaveBeenCalledWith('mindwtr:view:focus:v1');
+    expect(asyncStorageMock.getItem).toHaveBeenCalledWith('tinybubbles:view:focus:v1');
     expect(nextSectionButton.props.accessibilityState).toEqual({ expanded: false });
     expect(
       tree.root.findAllByType(SwipeableTaskItem).map((node) => node.props.task.id),
@@ -787,7 +787,7 @@ describe('FocusScreen', () => {
     });
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      'mindwtr:view:focus:v1',
+      'tinybubbles:view:focus:v1',
       JSON.stringify({
         expandedSections: {
           focus: true,
@@ -1701,7 +1701,7 @@ describe('FocusScreen', () => {
         contexts: ['@desk', '@phone'],
       }),
     ];
-    const actualCore = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+    const actualCore = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
     const cloneDocument = (data: AppData): AppData => JSON.parse(JSON.stringify(data)) as AppData;
     let persistedDocument: AppData = {
       tasks: storeState.tasks,

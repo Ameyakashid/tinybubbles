@@ -1,6 +1,6 @@
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-export const FULLSCREEN_STORAGE_KEY = 'mindwtr-window-fullscreen';
+export const FULLSCREEN_STORAGE_KEY = 'tinybubbles-window-fullscreen';
 
 function parseStoredBoolean(value: string | null | undefined): boolean {
     const normalized = String(value || '').trim().toLowerCase();

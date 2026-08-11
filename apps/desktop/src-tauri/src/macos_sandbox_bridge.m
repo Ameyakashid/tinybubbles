@@ -4,8 +4,8 @@
 
 /// Create a security-scoped bookmark for the given file-system path.
 /// Returns a heap-allocated base64-encoded C string on success, or NULL.
-/// The caller must free the result with `mindwtr_macos_free_bookmark_string`.
-char *mindwtr_macos_create_security_bookmark(const char *path_cstr) {
+/// The caller must free the result with `tinybubbles_macos_free_bookmark_string`.
+char *tinybubbles_macos_create_security_bookmark(const char *path_cstr) {
     if (!path_cstr) return NULL;
 
     NSString *pathString = [NSString stringWithUTF8String:path_cstr];
@@ -18,7 +18,7 @@ char *mindwtr_macos_create_security_bookmark(const char *path_cstr) {
                            relativeToURL:nil
                                    error:&error];
     if (!bookmarkData) {
-        NSLog(@"[Mindwtr] Failed to create security bookmark for %@: %@",
+        NSLog(@"[Tiny Bubbles] Failed to create security bookmark for %@: %@",
               pathString, error);
         return NULL;
     }
@@ -33,15 +33,15 @@ char *mindwtr_macos_create_security_bookmark(const char *path_cstr) {
 /// Resolve a previously stored security-scoped bookmark (base64-encoded).
 /// On success calls `startAccessingSecurityScopedResource` and returns the
 /// resolved path as a heap-allocated C string.  Returns NULL on failure.
-/// The caller must free the result with `mindwtr_macos_free_bookmark_string`.
-char *mindwtr_macos_resolve_security_bookmark(const char *base64_cstr) {
+/// The caller must free the result with `tinybubbles_macos_free_bookmark_string`.
+char *tinybubbles_macos_resolve_security_bookmark(const char *base64_cstr) {
     if (!base64_cstr) return NULL;
 
     NSString *base64String = [NSString stringWithUTF8String:base64_cstr];
     NSData *bookmarkData =
         [[NSData alloc] initWithBase64EncodedString:base64String options:0];
     if (!bookmarkData) {
-        NSLog(@"[Mindwtr] Failed to decode bookmark base64 data");
+        NSLog(@"[Tiny Bubbles] Failed to decode bookmark base64 data");
         return NULL;
     }
 
@@ -54,18 +54,18 @@ char *mindwtr_macos_resolve_security_bookmark(const char *base64_cstr) {
                       bookmarkDataIsStale:&isStale
                                     error:&error];
     if (!resolvedURL) {
-        NSLog(@"[Mindwtr] Failed to resolve security bookmark: %@", error);
+        NSLog(@"[Tiny Bubbles] Failed to resolve security bookmark: %@", error);
         return NULL;
     }
 
     if (isStale) {
-        NSLog(@"[Mindwtr] Security bookmark is stale — the app may need to "
+        NSLog(@"[Tiny Bubbles] Security bookmark is stale — the app may need to "
               @"re-select the folder to refresh it");
     }
 
     BOOL started = [resolvedURL startAccessingSecurityScopedResource];
     if (!started) {
-        NSLog(@"[Mindwtr] startAccessingSecurityScopedResource failed for %@",
+        NSLog(@"[Tiny Bubbles] startAccessingSecurityScopedResource failed for %@",
               resolvedURL);
     }
 
@@ -76,6 +76,6 @@ char *mindwtr_macos_resolve_security_bookmark(const char *base64_cstr) {
 }
 
 /// Free a string returned by the bookmark helper functions.
-void mindwtr_macos_free_bookmark_string(char *ptr) {
+void tinybubbles_macos_free_bookmark_string(char *ptr) {
     free(ptr);
 }

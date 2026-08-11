@@ -22,13 +22,13 @@
 //   - OLDER, but on a NESTED path that is dev-only (e.g. eslint's private
 //     minimatch@3.1.5) -> warning by default. These never reach a shipped
 //     bundle, and pinning them would drag a lint-only dependency across a
-//     major version. Set MINDWTR_LOCK_OVERRIDE_STRICT=1 to make them fail.
+//     major version. Set TINYBUBBLES_LOCK_OVERRIDE_STRICT=1 to make them fail.
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT_PACKAGE_JSON = path.resolve(__dirname, '..', '..', 'package.json');
-const STRICT_NESTED_DEV = process.env.MINDWTR_LOCK_OVERRIDE_STRICT === '1';
+const STRICT_NESTED_DEV = process.env.TINYBUBBLES_LOCK_OVERRIDE_STRICT === '1';
 const NODE_MODULES_SEGMENT = 'node_modules/';
 
 const SKIP_SPEC_PREFIXES = [

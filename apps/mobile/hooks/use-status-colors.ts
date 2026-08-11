@@ -1,9 +1,9 @@
 import { useContext } from 'react';
-import { STATUS_COLORS_BY_THEME } from '@mindwtr/core';
-import type { StatusPalette } from '@mindwtr/core';
+import { STATUS_COLORS_BY_THEME } from '@tinybubbles/core';
+import type { StatusPalette } from '@tinybubbles/core';
 import { ThemeContext, type ThemeContextType } from '../contexts/theme-context';
 
-export type { StatusColorSet, StatusPalette } from '@mindwtr/core';
+export type { StatusColorSet, StatusPalette } from '@tinybubbles/core';
 
 type ResolvableTheme = Pick<ThemeContextType, 'isDark' | 'themePreset'>;
 

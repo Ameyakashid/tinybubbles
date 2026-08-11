@@ -2,7 +2,7 @@ import React from 'react';
 import { Dimensions, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createTaskDraft } from '@mindwtr/core/task-draft';
+import { createTaskDraft } from '@tinybubbles/core/task-draft';
 
 import { TaskEditFormTab } from './TaskEditFormTab';
 

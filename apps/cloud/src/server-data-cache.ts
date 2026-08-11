@@ -1,5 +1,5 @@
 import { lstatSync, type Stats } from 'fs';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 
 import { corsOrigin, logFailureWarn } from './server-config';
 import {
@@ -164,7 +164,7 @@ const formatStatEtagPart = (value: number): string => {
 };
 
 const buildDataMetadataEtag = (stat: Stats): string => (
-    `W/"mindwtr-${formatStatEtagPart(stat.ino)}-${formatStatEtagPart(stat.size)}`
+    `W/"tinybubbles-${formatStatEtagPart(stat.ino)}-${formatStatEtagPart(stat.size)}`
     + `-${formatStatEtagPart(stat.mtimeMs)}-${formatStatEtagPart(stat.ctimeMs)}"`
 );
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
-import { useTaskStore, type MergeStats } from '@mindwtr/core';
+import { useTaskStore, type MergeStats } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../contexts/language-context';
 import { KeybindingProvider } from '../contexts/keybinding-context';
@@ -202,7 +202,7 @@ describe('Layout sidebar archive section', () => {
     });
 
     it('respects a stored collapsed archive preference', () => {
-        window.localStorage.setItem('mindwtr:sidebar:collapsedSections', JSON.stringify(['archive']));
+        window.localStorage.setItem('tinybubbles:sidebar:collapsedSections', JSON.stringify(['archive']));
 
         const { container, getByRole } = renderLayout();
 
@@ -225,7 +225,7 @@ describe('Layout sidebar archive section', () => {
 describe('Layout Obsidian nav visibility', () => {
     it('opens global inbox capture from the visible Add Task button', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
         const { getByRole } = renderLayout();
         const addTaskButton = getByRole('button', { name: 'Add Task (Inbox)' });
 
@@ -240,7 +240,7 @@ describe('Layout Obsidian nav visibility', () => {
             detail: { initialProps: { status: 'inbox' } },
         });
 
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('hides Obsidian when the integration is disabled', () => {
@@ -556,7 +556,7 @@ describe('Layout sync security warning', () => {
             backend: 'webdav',
             syncPath: '',
             webdav: {
-                url: 'http://127.0.0.1:9328/Mindwtr',
+                url: 'http://127.0.0.1:9328/Tiny Bubbles',
                 username: '',
                 password: null,
                 passwordAuthority: 'opaque',

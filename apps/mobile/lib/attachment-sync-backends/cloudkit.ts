@@ -1,5 +1,5 @@
-import type { AppData, Attachment } from '@mindwtr/core';
-import { buildCloudKitAttachmentKey, parseCloudKitAttachmentKey, validateAttachmentForUpload } from '@mindwtr/core';
+import type { AppData, Attachment } from '@tinybubbles/core';
+import { buildCloudKitAttachmentKey, parseCloudKitAttachmentKey, validateAttachmentForUpload } from '@tinybubbles/core';
 import {
     deleteCloudKitAttachmentAssets,
     fetchCloudKitAttachmentAsset,

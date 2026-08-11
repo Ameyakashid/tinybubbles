@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData, Task } from '@mindwtr/core';
+import type { AppData, Task } from '@tinybubbles/core';
 
 const {
   asyncStorageMock,
@@ -252,7 +252,7 @@ describe('mobile storage adapter', () => {
     expect(sqliteAdapterSaveTask).toHaveBeenCalledWith(currentTask);
     // The backup is deferred off the save path (#766): the save resolves after
     // the SQLite write, and the JSON copy lands coalesced afterwards.
-    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('mindwtr-data', expect.anything());
+    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('tinybubbles-data', expect.anything());
 
     await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
     // Widget refresh runs on its own decoupled schedule (#766) and needs its
@@ -260,15 +260,15 @@ describe('mobile storage adapter', () => {
     await __mobileStorageTestUtils.flushPendingWidgetRefresh();
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      'mindwtr-data',
+      'tinybubbles-data',
       JSON.stringify(currentSnapshot),
     );
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      'mindwtr-data:startup-backup-version',
+      'tinybubbles-data:startup-backup-version',
       '2',
     );
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      'mindwtr-data:startup-backup-updated-at',
+      'tinybubbles-data:startup-backup-updated-at',
       expect.stringMatching(/^\d+$/),
     );
     expect(updateMobileWidgetFromDataMock).toHaveBeenCalledWith(currentSnapshot);
@@ -308,9 +308,9 @@ describe('mobile storage adapter', () => {
 
     // Past Android's ~2MB CursorWindow the row cannot be read back, so writing it
     // is seconds of JS thread for a copy nothing can load.
-    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('mindwtr-data', expect.anything());
+    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('tinybubbles-data', expect.anything());
     expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith(
-      'mindwtr-data:startup-backup-version',
+      'tinybubbles-data:startup-backup-version',
       expect.anything(),
     );
     expect(logWarnMock).toHaveBeenCalledWith(
@@ -366,7 +366,7 @@ describe('mobile storage adapter', () => {
 
     // iOS AsyncStorage has no CursorWindow row limit, so the backup is written
     // in full instead of skipped as oversized (#979).
-    expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data', expect.any(String));
+    expect(asyncStorageMock.setItem).toHaveBeenCalledWith('tinybubbles-data', expect.any(String));
     expect(logWarnMock).not.toHaveBeenCalledWith(
       '[Storage] Skipped JSON backup; library exceeds the readable AsyncStorage size',
       expect.anything(),
@@ -423,7 +423,7 @@ describe('mobile storage adapter', () => {
     // own flush.
     await __mobileStorageTestUtils.flushPendingWidgetRefresh();
 
-    const dataWrites = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data');
+    const dataWrites = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data');
     expect(dataWrites).toHaveLength(1);
     expect(dataWrites[0]?.[1]).toBe(JSON.stringify(makeSnapshot(third)));
     expect(updateMobileWidgetFromDataMock).toHaveBeenCalledTimes(1);
@@ -463,7 +463,7 @@ describe('mobile storage adapter', () => {
       const first = makeTask('task-first');
       await mobileStorage.saveTask(first, makeSnapshot(first));
       await vi.advanceTimersByTimeAsync(1_000);
-      const writesAfterFirst = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data');
+      const writesAfterFirst = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data');
       expect(writesAfterFirst).toHaveLength(1);
 
       // Keep saving well inside the 5-minute throttle window (~50s of churn).
@@ -473,13 +473,13 @@ describe('mobile storage adapter', () => {
         await mobileStorage.saveTask(lastChurnTask, makeSnapshot(lastChurnTask));
         await vi.advanceTimersByTimeAsync(10_000);
       }
-      const writesDuringChurn = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data');
+      const writesDuringChurn = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data');
       expect(writesDuringChurn).toHaveLength(1);
 
       // Advance past the remainder of the 5-minute window; the newest pending
       // payload lands in a single second write.
       await vi.advanceTimersByTimeAsync(5 * 60_000);
-      const finalWrites = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data');
+      const finalWrites = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data');
       expect(finalWrites).toHaveLength(2);
       expect(finalWrites[1]?.[1]).toBe(JSON.stringify(makeSnapshot(lastChurnTask)));
     } finally {
@@ -521,16 +521,16 @@ describe('mobile storage adapter', () => {
       const first = makeTask('task-first');
       await mobileStorage.saveTask(first, makeSnapshot(first));
       await vi.advanceTimersByTimeAsync(1_000);
-      expect(asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data')).toHaveLength(1);
+      expect(asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data')).toHaveLength(1);
 
       const second = makeTask('task-second');
       await mobileStorage.saveTask(second, makeSnapshot(second));
       // Still well inside the throttle window; no timer has fired yet.
-      expect(asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data')).toHaveLength(1);
+      expect(asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data')).toHaveLength(1);
 
       await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
 
-      const writes = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data');
+      const writes = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data');
       expect(writes).toHaveLength(2);
       expect(writes[1]?.[1]).toBe(JSON.stringify(makeSnapshot(second)));
     } finally {
@@ -564,7 +564,7 @@ describe('mobile storage adapter', () => {
     // Stall only the FIRST write to the data key so we can inject a
     // concurrent save while it's still in flight, then let it land.
     asyncStorageMock.setItem.mockImplementation((key: string, value: string) => {
-      if (key === 'mindwtr-data' && !firstDataWriteStarted) {
+      if (key === 'tinybubbles-data' && !firstDataWriteStarted) {
         firstDataWriteStarted = true;
         return new Promise<void>((resolve) => {
           resolveFirstDataWrite = () => {
@@ -614,7 +614,7 @@ describe('mobile storage adapter', () => {
     await flushPromise;
     expect(flushSettled).toBe(true);
 
-    expect(stored.get('mindwtr-data')).toBe(JSON.stringify(makeSnapshot(second)));
+    expect(stored.get('tinybubbles-data')).toBe(JSON.stringify(makeSnapshot(second)));
 
     // Exercise the exact failure mode this guards against: a fallback read
     // racing the flush must see the newest payload and its freshness stamp,
@@ -669,7 +669,7 @@ describe('mobile storage adapter', () => {
         await vi.advanceTimersByTimeAsync(2_000);
       }
 
-      const backupWrites = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'mindwtr-data').length;
+      const backupWrites = asyncStorageMock.setItem.mock.calls.filter(([key]) => key === 'tinybubbles-data').length;
       expect(backupWrites).toBe(1);
       expect(updateMobileWidgetFromDataMock).toHaveBeenCalledTimes(5);
       expect(updateMobileWidgetFromDataMock.mock.calls.length).toBeGreaterThan(backupWrites);
@@ -820,7 +820,7 @@ describe('mobile storage adapter', () => {
     expect(appStateListeners.length).toBeGreaterThan(0);
 
     await mobileStorage.saveTask(currentTask, currentSnapshot);
-    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('mindwtr-data', expect.anything());
+    expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('tinybubbles-data', expect.anything());
 
     appStateListeners.forEach((listener) => listener('background'));
     // The listener flushes fire-and-forget; give its promise chain a couple
@@ -829,7 +829,7 @@ describe('mobile storage adapter', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      'mindwtr-data',
+      'tinybubbles-data',
       JSON.stringify(currentSnapshot),
     );
   }, 10_000);
@@ -874,7 +874,7 @@ describe('mobile storage adapter', () => {
 
     // The save resolves with the backup still pending (deferred off the queue).
     await mobileStorage.saveTask(currentTask, currentSnapshot);
-    expect(stored.has('mindwtr-data')).toBe(false);
+    expect(stored.has('tinybubbles-data')).toBe(false);
 
     // The fallback read must land the pending backup first instead of refusing
     // it as stale (freshness invariant: backupUpdatedAt >= latest queued write).
@@ -916,7 +916,7 @@ describe('mobile storage adapter', () => {
     // SQLite failed, so the JSON backup is the durable copy and must have
     // landed by the time the save resolves.
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
-      'mindwtr-data',
+      'tinybubbles-data',
       JSON.stringify(currentSnapshot),
     );
   }, 10_000);
@@ -1008,8 +1008,8 @@ describe('mobile storage adapter', () => {
         settings: {},
       };
       asyncStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'mindwtr-data:startup-backup-updated-at') return Promise.resolve(freshBackupUpdatedAt);
-        if (key === 'mindwtr-data') return Promise.resolve(JSON.stringify(backupSnapshot));
+        if (key === 'tinybubbles-data:startup-backup-updated-at') return Promise.resolve(freshBackupUpdatedAt);
+        if (key === 'tinybubbles-data') return Promise.resolve(JSON.stringify(backupSnapshot));
         return Promise.resolve(null);
       });
 
@@ -1074,8 +1074,8 @@ describe('mobile storage adapter', () => {
         settings: {},
       };
       asyncStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'mindwtr-data:startup-backup-updated-at') return Promise.resolve(staleBackupUpdatedAt);
-        if (key === 'mindwtr-data') return Promise.resolve(JSON.stringify(staleBackup));
+        if (key === 'tinybubbles-data:startup-backup-updated-at') return Promise.resolve(staleBackupUpdatedAt);
+        if (key === 'tinybubbles-data') return Promise.resolve(JSON.stringify(staleBackup));
         return Promise.resolve(null);
       });
 
@@ -1116,7 +1116,7 @@ describe('mobile storage adapter', () => {
     const db = { execute };
 
     const { __mobileStorageTestUtils } = await import('./storage-adapter');
-    const { SQLITE_BASE_SCHEMA } = await import('@mindwtr/core');
+    const { SQLITE_BASE_SCHEMA } = await import('@tinybubbles/core');
     const client = __mobileStorageTestUtils.createOpSqliteClientForTests(db);
     expect(client.exec).toBeDefined();
 
@@ -1190,8 +1190,8 @@ describe('mobile storage adapter', () => {
       settings: {},
     };
     const stored = new Map<string, string>([
-      ['mindwtr-data', JSON.stringify(backupData)],
-      ['mindwtr-data:startup-backup-version', '2'],
+      ['tinybubbles-data', JSON.stringify(backupData)],
+      ['tinybubbles-data:startup-backup-version', '2'],
     ]);
     asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
     asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
@@ -1214,7 +1214,7 @@ describe('mobile storage adapter', () => {
     expect(merged.tasks.some((task) => task.id === 'backup-only')).toBe(true);
     expect(merged.tasks.find((task) => task.id === 'deleted-before-rc1')?.deletedAt)
       .toBe('2026-07-16T00:00:03.000Z');
-    expect(stored.get('mindwtr-data:sqlite-json-reconcile-v1')).toBe('1');
+    expect(stored.get('tinybubbles-data:sqlite-json-reconcile-v1')).toBe('1');
 
     await __mobileStorageTestUtils.reconcileJsonBackupIntoSqliteForTests({
       getData,
@@ -1256,8 +1256,8 @@ describe('mobile storage adapter', () => {
       settings: {},
     };
     const stored = new Map<string, string>([
-      ['mindwtr-data', JSON.stringify(backup)],
-      ['mindwtr-data:startup-backup-version', '2'],
+      ['tinybubbles-data', JSON.stringify(backup)],
+      ['tinybubbles-data:startup-backup-version', '2'],
     ]);
     asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
     asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
@@ -1319,7 +1319,7 @@ describe('mobile storage adapter', () => {
       people: [],
       settings: {},
     };
-    const stored = new Map<string, string>([['mindwtr-data', JSON.stringify(backup)]]);
+    const stored = new Map<string, string>([['tinybubbles-data', JSON.stringify(backup)]]);
     asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
     asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
       stored.set(key, value);
@@ -1335,7 +1335,7 @@ describe('mobile storage adapter', () => {
 
     const migrated = saveData.mock.calls[0]?.[0] as AppData;
     expect(migrated.tasks.map((task) => task.id).sort()).toEqual(['backup-only', 'concurrent-sqlite']);
-    expect(JSON.parse(stored.get('mindwtr-data') ?? '{}').tasks.map((task: Task) => task.id).sort())
+    expect(JSON.parse(stored.get('tinybubbles-data') ?? '{}').tasks.map((task: Task) => task.id).sort())
       .toEqual(['backup-only', 'concurrent-sqlite']);
   }, 10_000);
 
@@ -1353,7 +1353,7 @@ describe('mobile storage adapter', () => {
 
   it('does not mark JSON reconciliation complete until the merged SQLite save succeeds', async () => {
     const stored = new Map<string, string>([
-      ['mindwtr-data', JSON.stringify({
+      ['tinybubbles-data', JSON.stringify({
         tasks: [],
         projects: [],
         sections: [],
@@ -1361,7 +1361,7 @@ describe('mobile storage adapter', () => {
         people: [],
         settings: {},
       } satisfies AppData)],
-      ['mindwtr-data:startup-backup-version', '2'],
+      ['tinybubbles-data:startup-backup-version', '2'],
     ]);
     asyncStorageMock.getItem.mockImplementation(async (key: string) => stored.get(key) ?? null);
     asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
@@ -1382,12 +1382,12 @@ describe('mobile storage adapter', () => {
       saveData,
     } as never)).rejects.toThrow('disk I/O error');
 
-    expect(stored.has('mindwtr-data:sqlite-json-reconcile-v1')).toBe(false);
+    expect(stored.has('tinybubbles-data:sqlite-json-reconcile-v1')).toBe(false);
   }, 10_000);
 
   it('does not merge an unmarked legacy JSON snapshot into an existing SQLite store', async () => {
     const stored = new Map<string, string>([
-      ['mindwtr-data', JSON.stringify({
+      ['tinybubbles-data', JSON.stringify({
         tasks: [{
           id: 'stale-task',
           title: 'Stale legacy task',
@@ -1419,7 +1419,7 @@ describe('mobile storage adapter', () => {
 
     expect(getData).not.toHaveBeenCalled();
     expect(saveData).not.toHaveBeenCalled();
-    expect(stored.get('mindwtr-data:sqlite-json-reconcile-v1')).toBe('1');
+    expect(stored.get('tinybubbles-data:sqlite-json-reconcile-v1')).toBe('1');
   }, 10_000);
 
   it('maps op-sqlite rows and binds undefined params as null', async () => {
@@ -1467,7 +1467,7 @@ describe('mobile storage adapter', () => {
       settings: {},
     };
     asyncStorageMock.getItem.mockImplementation((key: string) => (
-      key === 'mindwtr-data' ? Promise.resolve(JSON.stringify(staleBackup)) : Promise.resolve(null)
+      key === 'tinybubbles-data' ? Promise.resolve(JSON.stringify(staleBackup)) : Promise.resolve(null)
     ));
 
     const { getMobileStartupSnapshotFromBackup } = await import('./storage-adapter');
@@ -1493,10 +1493,10 @@ describe('mobile storage adapter', () => {
       settings: {},
     };
     asyncStorageMock.getItem.mockImplementation((key: string) => {
-      if (key === 'mindwtr-data:startup-backup-version') {
+      if (key === 'tinybubbles-data:startup-backup-version') {
         return Promise.resolve('2');
       }
-      if (key === 'mindwtr-data') {
+      if (key === 'tinybubbles-data') {
         return Promise.resolve(JSON.stringify(backup));
       }
       return Promise.resolve(null);
@@ -1545,7 +1545,7 @@ describe('mobile storage adapter', () => {
       const stored = new Map<string, string>();
       const dataKeyError = { current: null as Error | null };
       asyncStorageMock.getItem.mockImplementation(async (key: string) => {
-        if (key === 'mindwtr-data' && dataKeyError.current) {
+        if (key === 'tinybubbles-data' && dataKeyError.current) {
           throw dataKeyError.current;
         }
         return stored.get(key) ?? null;
@@ -1559,7 +1559,7 @@ describe('mobile storage adapter', () => {
 
       __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
       await mobileStorage.saveData(jsonBackup);
-      expect(stored.get('mindwtr-data:json-ahead-of-sqlite')).toBe('1');
+      expect(stored.get('tinybubbles-data:json-ahead-of-sqlite')).toBe('1');
 
       return { mobileStorage, __mobileStorageTestUtils, stored, dataKeyError };
     };
@@ -1570,16 +1570,16 @@ describe('mobile storage adapter', () => {
 
       await mobileStorage.saveData(jsonBackup);
 
-      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite', '1');
-      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data', JSON.stringify(jsonBackup));
+      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('tinybubbles-data:json-ahead-of-sqlite', '1');
+      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('tinybubbles-data', JSON.stringify(jsonBackup));
       const persistedKeys = asyncStorageMock.setItem.mock.calls.map(([key]) => key);
-      expect(persistedKeys.indexOf('mindwtr-data:json-ahead-of-sqlite'))
-        .toBeLessThan(persistedKeys.indexOf('mindwtr-data'));
+      expect(persistedKeys.indexOf('tinybubbles-data:json-ahead-of-sqlite'))
+        .toBeLessThan(persistedKeys.indexOf('tinybubbles-data'));
     }, 10_000);
 
     it('reports failure instead of accepting an unmarked JSON-only write', async () => {
       asyncStorageMock.setItem.mockImplementation((key: string) => (
-        key === 'mindwtr-data:json-ahead-of-sqlite'
+        key === 'tinybubbles-data:json-ahead-of-sqlite'
           ? Promise.reject(new Error('marker write failed'))
           : Promise.resolve()
       ));
@@ -1587,13 +1587,13 @@ describe('mobile storage adapter', () => {
       __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
 
       await expect(mobileStorage.saveData(jsonBackup)).rejects.toThrow('marker write failed');
-      expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('mindwtr-data', JSON.stringify(jsonBackup));
+      expect(asyncStorageMock.setItem).not.toHaveBeenCalledWith('tinybubbles-data', JSON.stringify(jsonBackup));
     }, 10_000);
 
     it('merges those writes back into SQLite on the next launch and clears the marker', async () => {
       stubStoredKeys({
-        'mindwtr-data:json-ahead-of-sqlite': '1',
-        'mindwtr-data': JSON.stringify(jsonBackup),
+        'tinybubbles-data:json-ahead-of-sqlite': '1',
+        'tinybubbles-data': JSON.stringify(jsonBackup),
       });
       const saveData = vi.fn().mockResolvedValue(undefined);
       const adapter = { getData: vi.fn().mockResolvedValue(staleSqliteData), saveData } as any;
@@ -1604,13 +1604,13 @@ describe('mobile storage adapter', () => {
 
       expect(saveData).toHaveBeenCalled();
       expect(saveData.mock.calls[0][0].tasks.map((task: Task) => task.id)).toEqual(['task-new']);
-      expect(asyncStorageMock.removeItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+      expect(asyncStorageMock.removeItem).toHaveBeenCalledWith('tinybubbles-data:json-ahead-of-sqlite');
     }, 10_000);
 
     it('fails initialization when SQLite still refuses the recovered writes, so reads use the JSON copy', async () => {
       stubStoredKeys({
-        'mindwtr-data:json-ahead-of-sqlite': '1',
-        'mindwtr-data': JSON.stringify(jsonBackup),
+        'tinybubbles-data:json-ahead-of-sqlite': '1',
+        'tinybubbles-data': JSON.stringify(jsonBackup),
       });
       const adapter = {
         getData: vi.fn().mockResolvedValue(staleSqliteData),
@@ -1622,7 +1622,7 @@ describe('mobile storage adapter', () => {
       await expect(__mobileStorageTestUtils.prepareSqliteDataForTests(adapter, client))
         .rejects.toThrow('disk I/O error');
       // Still ahead: the writes are only in the backup, so the marker must stay.
-      expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+      expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('tinybubbles-data:json-ahead-of-sqlite');
     }, 10_000);
 
     // #975: once the marker is set, SQLite reads keep succeeding but serve
@@ -1640,7 +1640,7 @@ describe('mobile storage adapter', () => {
 
       // SQLite refuses the write; the marker is set and the backup takes it.
       await mobileStorage.saveData(jsonBackup);
-      expect(stored.get('mindwtr-data')).toBe(JSON.stringify(jsonBackup));
+      expect(stored.get('tinybubbles-data')).toBe(JSON.stringify(jsonBackup));
 
       // SQLite recovers enough to serve reads again, but what it holds predates
       // the write above — the marker says the backup is still ahead.
@@ -1655,7 +1655,7 @@ describe('mobile storage adapter', () => {
       expect(data).toEqual(jsonBackup);
       expect(sqliteAdapterGetData).not.toHaveBeenCalled();
       await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
-      expect(stored.get('mindwtr-data')).toBe(JSON.stringify(jsonBackup));
+      expect(stored.get('tinybubbles-data')).toBe(JSON.stringify(jsonBackup));
     }, 10_000);
 
     it('falls through to the SQLite read and skips scheduling a backup write when the marker is set but the JSON backup is unusable (#975)', async () => {
@@ -1685,7 +1685,7 @@ describe('mobile storage adapter', () => {
       // SQLite refuses the write; the fallback backup is too large for Android's
       // AsyncStorage to read back, so the marker ends up set with an unusable backup.
       await expect(mobileStorage.saveData(hugeSnapshot)).rejects.toThrow('too large for the JSON backup');
-      expect(stored.has('mindwtr-data')).toBe(false);
+      expect(stored.has('tinybubbles-data')).toBe(false);
 
       const sqliteAdapterGetData = vi.fn().mockResolvedValue(staleSqliteData);
       __mobileStorageTestUtils.setSqliteStateForTests({
@@ -1698,7 +1698,7 @@ describe('mobile storage adapter', () => {
       expect(data).toEqual(staleSqliteData);
       expect(sqliteAdapterGetData).toHaveBeenCalledTimes(1);
       await __mobileStorageTestUtils.flushPendingStartupJsonBackup();
-      expect(stored.has('mindwtr-data')).toBe(false);
+      expect(stored.has('tinybubbles-data')).toBe(false);
     }, 20_000);
 
     it('recoverJsonAheadWrites keeps the marker and rethrows on a transient AsyncStorage read error, but still clears it when the backup is absent (#975)', async () => {
@@ -1709,18 +1709,18 @@ describe('mobile storage adapter', () => {
       // saveData that falls back to the JSON backup.
       __mobileStorageTestUtils.setSqliteInitializerForTests(() => Promise.reject(new Error('disk I/O error')));
       await mobileStorage.saveData(jsonBackup);
-      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite', '1');
+      expect(asyncStorageMock.setItem).toHaveBeenCalledWith('tinybubbles-data:json-ahead-of-sqlite', '1');
 
       // Transient read error: keep the marker and propagate so init fails loudly.
       asyncStorageMock.getItem.mockImplementation((key: string) => (
-        key === 'mindwtr-data'
+        key === 'tinybubbles-data'
           ? Promise.reject(new Error('AsyncStorage getItem failed: I/O error'))
           : Promise.resolve(null)
       ));
 
       await expect(__mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter))
         .rejects.toThrow('AsyncStorage getItem failed');
-      expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+      expect(asyncStorageMock.removeItem).not.toHaveBeenCalledWith('tinybubbles-data:json-ahead-of-sqlite');
       expect(adapter.getData).not.toHaveBeenCalled();
       expect(adapter.saveData).not.toHaveBeenCalled();
 
@@ -1729,7 +1729,7 @@ describe('mobile storage adapter', () => {
       asyncStorageMock.getItem.mockResolvedValue(null);
 
       await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
-      expect(asyncStorageMock.removeItem).toHaveBeenCalledWith('mindwtr-data:json-ahead-of-sqlite');
+      expect(asyncStorageMock.removeItem).toHaveBeenCalledWith('tinybubbles-data:json-ahead-of-sqlite');
       expect(adapter.saveData).not.toHaveBeenCalled();
     }, 10_000);
 
@@ -1741,7 +1741,7 @@ describe('mobile storage adapter', () => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         await expect(__mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter))
           .rejects.toThrow('AsyncStorage getItem failed');
-        expect(stored.get('mindwtr-data:json-ahead-of-sqlite')).toBe('1');
+        expect(stored.get('tinybubbles-data:json-ahead-of-sqlite')).toBe('1');
       }
       expect(adapter.getData).not.toHaveBeenCalled();
       expect(adapter.saveData).not.toHaveBeenCalled();
@@ -1750,7 +1750,7 @@ describe('mobile storage adapter', () => {
     it('quarantines SQLite writes when the persisted JSON-ahead marker cannot be read (#975)', async () => {
       const markerReadError = new Error('AsyncStorage marker read failed');
       asyncStorageMock.getItem.mockImplementation((key: string) => (
-        key === 'mindwtr-data:json-ahead-of-sqlite'
+        key === 'tinybubbles-data:json-ahead-of-sqlite'
           ? Promise.reject(markerReadError)
           : Promise.resolve(null)
       ));
@@ -1789,11 +1789,11 @@ describe('mobile storage adapter', () => {
         let sqliteData = newerSqliteData;
         let markerReadFails = true;
         const stored = new Map<string, string>([
-          ['mindwtr-data', JSON.stringify(staleJsonData)],
-          ['mindwtr-data:sqlite-json-reconcile-v1', '1'],
+          ['tinybubbles-data', JSON.stringify(staleJsonData)],
+          ['tinybubbles-data:sqlite-json-reconcile-v1', '1'],
         ]);
         asyncStorageMock.getItem.mockImplementation(async (key: string) => {
-          if (key === 'mindwtr-data:json-ahead-of-sqlite' && markerReadFails) {
+          if (key === 'tinybubbles-data:json-ahead-of-sqlite' && markerReadFails) {
             throw new Error('AsyncStorage marker read failed');
           }
           return stored.get(key) ?? null;
@@ -1826,7 +1826,7 @@ describe('mobile storage adapter', () => {
         markerReadFails = false;
         vi.setSystemTime(Date.now() + 60_000);
         await expect(mobileStorage.saveData(staleRead))
-          .rejects.toThrow('Reload Mindwtr before saving again');
+          .rejects.toThrow('Reload Tiny Bubbles before saving again');
         expect(adapter.saveData).not.toHaveBeenCalled();
         expect(sqliteData).toEqual(newerSqliteData);
 
@@ -1838,7 +1838,7 @@ describe('mobile storage adapter', () => {
         expect(structurallyEqualClone).toEqual(backgroundCanonical);
         mobileStorage.acknowledgeDataLoad?.(structurallyEqualClone);
         await expect(mobileStorage.saveData(staleRead))
-          .rejects.toThrow('Reload Mindwtr before saving again');
+          .rejects.toThrow('Reload Tiny Bubbles before saving again');
         expect(adapter.saveData).not.toHaveBeenCalled();
 
         const canonical = await mobileStorage.getData();
@@ -1848,7 +1848,7 @@ describe('mobile storage adapter', () => {
         const staleSaveQueuedBeforeAcknowledgement = mobileStorage.saveData(staleRead);
         acknowledgeDataLoad?.(canonical);
         await expect(staleSaveQueuedBeforeAcknowledgement)
-          .rejects.toThrow('Reload Mindwtr before saving again');
+          .rejects.toThrow('Reload Tiny Bubbles before saving again');
         expect(adapter.saveData).not.toHaveBeenCalled();
         await mobileStorage.saveData(canonical);
         expect(adapter.saveData).toHaveBeenCalledTimes(1);
@@ -1869,8 +1869,8 @@ describe('mobile storage adapter', () => {
           ...jsonBackup,
           settings: { theme: 'dark' },
         };
-        stored.set('mindwtr-data', JSON.stringify(recoveryBackup));
-        const pendingBackup = stored.get('mindwtr-data');
+        stored.set('tinybubbles-data', JSON.stringify(recoveryBackup));
+        const pendingBackup = stored.get('tinybubbles-data');
         const replacementSnapshot: AppData = {
           ...staleSqliteData,
           tasks: [{ ...backupTask, id: 'task-replacement', title: 'Must not replace pending backup' }],
@@ -1886,7 +1886,7 @@ describe('mobile storage adapter', () => {
         const client = { get: vi.fn().mockResolvedValue({ count: 1 }) } as any;
         // Keep the test focused on JSON-ahead recovery, not the older one-time
         // rc.1 reconciliation pass that follows ordinary SQLite initialization.
-        stored.set('mindwtr-data:sqlite-json-reconcile-v1', '1');
+        stored.set('tinybubbles-data:sqlite-json-reconcile-v1', '1');
         dataKeyError.current = new Error('AsyncStorage getItem failed: I/O error');
         asyncStorageMock.setItem.mockClear();
         asyncStorageMock.removeItem.mockClear();
@@ -1904,13 +1904,13 @@ describe('mobile storage adapter', () => {
         expect(adapter.saveData).not.toHaveBeenCalled();
         expect(adapter.saveTask).not.toHaveBeenCalled();
         expect(asyncStorageMock.setItem).not.toHaveBeenCalled();
-        expect(stored.get('mindwtr-data')).toBe(pendingBackup);
-        expect(stored.get('mindwtr-data:json-ahead-of-sqlite')).toBe('1');
+        expect(stored.get('tinybubbles-data')).toBe(pendingBackup);
+        expect(stored.get('tinybubbles-data:json-ahead-of-sqlite')).toBe('1');
 
         dataKeyError.current = null;
         await vi.advanceTimersByTimeAsync(60_000);
         await expect(mobileStorage.saveData(replacementSnapshot))
-          .rejects.toThrow('Reload Mindwtr before saving again');
+          .rejects.toThrow('Reload Tiny Bubbles before saving again');
 
         // Recovery itself landed, but the stale snapshot that triggered it was
         // refused. Otherwise SqliteAdapter would treat the newly recovered row
@@ -1919,7 +1919,7 @@ describe('mobile storage adapter', () => {
         expect(adapter.saveData.mock.calls[0][0].tasks.map((task: Task) => task.id)).toEqual([backupTask.id]);
         expect(sqliteData.tasks.map((task) => task.id)).toEqual([backupTask.id]);
         expect(sqliteData.settings).toMatchObject(recoveryBackup.settings);
-        expect(stored.has('mindwtr-data:json-ahead-of-sqlite')).toBe(false);
+        expect(stored.has('tinybubbles-data:json-ahead-of-sqlite')).toBe(false);
         const markerClearOrder = asyncStorageMock.removeItem.mock.invocationCallOrder[0];
         expect(adapter.saveData.mock.invocationCallOrder[0]).toBeLessThan(markerClearOrder);
 
@@ -1953,7 +1953,7 @@ describe('mobile storage adapter', () => {
 
       await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
 
-      expect(stored.has('mindwtr-data:json-ahead-of-sqlite')).toBe(false);
+      expect(stored.has('tinybubbles-data:json-ahead-of-sqlite')).toBe(false);
       expect(adapter.getData).not.toHaveBeenCalled();
       expect(adapter.saveData).not.toHaveBeenCalled();
     }, 10_000);
@@ -1961,11 +1961,11 @@ describe('mobile storage adapter', () => {
     it('recoverJsonAheadWrites clears the marker when the backup is corrupt JSON', async () => {
       const { __mobileStorageTestUtils, stored } = await primeJsonAheadMarker();
       const adapter = { getData: vi.fn(), saveData: vi.fn() } as any;
-      stored.set('mindwtr-data', '{ not valid json');
+      stored.set('tinybubbles-data', '{ not valid json');
 
       await __mobileStorageTestUtils.recoverJsonAheadWritesForTests(adapter);
 
-      expect(stored.has('mindwtr-data:json-ahead-of-sqlite')).toBe(false);
+      expect(stored.has('tinybubbles-data:json-ahead-of-sqlite')).toBe(false);
       expect(adapter.getData).not.toHaveBeenCalled();
       expect(adapter.saveData).not.toHaveBeenCalled();
     }, 10_000);
@@ -1979,7 +1979,7 @@ describe('mobile storage adapter', () => {
       // Simulate the marker surviving without a backup behind it (e.g. the
       // marker write landed but the backup write that should have followed
       // did not).
-      stored.delete('mindwtr-data');
+      stored.delete('tinybubbles-data');
 
       const sqliteAdapterGetData = vi.fn().mockResolvedValue(staleSqliteData);
       __mobileStorageTestUtils.setSqliteStateForTests({

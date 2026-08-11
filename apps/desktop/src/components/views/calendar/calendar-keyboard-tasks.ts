@@ -1,5 +1,5 @@
-import { isProjectedRecurringTaskId, useTaskStore } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { isProjectedRecurringTaskId, useTaskStore } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 
 // The calendar has no single ordered task array to register: four view modes
 // (day/week/month/schedule) plus the planning and selected-day panels each

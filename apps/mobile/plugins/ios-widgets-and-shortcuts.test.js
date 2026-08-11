@@ -17,19 +17,19 @@ describe('ios-widgets-and-shortcuts', () => {
   it('ships App Intents sources for Siri Inbox capture and v1 Shortcuts actions', () => {
     const sourceDir = path.resolve(__dirname, '..', APP_INTENTS_FOLDER);
     const source = fs.readFileSync(
-      path.join(sourceDir, 'MindwtrSiriCaptureIntents.swift'),
+      path.join(sourceDir, 'TinyBubblesSiriCaptureIntents.swift'),
       'utf8'
     );
 
-    expect(collectSwiftFiles(sourceDir)).toContain('MindwtrSiriCaptureIntents.swift');
-    expect(source).toContain('struct MindwtrSiriCaptureIntent: AppIntent');
-    expect(source).toContain('struct MindwtrOpenListIntent: AppIntent');
-    expect(source).toContain('enum MindwtrShortcutList: String, AppEnum');
-    expect(source).toContain('struct MindwtrSiriCaptureShortcuts: AppShortcutsProvider');
+    expect(collectSwiftFiles(sourceDir)).toContain('TinyBubblesSiriCaptureIntents.swift');
+    expect(source).toContain('struct TinyBubblesSiriCaptureIntent: AppIntent');
+    expect(source).toContain('struct TinyBubblesOpenListIntent: AppIntent');
+    expect(source).toContain('enum TinyBubblesShortcutList: String, AppEnum');
+    expect(source).toContain('struct TinyBubblesSiriCaptureShortcuts: AppShortcutsProvider');
     expect(source).toContain('"Capture in \\(.applicationName)"');
     const phraseBlock = source.match(/phrases:\s*\[[\s\S]*?\]/)?.[0] ?? '';
     expect(phraseBlock).not.toContain('\\(\\.$task)');
-    expect(source).toContain('mindwtr');
+    expect(source).toContain('tinybubbles');
     expect(source).toContain('/capture');
     expect(source).toContain('/open-feature');
     expect(source).toContain('requestId');
@@ -40,46 +40,46 @@ describe('ios-widgets-and-shortcuts', () => {
     expect(source).toContain('URLQueryItem(name: "tags"');
     expect(source).toContain('case focus');
     expect(source).toContain('case review');
-    expect(source).toContain('@Parameter(title: "List", default: MindwtrShortcutList.inbox)');
-    expect(source).toContain('var list: MindwtrShortcutList');
-    expect(source).not.toContain('var list: MindwtrShortcutList = .inbox');
+    expect(source).toContain('@Parameter(title: "List", default: TinyBubblesShortcutList.inbox)');
+    expect(source).toContain('var list: TinyBubblesShortcutList');
+    expect(source).not.toContain('var list: TinyBubblesShortcutList = .inbox');
     expect(source).toContain('.foreground(.immediate)');
   });
 
   it('ships a background capture intent that only writes the pending-captures queue', () => {
     const sourceDir = path.resolve(__dirname, '..', APP_INTENTS_FOLDER);
     const source = fs.readFileSync(
-      path.join(sourceDir, 'MindwtrSiriCaptureIntents.swift'),
+      path.join(sourceDir, 'TinyBubblesSiriCaptureIntents.swift'),
       'utf8'
     );
 
-    expect(source).toContain('struct MindwtrBackgroundCaptureIntent: AppIntent');
+    expect(source).toContain('struct TinyBubblesBackgroundCaptureIntent: AppIntent');
     expect(source).toContain('"pending-captures"');
 
-    const backgroundIntent = source.slice(source.indexOf('struct MindwtrBackgroundCaptureIntent'));
+    const backgroundIntent = source.slice(source.indexOf('struct TinyBubblesBackgroundCaptureIntent'));
     // Background capture must never foreground the app or open deep links.
     expect(backgroundIntent).toContain('.background');
     expect(backgroundIntent).not.toContain('.foreground');
     expect(backgroundIntent).not.toContain('UIApplication');
-    expect(backgroundIntent).not.toContain('MindwtrSiriCaptureLauncher.open');
+    expect(backgroundIntent).not.toContain('TinyBubblesSiriCaptureLauncher.open');
 
     // No SQLite or store writes from Swift: the queue file is the only output.
     expect(source).not.toContain('sqlite');
     expect(source).not.toContain('SQLite');
   });
 
-  it('renames the background capture intent to "Add to Mindwtr" with due/start date params (#980 stage 1)', () => {
+  it('renames the background capture intent to "Add to Tiny Bubbles" with due/start date params (#980 stage 1)', () => {
     const sourceDir = path.resolve(__dirname, '..', APP_INTENTS_FOLDER);
     const source = fs.readFileSync(
-      path.join(sourceDir, 'MindwtrSiriCaptureIntents.swift'),
+      path.join(sourceDir, 'TinyBubblesSiriCaptureIntents.swift'),
       'utf8'
     );
     const backgroundIntent = source.slice(
-      source.indexOf('struct MindwtrBackgroundCaptureIntent'),
+      source.indexOf('struct TinyBubblesBackgroundCaptureIntent'),
       source.indexOf('// MARK: - Shortcuts snapshot')
     );
 
-    expect(backgroundIntent).toContain('static var title: LocalizedStringResource = "Add to Mindwtr"');
+    expect(backgroundIntent).toContain('static var title: LocalizedStringResource = "Add to Tiny Bubbles"');
     expect(backgroundIntent).toContain('@Parameter(title: "Due date")');
     expect(backgroundIntent).toContain('var dueDate: Date?');
     expect(backgroundIntent).toContain('@Parameter(title: "Start date")');
@@ -88,32 +88,32 @@ describe('ios-widgets-and-shortcuts', () => {
     expect(backgroundIntent).toContain('\\.$startDate');
     expect(backgroundIntent).toContain('dueDate: dueDate');
     expect(backgroundIntent).toContain('startDate: startDate');
-    expect(backgroundIntent).toContain('"Added to Mindwtr."');
+    expect(backgroundIntent).toContain('"Added to Tiny Bubbles."');
     // The dialog must not promise a specific project placement -- the drain
     // decides that, and an unknown project falls back to Inbox.
     expect(backgroundIntent).not.toMatch(/dialog:\s*"[^"]*Inbox[^"]*"/);
   });
 
-  it('ships a background, read-only Get Mindwtr Tasks intent over the shortcuts snapshot (#980 stage 2)', () => {
+  it('ships a background, read-only Get Tiny Bubbles Tasks intent over the shortcuts snapshot (#980 stage 2)', () => {
     const sourceDir = path.resolve(__dirname, '..', APP_INTENTS_FOLDER);
     const source = fs.readFileSync(
-      path.join(sourceDir, 'MindwtrSiriCaptureIntents.swift'),
+      path.join(sourceDir, 'TinyBubblesSiriCaptureIntents.swift'),
       'utf8'
     );
 
-    expect(source).toContain('struct MindwtrGetTasksIntent: AppIntent');
-    expect(source).toContain('enum MindwtrGetTasksList: String, AppEnum');
-    expect(source).toContain('mindwtr-ios-shortcuts-snapshot');
+    expect(source).toContain('struct TinyBubblesGetTasksIntent: AppIntent');
+    expect(source).toContain('enum TinyBubblesGetTasksList: String, AppEnum');
+    expect(source).toContain('tinybubbles-ios-shortcuts-snapshot');
     expect(source).toContain('UserDefaults(suiteName: appGroup)');
 
-    // The store's `items(forList:)` takes the iOS 16-only `MindwtrGetTasksList`
+    // The store's `items(forList:)` takes the iOS 16-only `TinyBubblesGetTasksList`
     // while the deployment target is 15.1 -- the enclosing enum must carry an
     // iOS 16 guard or this is a hard compile error the CI validator can't
     // catch (it only checks IntentModes/phrases/@Parameter defaults, not
     // signature availability).
-    expect(source).toContain('@available(iOS 16.0, *)\nprivate enum MindwtrShortcutsSnapshotStore');
+    expect(source).toContain('@available(iOS 16.0, *)\nprivate enum TinyBubblesShortcutsSnapshotStore');
 
-    const getTasksIntent = source.slice(source.indexOf('struct MindwtrGetTasksIntent'));
+    const getTasksIntent = source.slice(source.indexOf('struct TinyBubblesGetTasksIntent'));
     const getTasksIntentBody = getTasksIntent.slice(0, getTasksIntent.indexOf('\n}\n'));
     expect(getTasksIntentBody).toContain('.background');
     expect(getTasksIntentBody).not.toContain('.foreground');
@@ -127,22 +127,22 @@ describe('ios-widgets-and-shortcuts', () => {
   it('ships a Task entity (iOS 16+) with IndexedEntity Spotlight indexing guarded to iOS 18+ (#980 stage 3)', () => {
     const sourceDir = path.resolve(__dirname, '..', APP_INTENTS_FOLDER);
     const source = fs.readFileSync(
-      path.join(sourceDir, 'MindwtrSiriCaptureIntents.swift'),
+      path.join(sourceDir, 'TinyBubblesSiriCaptureIntents.swift'),
       'utf8'
     );
 
-    expect(source).toContain('@available(iOS 16.0, *)\nstruct MindwtrTaskEntity: AppEntity');
-    expect(source).toContain('static var defaultQuery = MindwtrTaskEntityQuery()');
-    expect(source).toContain('struct MindwtrTaskEntityQuery: EntityStringQuery');
-    expect(source).toContain('@available(iOS 18.0, *)\nextension MindwtrTaskEntity: IndexedEntity');
+    expect(source).toContain('@available(iOS 16.0, *)\nstruct TinyBubblesTaskEntity: AppEntity');
+    expect(source).toContain('static var defaultQuery = TinyBubblesTaskEntityQuery()');
+    expect(source).toContain('struct TinyBubblesTaskEntityQuery: EntityStringQuery');
+    expect(source).toContain('@available(iOS 18.0, *)\nextension TinyBubblesTaskEntity: IndexedEntity');
     expect(source).toContain('CSSearchableIndex.default().indexAppEntities(');
-    expect(source).toContain('@available(iOS 18.0, *)\nenum MindwtrShortcutsSpotlightIndexer');
+    expect(source).toContain('@available(iOS 18.0, *)\nenum TinyBubblesShortcutsSpotlightIndexer');
 
     // Reindexing must be driven by the app's refresh path, never by an
     // intent's perform().
     const getTasksIntent = source.slice(
-      source.indexOf('struct MindwtrGetTasksIntent'),
-      source.indexOf('enum MindwtrShortcutsSpotlightIndexer')
+      source.indexOf('struct TinyBubblesGetTasksIntent'),
+      source.indexOf('enum TinyBubblesShortcutsSpotlightIndexer')
     );
     expect(getTasksIntent).not.toContain('reindexIfNeeded');
 
@@ -158,7 +158,7 @@ describe('ios-widgets-and-shortcuts', () => {
     // Spotlight must clear stale entries before reindexing -- indexAppEntities
     // is additive and never removes completed/deleted/capped-out tasks on its
     // own.
-    const spotlightIndexer = source.slice(source.indexOf('enum MindwtrShortcutsSpotlightIndexer'));
+    const spotlightIndexer = source.slice(source.indexOf('enum TinyBubblesShortcutsSpotlightIndexer'));
     const deleteIndex = spotlightIndexer.indexOf('deleteAllSearchableItems');
     const indexEntities = spotlightIndexer.indexOf('indexAppEntities(entities)');
     expect(deleteIndex).toBeGreaterThan(-1);
@@ -208,24 +208,24 @@ describe('ios-widgets-and-shortcuts', () => {
   it('adds App Intents Swift files to the main target once', () => {
     const calls = [];
     const xcodeProject = {
-      hasFile: (filePath) => filePath === 'Mindwtr/Existing.swift',
+      hasFile: (filePath) => filePath === 'Tiny Bubbles/Existing.swift',
       addSourceFile: (...args) => calls.push(args),
     };
 
     expect(ensureSourceFileInTarget(xcodeProject, {
-      filePath: 'Mindwtr/MindwtrSiriCaptureIntents.swift',
+      filePath: 'Tiny Bubbles/TinyBubblesSiriCaptureIntents.swift',
       groupKey: 'MAIN_GROUP',
       targetUuid: 'MAIN_TARGET',
     })).toBe(true);
     expect(ensureSourceFileInTarget(xcodeProject, {
-      filePath: 'Mindwtr/Existing.swift',
+      filePath: 'Tiny Bubbles/Existing.swift',
       groupKey: 'MAIN_GROUP',
       targetUuid: 'MAIN_TARGET',
     })).toBe(false);
 
     expect(calls).toEqual([
       [
-        'Mindwtr/MindwtrSiriCaptureIntents.swift',
+        'Tiny Bubbles/TinyBubblesSiriCaptureIntents.swift',
         { target: 'MAIN_TARGET' },
         'MAIN_GROUP',
       ],

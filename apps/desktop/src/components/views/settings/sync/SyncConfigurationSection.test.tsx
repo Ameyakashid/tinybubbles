@@ -15,11 +15,11 @@ const baseProps: Parameters<typeof SyncConfigurationSection>[0] = {
         syncBackendCloudkit: 'iCloud',
         syncBackendChoiceHint: 'Choose one sync method. Turn sync off to keep data local to this device.',
         syncBackendGroupCloud: 'Cloud Sync',
-        syncBackendGroupCloudDesc: 'Easy account sync handled by Mindwtr.',
+        syncBackendGroupCloudDesc: 'Easy account sync handled by Tiny Bubbles.',
         syncBackendGroupFile: 'Folder / File Sync',
         syncBackendGroupFileDesc: 'Bring your own local synced folder.',
         syncBackendGroupAdvanced: 'Advanced / Custom Server',
-        syncBackendGroupAdvancedDesc: 'Use WebDAV or your own Mindwtr Cloud endpoint.',
+        syncBackendGroupAdvancedDesc: 'Use WebDAV or your own Tiny Bubbles Cloud endpoint.',
         syncFolderLocation: 'Folder',
         savePath: 'Save',
         browse: 'Browse',
@@ -126,7 +126,7 @@ describe('SyncConfigurationSection', () => {
         expect(selfHostedButton).toBeInTheDocument();
         expect(selfHostedButton).toHaveAttribute('aria-pressed', 'false');
         expect(queryByText('Cloud Sync')).toBeInTheDocument();
-        expect(queryByText('Easy account sync handled by Mindwtr.')).toBeInTheDocument();
+        expect(queryByText('Easy account sync handled by Tiny Bubbles.')).toBeInTheDocument();
         expect(queryByText('Folder / File Sync')).not.toBeInTheDocument();
         expect(queryByText('Advanced / Custom Server')).not.toBeInTheDocument();
         expect(queryByText('Cloud provider')).not.toBeInTheDocument();
@@ -147,7 +147,7 @@ describe('SyncConfigurationSection', () => {
         );
 
         expect(queryByText('Advanced / Custom Server')).toBeInTheDocument();
-        expect(queryByText('Use WebDAV or your own Mindwtr Cloud endpoint.')).toBeInTheDocument();
+        expect(queryByText('Use WebDAV or your own Tiny Bubbles Cloud endpoint.')).toBeInTheDocument();
         expect(queryByText('Cloud Sync')).not.toBeInTheDocument();
         expect(queryByText('Folder / File Sync')).not.toBeInTheDocument();
     });

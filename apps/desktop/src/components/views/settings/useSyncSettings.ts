@@ -26,17 +26,17 @@ import {
     type AppData,
     type ImportDiagnostic,
     type SyncBackend,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     importDesktopDgtData,
     exportDesktopBackup,
-    importDesktopMindwtrCsvData,
+    importDesktopTinyBubblesCsvData,
     importDesktopOmniFocusData,
     importDesktopTickTickData,
     importDesktopTodoistData,
     inspectDesktopDgtImport,
     inspectDesktopBackup,
-    inspectDesktopMindwtrCsvImport,
+    inspectDesktopTinyBubblesCsvImport,
     inspectDesktopOmniFocusImport,
     inspectDesktopTickTickImport,
     inspectDesktopTodoistImport,
@@ -56,13 +56,13 @@ export type DropboxTestState = 'idle' | 'success' | 'error';
 export type WebDavTestState = 'idle' | 'success' | 'error';
 
 const IMPORT_DIAGNOSTIC_FALLBACKS: Record<string, string> = {
-    'settings.backupDiagnostics.newerVersion': 'This backup was created by a newer Mindwtr version ({{version}}).',
+    'settings.backupDiagnostics.newerVersion': 'This backup was created by a newer Tiny Bubbles version ({{version}}).',
     'settings.backupDiagnostics.noActiveRecords': 'This backup does not contain any active tasks or projects.',
-    'settings.backupDiagnostics.olderVersion': 'This backup was created by an older Mindwtr version ({{version}}).',
+    'settings.backupDiagnostics.olderVersion': 'This backup was created by an older Tiny Bubbles version ({{version}}).',
     'settings.backupDiagnostics.tooLarge': 'The selected backup file is too large. Choose a backup no larger than {{maxSizeMb}} MB.',
-    'settings.backupDiagnostics.unknownSize': 'Mindwtr could not verify the selected backup file size. Copy it locally and try again.',
+    'settings.backupDiagnostics.unknownSize': 'Tiny Bubbles could not verify the selected backup file size. Copy it locally and try again.',
     'settings.importDiagnostics.adjustedRecords': '{{count}} imported record(s) needed an adjustment. Review the imported data.',
-    'settings.importDiagnostics.cannotRead': 'Mindwtr could not safely read this export.',
+    'settings.importDiagnostics.cannotRead': 'Tiny Bubbles could not safely read this export.',
     'settings.importDiagnostics.limitExceeded': 'This export exceeds a safe import limit. Choose a smaller export.',
     'settings.importDiagnostics.missingColumn': 'This export is missing the required column: {{column}}.',
     'settings.importDiagnostics.noImportableRecords': 'No importable records were found in this export.',
@@ -203,7 +203,7 @@ export const useSyncSettings = ({
         if (normalized.includes('permission denied') || normalized.includes('operation not permitted')) {
             return resolveText(
                 'settings.sync.folderPermissionDenied',
-                'Mindwtr cannot access this folder. Choose a folder you own, then try again.',
+                'Tiny Bubbles cannot access this folder. Choose a folder you own, then try again.',
             );
         }
         return resolveText('settings.syncMobile.failedToSetSyncPath', 'Failed to set sync path');
@@ -1234,7 +1234,7 @@ export const useSyncSettings = ({
             const validation = await inspectDesktopBackup(appVersion);
             if (!validation) return;
             if (!validation.valid || !validation.data) {
-                showToast(formatImportError(validation.diagnostics, resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.')), 'error');
+                showToast(formatImportError(validation.diagnostics, resolveText('settings.backupMobile.thisFileIsNotAValidTinyBubblesBackup', 'This file is not a valid Tiny Bubbles backup.')), 'error');
                 return;
             }
 
@@ -1270,7 +1270,7 @@ export const useSyncSettings = ({
             const validation = await inspectDesktopBackup(appVersion);
             if (!validation) return;
             if (!validation.valid || !validation.data) {
-                showToast(formatImportError(validation.diagnostics, resolveText('settings.backupMobile.thisFileIsNotAValidMindwtrBackup', 'This file is not a valid Mindwtr backup.')), 'error');
+                showToast(formatImportError(validation.diagnostics, resolveText('settings.backupMobile.thisFileIsNotAValidTinyBubblesBackup', 'This file is not a valid Tiny Bubbles backup.')), 'error');
                 return;
             }
 
@@ -1334,7 +1334,7 @@ export const useSyncSettings = ({
                     formatText('settings.backupMobile.importTodoistTasksFromProjects', 'Import {{taskCount}} tasks from {{projectCount}} Todoist project(s)?', { taskCount: preview.taskCount, projectCount: preview.projectCount }),
                     preview.sectionCount > 0 ? formatText('settings.backupMobile.sectionsWillBePreserved', '{{sectionCount}} section(s) will be preserved.', { sectionCount: preview.sectionCount }) : null,
                     preview.checklistItemCount > 0 ? formatText('settings.backupMobile.subtasksWillBecomeChecklistItems', '{{subtaskCount}} subtask(s) will become checklist items.', { subtaskCount: preview.checklistItemCount }) : null,
-                    resolveText('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem', 'Imported tasks stay in Inbox so you can process them in Mindwtr.'),
+                    resolveText('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem', 'Imported tasks stay in Inbox so you can process them in Tiny Bubbles.'),
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
@@ -1394,7 +1394,7 @@ export const useSyncSettings = ({
                     preview.projectCount > 0 ? formatText('settings.backupMobile.ticktickProjectsWillBeCreated', '{{projectCount}} project(s) will be created from TickTick lists.', { projectCount: preview.projectCount }) : null,
                     preview.checklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsWillBePreserved', '{{checklistItemCount}} checklist item(s) will be preserved.', { checklistItemCount: preview.checklistItemCount }) : null,
                     preview.recurringCount > 0 ? formatText('settings.backupMobile.recurringTasksWillKeepSupportedRepeatRules', '{{taskCount}} recurring task(s) will keep supported repeat rules.', { taskCount: preview.recurringCount }) : null,
-                    resolveText('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem', 'Imported tasks stay in Inbox so you can process them in Mindwtr.'),
+                    resolveText('settings.backupMobile.importedTasksStayInInboxSoYouCanProcessThem', 'Imported tasks stay in Inbox so you can process them in Tiny Bubbles.'),
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
                 ].filter(Boolean).join('\n'),
@@ -1454,7 +1454,7 @@ export const useSyncSettings = ({
                     preview.projectCount > 0 ? formatText('settings.backupMobile.projectsWillBeCreated', '{{projectCount}} project(s) will be created.', { projectCount: preview.projectCount }) : null,
                     preview.checklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsWillBePreserved', '{{checklistItemCount}} checklist item(s) will be preserved.', { checklistItemCount: preview.checklistItemCount }) : null,
                     preview.standaloneTaskCount > 0
-                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Mindwtr.', { taskCount: preview.standaloneTaskCount })
+                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Tiny Bubbles.', { taskCount: preview.standaloneTaskCount })
                         : null,
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
@@ -1515,7 +1515,7 @@ export const useSyncSettings = ({
                     preview.areaCount > 0 ? formatText('settings.backupMobile.omnifocusAreasWillBeCreated', '{{areaCount}} area(s) will be created from OmniFocus folders when needed.', { areaCount: preview.areaCount }) : null,
                     preview.checklistItemCount > 0 ? formatText('settings.backupMobile.nestedTasksWillBecomeChecklistItems', '{{taskCount}} nested task(s) will become checklist items when possible.', { taskCount: preview.checklistItemCount }) : null,
                     preview.standaloneTaskCount > 0
-                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Mindwtr.', { taskCount: preview.standaloneTaskCount })
+                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Tiny Bubbles.', { taskCount: preview.standaloneTaskCount })
                         : null,
                     resolveText('settings.backupMobile.importedTasksKeepOmnifocusNotesDatesTagsRecurrenceAndChecklist', 'Imported tasks keep OmniFocus notes, dates, tags, recurrence, and checklist children when supported.'),
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
@@ -1551,14 +1551,14 @@ export const useSyncSettings = ({
         }
     }, [formatImportError, formatImportMessages, formatText, isTauri, requestConfirmation, resolveText, showToast, toErrorMessage]);
 
-    const handleImportMindwtrCsv = useCallback(async () => {
+    const handleImportTinyBubblesCsv = useCallback(async () => {
         addBreadcrumb('transfer:restore');
-        setTransferAction('import:mindwtr-csv');
+        setTransferAction('import:tinybubbles-csv');
         try {
-            const parseResult = await inspectDesktopMindwtrCsvImport();
+            const parseResult = await inspectDesktopTinyBubblesCsvImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedMindwtrCsvFile', 'The selected file is not a supported Mindwtr CSV file.')), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedTinyBubblesCsvFile', 'The selected file is not a supported TinyBubbles CSV file.')), 'error');
                 return;
             }
 
@@ -1571,15 +1571,15 @@ export const useSyncSettings = ({
             }
 
             const confirmed = await requestConfirmation({
-                title: resolveText('settings.backupMobile.importMindwtrCsvData', 'Import Mindwtr CSV data?'),
+                title: resolveText('settings.backupMobile.importTinyBubblesCsvData', 'Import TinyBubbles CSV data?'),
                 message: [
                     formatText('settings.backupMobile.importTaskCountFromFile', 'Import {{taskCount}} task(s) from {{fileName}}?', { taskCount: preview.taskCount, fileName: preview.fileName }),
-                    preview.areaCount > 0 ? formatText('settings.backupMobile.mindwtrCsvAreasWillBeCreated', '{{areaCount}} area(s) will be created from the Area column.', { areaCount: preview.areaCount }) : null,
+                    preview.areaCount > 0 ? formatText('settings.backupMobile.tinybubblesCsvAreasWillBeCreated', '{{areaCount}} area(s) will be created from the Area column.', { areaCount: preview.areaCount }) : null,
                     preview.projectCount > 0 ? formatText('settings.backupMobile.projectsWillBeCreatedWhenNeeded', '{{projectCount}} project(s) will be created when needed.', { projectCount: preview.projectCount }) : null,
-                    preview.sectionCount > 0 ? formatText('settings.backupMobile.mindwtrCsvSectionsWillBeCreated', '{{sectionCount}} section(s) will be created from the Section column.', { sectionCount: preview.sectionCount }) : null,
+                    preview.sectionCount > 0 ? formatText('settings.backupMobile.tinybubblesCsvSectionsWillBeCreated', '{{sectionCount}} section(s) will be created from the Section column.', { sectionCount: preview.sectionCount }) : null,
                     preview.checklistItemCount > 0 ? formatText('settings.backupMobile.checklistItemsWillBePreserved', '{{checklistItemCount}} checklist item(s) will be preserved.', { checklistItemCount: preview.checklistItemCount }) : null,
                     preview.standaloneTaskCount > 0
-                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Mindwtr.', { taskCount: preview.standaloneTaskCount })
+                        ? formatText('settings.backupMobile.tasksWillStayOutsideProjects', '{{taskCount}} task(s) will stay outside projects so you can process them in Tiny Bubbles.', { taskCount: preview.standaloneTaskCount })
                         : null,
                     ...(projectLines.length > 0 ? ['', ...projectLines] : []),
                     ...(preview.warnings.length > 0 ? ['', ...formatImportMessages(preview.warnings)] : []),
@@ -1587,13 +1587,13 @@ export const useSyncSettings = ({
             });
             if (!confirmed) return;
 
-            const { snapshotName, result } = await importDesktopMindwtrCsvData(parseResult.parsedData);
+            const { snapshotName, result } = await importDesktopTinyBubblesCsvData(parseResult.parsedData);
             if (isTauri) {
                 setSnapshots(await SyncService.listDataSnapshots());
             }
             const details = [
                 formatText(
-                    'settings.importMindwtrCsvSummary',
+                    'settings.importTinyBubblesCsvSummary',
                     'Imported {{taskCount}} task(s), {{projectCount}} project(s), {{sectionCount}} section(s), and {{areaCount}} area(s).',
                     {
                         taskCount: result.importedTaskCount,
@@ -1745,7 +1745,7 @@ export const useSyncSettings = ({
             onImportTickTick: handleImportTickTick,
             onImportDgt: handleImportDgt,
             onImportOmniFocus: handleImportOmniFocus,
-            onImportMindwtrCsv: handleImportMindwtrCsv,
+            onImportTinyBubblesCsv: handleImportTinyBubblesCsv,
         } satisfies SettingsDataTransferProps,
     };
 };

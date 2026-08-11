@@ -1,6 +1,6 @@
 import { usePathname } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 import {

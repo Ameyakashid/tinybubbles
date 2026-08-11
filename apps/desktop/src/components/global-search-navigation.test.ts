@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { resolveGlobalSearchTaskView } from './GlobalSearch';
 
 const baseTask: Task = {

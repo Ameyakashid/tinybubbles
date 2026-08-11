@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { TASK_SYNC_FIELD_SCHEMA } from '@mindwtr/core/task-sync-schema';
-import { PROJECT_SYNC_FIELD_SCHEMA } from '@mindwtr/core/project-sync-schema';
-import { SECTION_SYNC_FIELD_SCHEMA } from '@mindwtr/core/section-sync-schema';
+import { TASK_SYNC_FIELD_SCHEMA } from '@tinybubbles/core/task-sync-schema';
+import { PROJECT_SYNC_FIELD_SCHEMA } from '@tinybubbles/core/project-sync-schema';
+import { SECTION_SYNC_FIELD_SCHEMA } from '@tinybubbles/core/section-sync-schema';
 import {
     CLOUD_PROJECT_CREATION_ALLOWED_PROP_KEYS,
     CLOUD_PROJECT_PATCH_ALLOWED_PROP_KEYS,
@@ -49,7 +49,7 @@ const PRE_REFACTOR_CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS = [
     'showFutureRecurrence', 'pushCount', 'tags', 'contexts', 'checklist', 'description',
     'textDirection', 'attachments', 'location', 'projectId', 'sectionId', 'areaId',
     'isFocusedToday', 'energyLevel', 'assignedTo', 'timeEstimate', 'timeSpentMinutes', 'reviewAt',
-    'suppressMindwtrReminders', 'repeatReminderMinutes',
+    'suppressTinyBubblesReminders', 'repeatReminderMinutes',
 ];
 
 const PRE_REFACTOR_CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS = [

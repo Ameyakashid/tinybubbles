@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Task } from '@mindwtr/core';
-import { setTaskDraftField } from '@mindwtr/core/task-draft';
+import type { Task } from '@tinybubbles/core';
+import { setTaskDraftField } from '@tinybubbles/core/task-draft';
 
 import {
     buildTaskEditUpdatePatch,

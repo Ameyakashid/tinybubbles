@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
     showToast: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@tinybubbles/core', () => ({
     useTaskStore: { getState: () => ({ setError: mocks.setError }) },
 }));
 

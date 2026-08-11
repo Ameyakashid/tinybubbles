@@ -10,7 +10,7 @@ import {
     type TaskPriority,
     type TaskStatus,
     type TimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
 import {

@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr already ships file-based BYOS sync and other backends using full-snapshot merge. The current sync model is revision-aware and deterministic:
+Tiny Bubbles already ships file-based BYOS sync and other backends using full-snapshot merge. The current sync model is revision-aware and deterministic:
 
 - ADR 0003 introduced `rev` and `revBy` metadata with tombstone-aware merge rules.
 - ADR 0007 kept that model and changed only the ambiguous delete-vs-live winner rule.
@@ -22,7 +22,7 @@ A delta log would add compaction, watermark tracking, replay rules, and more syn
 
 ## Decision
 
-Mindwtr keeps snapshot merge and does not add a delta log at this time.
+Tiny Bubbles keeps snapshot merge and does not add a delta log at this time.
 
 If sync transport evolves later, it must build on the existing `rev` and `revBy` metadata and preserve the current conflict rules from ADR 0003 and ADR 0007. We are not introducing a new sequence-number scheme.
 
@@ -33,5 +33,5 @@ If sync transport evolves later, it must build on the existing `rev` and `revBy`
 - We should revisit this decision only if one or more of these thresholds are crossed:
   - a user's snapshot file exceeds 5 MB
   - sync round-trip latency exceeds 5 seconds on a typical network
-  - Mindwtr needs real-time multi-device streaming
-- If that revisit happens, the first design to evaluate is an append-only `mindwtr-delta.jsonl` alongside `mindwtr-snapshot.json`, built on top of the existing `rev` and `revBy` metadata, keeping the current conflict resolution rules, compacting by the highest revision per entity id, and tracking watermarks per device.
+  - Tiny Bubbles needs real-time multi-device streaming
+- If that revisit happens, the first design to evaluate is an append-only `tinybubbles-delta.jsonl` alongside `tinybubbles-snapshot.json`, built on top of the existing `rev` and `revBy` metadata, keeping the current conflict resolution rules, compacting by the highest revision per entity id, and tracking watermarks per device.

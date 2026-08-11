@@ -16,7 +16,7 @@ import {
     type TaskStatus,
     type WeeklyReviewProjectEntry,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     Calendar as CalendarIcon,
     CheckCircle2,
@@ -64,7 +64,7 @@ export type {
     CalendarReviewEntry as CalendarTaskReviewEntry,
     ContextReviewGroup,
     ExternalCalendarDaySummary,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export type ReviewProjectEntry = WeeklyReviewProjectEntry & {
     areaColor: string;

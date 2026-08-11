@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import type { Project } from '@mindwtr/core';
+import type { Project } from '@tinybubbles/core';
 
 import { useProjectNotesEditor } from './use-project-notes-editor';
 

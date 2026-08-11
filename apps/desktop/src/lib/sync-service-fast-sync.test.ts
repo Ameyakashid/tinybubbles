@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppData, SyncBackend } from '@mindwtr/core';
+import type { AppData, SyncBackend } from '@tinybubbles/core';
 
 import {
     buildFastSyncScope,
@@ -52,7 +52,7 @@ describe('sync-service fast sync helpers', () => {
             ...baseScopeContext,
             backend: 'webdav',
             webdavConfig: {
-                url: 'https://example.com/mindwtr/',
+                url: 'https://example.com/tinybubbles/',
                 username: 'user',
             },
         });
@@ -60,7 +60,7 @@ describe('sync-service fast sync helpers', () => {
             ...baseScopeContext,
             backend: 'webdav',
             webdavConfig: {
-                url: 'https://example.com/mindwtr',
+                url: 'https://example.com/tinybubbles',
                 username: 'user',
             },
         });

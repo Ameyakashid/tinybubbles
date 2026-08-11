@@ -34,11 +34,11 @@ for (const excludedModule of ['play-store-updates', 'expo-store-review']) {
   }
 }
 pkg.expo.autolinking.exclude = existingExclude;
-if (pkg.dependencies && pkg.dependencies['@mindwtr/core'] === 'workspace:*') {
-  pkg.dependencies['@mindwtr/core'] = 'file:../../packages/core';
+if (pkg.dependencies && pkg.dependencies['@tinybubbles/core'] === 'workspace:*') {
+  pkg.dependencies['@tinybubbles/core'] = 'file:../../packages/core';
 }
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindwtr-mobile-foss-package-'));
+const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tinybubbles-mobile-foss-package-'));
 const tmpMobileDir = path.join(tmpDir, 'apps/mobile');
 const tmpCoreDir = path.join(tmpDir, 'packages/core');
 const tmpPackagePath = path.join(tmpMobileDir, 'package.json');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 import {
     advanceSaveProvenance,
     buildChangedEntityBaseline,
@@ -87,7 +87,7 @@ describe('advanceSaveProvenance', () => {
             ...created,
             showFutureRecurrence: false,
             isFocusedToday: false,
-            suppressMindwtrReminders: false,
+            suppressTinyBubblesReminders: false,
         };
         const provenance = {
             tasks: [original], projects: [], sections: [], areas: [], people: [], settings: {},

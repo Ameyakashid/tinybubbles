@@ -19,7 +19,7 @@ import {
     type TaskDraftSetter,
     type TaskEditorFieldId,
     type TimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type {
     QuickActionabilityChoice,
@@ -29,7 +29,7 @@ import type {
 import type { InboxProcessingScheduleFieldKey, InboxProcessingScheduleFieldsControls } from '../../InboxProcessingScheduleFields';
 import type { ProcessingStep } from '../../InboxProcessingWizard';
 import { DEFAULT_TASK_EDITOR_HIDDEN } from '../../Task/task-item-helpers';
-import { isTaskVisibleInArea, resolveAreaFilterSelection } from '@mindwtr/core';
+import { isTaskVisibleInArea, resolveAreaFilterSelection } from '@tinybubbles/core';
 import {
     getDateFieldDraft,
     mergeSuggestedTokens,

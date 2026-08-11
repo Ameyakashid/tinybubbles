@@ -1,4 +1,4 @@
-import { parseIcs, type ExternalCalendarEvent, type ExternalCalendarSubscription } from '@mindwtr/core';
+import { parseIcs, type ExternalCalendarEvent, type ExternalCalendarSubscription } from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { reportError } from './report-error';
 import { invokeNative } from './tauri-invoke';
@@ -10,7 +10,7 @@ export type SystemCalendarPushTarget = {
     name: string;
     sourceName?: string;
     color?: string;
-    isMindwtrDedicated: boolean;
+    isTinyBubblesDedicated: boolean;
 };
 
 export type SystemCalendarEventDetails = {
@@ -153,7 +153,7 @@ const sanitizePushTarget = (target: SystemCalendarPushTarget): SystemCalendarPus
             ? target.sourceName.trim()
             : undefined,
         color: typeof target.color === 'string' && target.color.trim().length > 0 ? target.color.trim() : undefined,
-        isMindwtrDedicated: target.isMindwtrDedicated === true,
+        isTinyBubblesDedicated: target.isTinyBubblesDedicated === true,
     };
 };
 
@@ -174,19 +174,19 @@ export async function getSystemCalendarPushTargets(): Promise<SystemCalendarPush
     }
 }
 
-export async function ensureSystemMindwtrCalendar(storedCalendarId?: string | null): Promise<SystemCalendarPushTarget | null> {
+export async function ensureSystemTinyBubblesCalendar(storedCalendarId?: string | null): Promise<SystemCalendarPushTarget | null> {
     const platform = getSystemCalendarPlatform();
     if (!isTauriRuntime() || !platform) return null;
     try {
         const command = platform === 'macos'
-            ? 'ensure_macos_mindwtr_calendar'
-            : 'ensure_linux_mindwtr_calendar';
+            ? 'ensure_macos_tinybubbles_calendar'
+            : 'ensure_linux_tinybubbles_calendar';
         const target = await invokeNative<SystemCalendarPushTarget | null>(command, {
             storedCalendarId: storedCalendarId?.trim() || null,
         });
         return target ? sanitizePushTarget(target) : null;
     } catch (error) {
-        reportError('Failed to create Mindwtr system calendar', error);
+        reportError('Failed to create Tiny Bubbles system calendar', error);
         return null;
     }
 }

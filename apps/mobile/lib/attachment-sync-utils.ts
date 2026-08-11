@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from './file-system';
-import type { AppData, Attachment } from '@mindwtr/core';
+import type { AppData, Attachment } from '@tinybubbles/core';
 import {
   ATTACHMENTS_DIR_NAME,
   buildCloudKey,
@@ -15,7 +15,7 @@ import {
   reportProgress,
   sleep,
   validateAttachmentHash,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
   CLOUD_TOKEN_KEY,
   CLOUD_ALLOW_INSECURE_HTTP_KEY,

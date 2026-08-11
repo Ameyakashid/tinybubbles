@@ -1,5 +1,5 @@
 import { Filter, List } from 'lucide-react';
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 
 import { GroupBySelect } from '../list/GroupBySelect';
 import { ToolbarButton } from '../list/list-toolbar';

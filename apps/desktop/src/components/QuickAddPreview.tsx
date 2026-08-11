@@ -1,4 +1,4 @@
-import type { QuickAddPreviewEntry } from '@mindwtr/core';
+import type { QuickAddPreviewEntry } from '@tinybubbles/core';
 
 import { cn } from '../lib/utils';
 

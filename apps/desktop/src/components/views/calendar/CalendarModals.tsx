@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { Check, Search, X } from 'lucide-react';
-import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel, safeParseDate, tFallback } from '@mindwtr/core';
+import { CALENDAR_TIME_ESTIMATE_OPTIONS, formatCalendarDurationLabel, safeParseDate, tFallback } from '@tinybubbles/core';
 
 import { TaskInput } from '../../Task/TaskInput';
 import { TaskItem } from '../../TaskItem';

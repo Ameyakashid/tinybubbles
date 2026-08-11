@@ -131,12 +131,12 @@ describe('markdown references', () => {
     it('normalizes internal markdown links outside code', () => {
         const input = 'See [[task:task-1|Quarterly review]] and `[[task:task-1|Quarterly review]]`.';
         const output = normalizeMarkdownInternalLinks(input);
-        expect(output).toContain('[Quarterly review](mindwtr://task/task-1)');
+        expect(output).toContain('[Quarterly review](tinybubbles://task/task-1)');
         expect(output).toContain('`[[task:task-1|Quarterly review]]`');
     });
 
     it('parses internal markdown hrefs', () => {
-        expect(parseMarkdownReferenceHref('mindwtr://project/project-1')).toEqual({
+        expect(parseMarkdownReferenceHref('tinybubbles://project/project-1')).toEqual({
             entityType: 'project',
             id: 'project-1',
         });

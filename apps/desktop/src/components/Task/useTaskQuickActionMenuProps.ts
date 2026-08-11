@@ -10,7 +10,7 @@ import {
     type Task,
     type TaskDraftSetter,
     type TaskStatus,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useLanguage } from '../../contexts/language-context';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';

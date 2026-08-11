@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-        window.localStorage.setItem('mindwtr:desktop:first-run-onboarding:v1', 'dismissed');
+        window.localStorage.setItem('tinybubbles:desktop:first-run-onboarding:v1', 'dismissed');
     });
 });
 

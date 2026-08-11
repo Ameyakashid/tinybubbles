@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { getTranslationsSync, shallow, useTaskStore } from '@mindwtr/core';
+import { getTranslationsSync, shallow, useTaskStore } from '@tinybubbles/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Task, TaskStatus } from '@mindwtr/core';
+import type { Task, TaskStatus } from '@tinybubbles/core';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
 import { Lightbulb } from 'lucide-react-native';

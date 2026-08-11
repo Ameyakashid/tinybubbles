@@ -1,4 +1,4 @@
-import { formatTimeEstimateLabel as formatCoreTimeEstimateLabel, type TimeEstimate } from '@mindwtr/core';
+import { formatTimeEstimateLabel as formatCoreTimeEstimateLabel, type TimeEstimate } from '@tinybubbles/core';
 
 export const MOBILE_TIME_ESTIMATE_OPTIONS: TimeEstimate[] = [
     '5min',

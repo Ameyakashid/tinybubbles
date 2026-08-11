@@ -1,7 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 
-int mindwtr_macos_frontmost_application_pid(void) {
+int tinybubbles_macos_frontmost_application_pid(void) {
     @autoreleasepool {
         NSRunningApplication *frontmost = [[NSWorkspace sharedWorkspace] frontmostApplication];
         NSRunningApplication *current = [NSRunningApplication currentApplication];
@@ -19,7 +19,7 @@ int mindwtr_macos_frontmost_application_pid(void) {
     }
 }
 
-void mindwtr_macos_activate_application(int pid) {
+void tinybubbles_macos_activate_application(int pid) {
     if (pid <= 0) {
         return;
     }

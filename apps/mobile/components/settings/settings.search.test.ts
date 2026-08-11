@@ -4,7 +4,7 @@ import {
     resolveSettingsSearchI18nKey,
     SETTINGS_SEARCH_INDEX,
     SETTINGS_SEARCH_MOBILE_EXCLUSIONS,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import {
     buildSettingsMenuSearchText,

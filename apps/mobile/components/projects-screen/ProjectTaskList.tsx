@@ -1,6 +1,6 @@
 import React from 'react';
 import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import type { Project, ProjectSequenceTaskCue, Task, TaskSortBy } from '@mindwtr/core';
+import type { Project, ProjectSequenceTaskCue, Task, TaskSortBy } from '@tinybubbles/core';
 
 import { TaskList, type TaskListProjectOptions } from '../task-list';
 import type { TaskListBulkBarProps } from '../task-list/TaskListBulkBar';

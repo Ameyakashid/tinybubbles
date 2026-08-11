@@ -19,7 +19,7 @@ import {
   tFallback,
   isTaskInActiveProject,
   getTaskMetadataFilterVisibility,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { TaskEditModal } from './task-edit-modal';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -42,7 +42,7 @@ import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useToast } from '@/contexts/toast-context';
 import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { logError } from '../lib/app-log';
 import {

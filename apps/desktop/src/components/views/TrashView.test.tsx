@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { Project, Task } from '@mindwtr/core';
-import { useTaskStore } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
+import { useTaskStore } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';

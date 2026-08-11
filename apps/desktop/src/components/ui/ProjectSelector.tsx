@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { getProjectChoiceState, type Project } from '@mindwtr/core';
+import { getProjectChoiceState, type Project } from '@tinybubbles/core';
 import { ChevronDown, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModalPortal } from '../ModalPortal';

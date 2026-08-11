@@ -199,7 +199,7 @@ export const normalizeTaskForSyncMerge = (
         timeEstimate: normalized.timeEstimate,
         timeSpentMinutes: normalized.timeSpentMinutes,
         showFutureRecurrence: hasRecurrence && normalizeSyncedBoolean(normalized.showFutureRecurrence) ? true : undefined,
-        suppressMindwtrReminders: normalizeSyncedBoolean(normalized.suppressMindwtrReminders),
+        suppressTinyBubblesReminders: normalizeSyncedBoolean(normalized.suppressTinyBubblesReminders),
         repeatReminderMinutes: normalized.repeatReminderMinutes,
         reviewAt: normalized.reviewAt,
         completedAt: normalized.completedAt,

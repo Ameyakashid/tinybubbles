@@ -30,7 +30,7 @@ import {
     shallow,
     tFallback,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColors, type ThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';

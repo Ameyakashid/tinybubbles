@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import type { StoreActionResult, Task } from '@mindwtr/core';
+import type { StoreActionResult, Task } from '@tinybubbles/core';
 
 import { createTaskEditDraft } from './task-edit-draft-adapter';
 import { useTaskEditActions } from './use-task-edit-actions';

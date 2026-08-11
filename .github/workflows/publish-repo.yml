@@ -43,6 +43,9 @@ concurrency:
 
 jobs:
   build-repo:
+    # Tiny Bubbles fork: releases are disabled until the project publishes builds.
+    # Set repository variable ENABLE_RELEASE_WORKFLOWS=true to re-enable.
+    if: vars.ENABLE_RELEASE_WORKFLOWS == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     env:
@@ -118,7 +121,7 @@ jobs:
           rpms=( *.rpm )
           if (( ${#debs[@]} > 0 )); then mv -- "${debs[@]}" "build_repo/deb${REPO_DIR_SUFFIX}/"; fi
           if (( ${#rpms[@]} > 0 )); then mv -- "${rpms[@]}" "build_repo/rpm${REPO_DIR_SUFFIX}/"; fi
-          gpg --armor --export > build_repo/mindwtr.gpg.key
+          gpg --armor --export > build_repo/tinybubbles.gpg.key
 
       - name: Normalize prerelease package versions
         run: |

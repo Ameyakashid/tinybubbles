@@ -46,7 +46,7 @@ const legacyFileSystemMocks = vi.hoisted(() => {
 
 // Real sanitizers on purpose: identity stubs meant this suite could not catch a
 // regression in the redaction this log path exists to perform.
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   return mockCore(importOriginal, () => storeState, {
     getBreadcrumbs: () => breadcrumbState.value,
@@ -176,9 +176,9 @@ describe('app-log', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     try {
-      await expect(logInfo('Hello', { scope: 'sync' })).resolves.toBe('file://document/logs/mindwtr.log');
+      await expect(logInfo('Hello', { scope: 'sync' })).resolves.toBe('file://document/logs/tinybubbles.log');
       expect(legacyFileSystemMocks.writeAsStringAsync).toHaveBeenCalledWith(
-        'file://document/logs/mindwtr.log',
+        'file://document/logs/tinybubbles.log',
         expect.stringContaining('Hello'),
         { encoding: 'utf8' },
       );
@@ -196,7 +196,7 @@ describe('app-log', () => {
 
     try {
       await expect(logInfo('Hello console', { scope: 'sync' })).resolves.toBeNull();
-      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('[Mindwtr sync] Hello console'));
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('[Tiny Bubbles sync] Hello console'));
       expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('append log line failed'));
     } finally {
       infoSpy.mockRestore();

@@ -11,10 +11,10 @@ const {
 
 describe('android-quick-settings-tile', () => {
   it('generates a TileService that opens the existing quick capture route', () => {
-    const source = buildCaptureTileServiceSource('tech.dongdongbh.mindwtr');
+    const source = buildCaptureTileServiceSource('app.tinybubbles');
 
     expect(source).toContain('class CaptureTileService : TileService()');
-    expect(source).toContain('mindwtr:///capture-quick?mode=text');
+    expect(source).toContain('tinybubbles:///capture-quick?mode=text');
     expect(source).toContain('unlockAndRun { launchQuickCapture() }');
     expect(source).toContain('Build.VERSION_CODES.UPSIDE_DOWN_CAKE');
     expect(source).toContain('PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE');

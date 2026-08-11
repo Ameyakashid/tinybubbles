@@ -1,8 +1,8 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import { AREA_FILTER_NONE, projectMatchesAreaFilterSelection } from '@mindwtr/core';
-import type { Area, AreaFilterSelection, Project } from '@mindwtr/core';
+import { AREA_FILTER_NONE, projectMatchesAreaFilterSelection } from '@tinybubbles/core';
+import type { Area, AreaFilterSelection, Project } from '@tinybubbles/core';
 
 import { DeferredProjectsSection, selectDeferredProjects } from './deferred-projects-section';
 

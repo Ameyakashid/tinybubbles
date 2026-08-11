@@ -60,7 +60,7 @@ describe('android monochrome icon packaging', () => {
   });
 
   it('writes vector resources and patches both launcher XML files', () => {
-    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mindwtr-monochrome-icon-'));
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tinybubbles-monochrome-icon-'));
 
     try {
       applyAndroidMonochromeIconResources(projectRoot);

@@ -4,11 +4,11 @@ import {
     GLOBAL_QUICK_ADD_SHORTCUT_DISABLED,
     getGlobalQuickAddShortcutOptions,
 } from '../../../lib/global-quick-add-shortcut';
-import { normalizeWeekStartSetting } from '@mindwtr/core';
+import { normalizeWeekStartSetting } from '@tinybubbles/core';
 import { Switch } from '../../ui/Switch';
 import { SettingRow, SettingsCard, SettingsSectionHeader } from './SettingRow';
 
-const FLATPAK_QUICK_ADD_COMMAND = 'flatpak run tech.dongdongbh.mindwtr --quick-add';
+const FLATPAK_QUICK_ADD_COMMAND = 'flatpak run app.tinybubbles --quick-add';
 
 type ThemeMode = 'system' | 'light' | 'dark' | 'eink' | 'nord' | 'sepia' | 'catppuccin-macchiato' | 'dracula';
 type DensityMode = 'comfortable' | 'compact' | 'condensed';

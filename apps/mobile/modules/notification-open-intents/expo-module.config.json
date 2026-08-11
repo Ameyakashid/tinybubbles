@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenIntentsModule"]
+    "modules": ["app.tinybubbles.notificationopenintents.NotificationOpenIntentsModule"]
   }
 }

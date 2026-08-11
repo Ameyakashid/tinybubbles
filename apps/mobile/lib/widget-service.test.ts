@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -228,15 +228,15 @@ describe('widget-service', () => {
         const payloadByKey = new Map(
             mockIosWidgetSetItem.mock.calls.map(([key, value]) => [key, JSON.parse(value as string)])
         );
-        expect(payloadByKey.get('mindwtr-ios-widget-payload-small')?.items).toHaveLength(3);
-        expect(payloadByKey.get('mindwtr-ios-widget-payload-medium')?.items).toHaveLength(5);
-        expect(payloadByKey.get('mindwtr-ios-widget-payload-large')?.items).toHaveLength(12);
-        expect(payloadByKey.get('mindwtr-ios-widget-payload-extra-large')?.items).toHaveLength(24);
-        expect(payloadByKey.get('mindwtr-ios-widget-payload')?.items).toHaveLength(12);
-        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('MindwtrTasksWidget');
-        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('MindwtrFocusLockWidget');
+        expect(payloadByKey.get('tinybubbles-ios-widget-payload-small')?.items).toHaveLength(3);
+        expect(payloadByKey.get('tinybubbles-ios-widget-payload-medium')?.items).toHaveLength(5);
+        expect(payloadByKey.get('tinybubbles-ios-widget-payload-large')?.items).toHaveLength(12);
+        expect(payloadByKey.get('tinybubbles-ios-widget-payload-extra-large')?.items).toHaveLength(24);
+        expect(payloadByKey.get('tinybubbles-ios-widget-payload')?.items).toHaveLength(12);
+        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('TinyBubblesTasksWidget');
+        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('TinyBubblesFocusLockWidget');
 
-        const snapshot = payloadByKey.get('mindwtr-ios-shortcuts-snapshot');
+        const snapshot = payloadByKey.get('tinybubbles-ios-shortcuts-snapshot');
         expect(snapshot.lists.next.length).toBeGreaterThan(0);
         expect(snapshot.lists.inbox).toEqual([]);
         expect(typeof snapshot.generatedAt).toBe('string');
@@ -277,7 +277,7 @@ describe('widget-service', () => {
         expect(mockIosWidgetSetItem).toHaveBeenCalledTimes(1);
         expect(mockIosWidgetReloadTimelines).not.toHaveBeenCalled();
         const [key, value] = mockIosWidgetSetItem.mock.calls[0] as [string, string];
-        expect(key).toBe('mindwtr-ios-shortcuts-snapshot');
+        expect(key).toBe('tinybubbles-ios-shortcuts-snapshot');
         expect(JSON.parse(value).lists.waiting).toHaveLength(1);
     });
 
@@ -302,8 +302,8 @@ describe('widget-service', () => {
         await updateMobileWidgetFromData(withThemeChange);
 
         expect(mockIosWidgetSetItem).toHaveBeenCalledTimes(5);
-        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('MindwtrTasksWidget');
+        expect(mockIosWidgetReloadTimelines).toHaveBeenCalledWith('TinyBubblesTasksWidget');
         const keys = mockIosWidgetSetItem.mock.calls.map(([key]) => key);
-        expect(keys).not.toContain('mindwtr-ios-shortcuts-snapshot');
+        expect(keys).not.toContain('tinybubbles-ios-shortcuts-snapshot');
     });
 });

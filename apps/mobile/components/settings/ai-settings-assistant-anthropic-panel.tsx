@@ -1,7 +1,7 @@
 import React from 'react';
 import { Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { DEFAULT_ANTHROPIC_THINKING_BUDGET } from '@mindwtr/core';
+import { DEFAULT_ANTHROPIC_THINKING_BUDGET } from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 

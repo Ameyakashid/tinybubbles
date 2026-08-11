@@ -321,8 +321,8 @@ jobs:
       - name: Compile iOS app and native Swift modules
         run: |
           xcodebuild \
-            -workspace apps/mobile/ios/Mindwtr.xcworkspace \
-            -scheme Mindwtr \
+            -workspace apps/mobile/ios/TinyBubbles.xcworkspace \
+            -scheme TinyBubbles \
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \

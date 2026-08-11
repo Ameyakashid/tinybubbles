@@ -1,4 +1,4 @@
-// Which Task fields the MCP write surface (mindwtr_add_task/mindwtr_update_task) exposes as
+// Which Task fields the MCP write surface (tinybubbles_add_task/tinybubbles_update_task) exposes as
 // generic per-field input, derived from TASK_SYNC_FIELD_SCHEMA the same way
 // apps/cloud/src/server-config.ts derives CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS /
 // CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS — so a new synced field doesn't need a hand-edit here to
@@ -15,8 +15,8 @@
 // against TASK_SYNC_FIELD_SCHEMA (see that file for the independent recomputation). The
 // exclusion list itself lives in the sibling task-write-field-exclusions.ts specifically so
 // the parity script CAN import that one piece directly (see its own header comment).
-import { TASK_SYNC_FIELD_SCHEMA } from '@mindwtr/core/task-sync-schema';
-import type { Task } from '@mindwtr/core';
+import { TASK_SYNC_FIELD_SCHEMA } from '@tinybubbles/core/task-sync-schema';
+import type { Task } from '@tinybubbles/core';
 
 import { TASK_WRITE_FIELD_EXCLUSIONS } from './task-write-field-exclusions.js';
 
@@ -50,12 +50,12 @@ const isDerivedFromSchema = (name: keyof Task): boolean => (
     && !Object.prototype.hasOwnProperty.call(TASK_WRITE_FIELD_EXCLUSIONS, name)
 );
 
-/** Fields mindwtr_add_task exposes beyond its dedicated title/quickAdd inputs. */
+/** Fields tinybubbles_add_task exposes beyond its dedicated title/quickAdd inputs. */
 export const TASK_CREATE_FIELD_NAMES: readonly (keyof Task)[] = TASK_SYNC_FIELD_SCHEMA
     .filter((field) => field.cloudWrite === 'create-patch' && isDerivedFromSchema(field.name))
     .map((field) => field.name);
 
-/** Fields mindwtr_update_task exposes beyond its dedicated id/title inputs. */
+/** Fields tinybubbles_update_task exposes beyond its dedicated id/title inputs. */
 export const TASK_PATCH_FIELD_NAMES: readonly (keyof Task)[] = TASK_SYNC_FIELD_SCHEMA
     .filter((field) => (
         (field.cloudWrite === 'create-patch' || field.cloudWrite === 'patch')

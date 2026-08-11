@@ -2,13 +2,13 @@
 set -euo pipefail
 
 ADB_BIN="${ADB_BIN:-adb}"
-PACKAGE="${PACKAGE:-tech.dongdongbh.mindwtr}"
+PACKAGE="${PACKAGE:-app.tinybubbles}"
 ACTIVITY="${ACTIVITY:-.MainActivity}"
 MODE="${MODE:-cold}"
 RUNS="${RUNS:-10}"
 WAIT_MS="${WAIT_MS:-3500}"
 REQUIRED_JS_MARKER="${REQUIRED_JS_MARKER:-js.splash_hidden}"
-LOGCAT_SPECS="${LOGCAT_SPECS:-MindwtrStartup:I ReactNativeJS:I LOG_FLOWCTRL:W AndroidRuntime:E Expo:E System.err:W *:S}"
+LOGCAT_SPECS="${LOGCAT_SPECS:-TinyBubblesStartup:I ReactNativeJS:I LOG_FLOWCTRL:W AndroidRuntime:E Expo:E System.err:W *:S}"
 LOGCAT_USE_PID="${LOGCAT_USE_PID:-1}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOBILE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -21,7 +21,7 @@ Run repeatable Android startup measurements (am start -W + startup markers).
 Examples:
   bash apps/mobile/scripts/android_startup_benchmark.sh
   MODE=warm RUNS=15 WAIT_MS=5000 bash apps/mobile/scripts/android_startup_benchmark.sh
-  PACKAGE=tech.dongdongbh.mindwtr ACTIVITY=.MainActivity bash apps/mobile/scripts/android_startup_benchmark.sh
+  PACKAGE=app.tinybubbles ACTIVITY=.MainActivity bash apps/mobile/scripts/android_startup_benchmark.sh
 
 Environment variables:
   ADB_BIN   adb binary path (default: adb)

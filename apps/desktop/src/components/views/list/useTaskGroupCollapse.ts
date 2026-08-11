@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { usePersistedViewState } from '../../../hooks/usePersistedViewState';
 import {
     buildGroupedVirtualRows,

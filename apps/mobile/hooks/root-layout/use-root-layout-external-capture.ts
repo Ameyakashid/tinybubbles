@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import * as FileSystem from 'expo-file-system';
 
-import { generateUUID, useTaskStore, validateAttachmentForUpload, type Attachment, type Task } from '@mindwtr/core';
+import { generateUUID, useTaskStore, validateAttachmentForUpload, type Attachment, type Task } from '@tinybubbles/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { logError, logWarn } from '@/lib/app-log';
@@ -301,7 +301,7 @@ export function useRootLayoutExternalCapture({
                 void logError(new Error('Share intent payload missing text and files'), { scope: 'share-intent' });
                 showToast({
                     title: resolveText('share.unavailable', 'Share unavailable'),
-                    message: resolveText('share.readFailed', 'Mindwtr could not read text, a URL, or a file from the shared item.'),
+                    message: resolveText('share.readFailed', 'Tiny Bubbles could not read text, a URL, or a file from the shared item.'),
                     tone: 'warning',
                 });
             }
@@ -386,7 +386,7 @@ export function useRootLayoutExternalCapture({
             });
             showToast({
                 title: resolveText('shortcuts.captureUnavailable', 'Capture shortcut unavailable'),
-                message: resolveText('shortcuts.missingTitle', 'Mindwtr could not read a task title from that shortcut link.'),
+                message: resolveText('shortcuts.missingTitle', 'Tiny Bubbles could not read a task title from that shortcut link.'),
                 tone: 'warning',
             });
             return;

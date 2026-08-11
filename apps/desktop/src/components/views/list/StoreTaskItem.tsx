@@ -1,5 +1,5 @@
 import { memo, useCallback, type ComponentProps } from 'react';
-import { type RangeSelectionOptions, type Task, useProjectById, useTaskById } from '@mindwtr/core';
+import { type RangeSelectionOptions, type Task, useProjectById, useTaskById } from '@tinybubbles/core';
 import { TaskItem } from '../../TaskItem';
 
 type TaskItemProps = ComponentProps<typeof TaskItem>;

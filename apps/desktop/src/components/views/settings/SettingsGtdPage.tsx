@@ -1,4 +1,4 @@
-import type { AppSettings, Area, DefaultProjectFlowMode, FeatureSettings, GtdSettings, TaskEditorFieldId, TaskEditorPresentation, TaskEditorSectionId, TimeEstimate } from '@mindwtr/core';
+import type { AppSettings, Area, DefaultProjectFlowMode, FeatureSettings, GtdSettings, TaskEditorFieldId, TaskEditorPresentation, TaskEditorSectionId, TimeEstimate } from '@tinybubbles/core';
 import {
     FOCUS_TASK_LIMIT_OPTIONS,
     formatTimeEstimateLabel,
@@ -7,7 +7,7 @@ import {
     getDefaultTaskAreaMode,
     resolveDefaultNewTaskAreaId,
     sanitizePomodoroDurations,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';

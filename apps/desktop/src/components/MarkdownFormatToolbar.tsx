@@ -6,7 +6,7 @@ import {
     type MarkdownSelection,
     type MarkdownToolbarActionId,
     type MarkdownToolbarResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { cn } from '../lib/utils';
 

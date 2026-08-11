@@ -5,7 +5,7 @@ import {
   computeSyncPayloadFingerprint,
   runDataTransferTransaction,
   type AppData,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 const emptyData = {
   tasks: [],
@@ -213,8 +213,8 @@ vi.mock('./app-log', () => ({
   sanitizeLogMessage: (value: string) => value,
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     ...actual,
     webdavGetJson: coreMocks.webdavGetJson,
@@ -257,10 +257,10 @@ describe('mobile sync-service runtime', () => {
 
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'webdav',
-        '@mindwtr_webdav_url': 'https://sync.example.com/data.json',
-        '@mindwtr_webdav_username': 'user',
-        '@mindwtr_webdav_password': 'pass',
+        '@tinybubbles_sync_backend': 'webdav',
+        '@tinybubbles_webdav_url': 'https://sync.example.com/data.json',
+        '@tinybubbles_webdav_username': 'user',
+        '@tinybubbles_webdav_password': 'pass',
       };
       return values[key] ?? null;
     });
@@ -331,7 +331,7 @@ describe('mobile sync-service runtime', () => {
 
   it('runs a first WebDAV round trip from session config without reading or activating persisted transport settings', async () => {
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
-      if (key === '@mindwtr_sync_backend') return 'off';
+      if (key === '@tinybubbles_sync_backend') return 'off';
       return null;
     });
 
@@ -341,7 +341,7 @@ describe('mobile sync-service runtime', () => {
       configOverride: {
         backend: 'webdav',
         webdav: {
-          url: 'https://pending.example.com/mindwtr',
+          url: 'https://pending.example.com/tinybubbles',
           username: 'pending-user',
           password: 'pending-password',
           allowInsecureHttp: false,
@@ -351,14 +351,14 @@ describe('mobile sync-service runtime', () => {
 
     expect(result.success).toBe(true);
     expect(coreMocks.webdavGetJson).toHaveBeenCalledWith(
-      'https://pending.example.com/mindwtr/data.json',
+      'https://pending.example.com/tinybubbles/data.json',
       expect.objectContaining({
         username: 'pending-user',
         password: 'pending-password',
       }),
     );
-    expect(asyncStorageMocks.getItem).not.toHaveBeenCalledWith('@mindwtr_webdav_url');
-    expect(asyncStorageMocks.setItem).not.toHaveBeenCalledWith('@mindwtr_sync_backend', 'webdav');
+    expect(asyncStorageMocks.getItem).not.toHaveBeenCalledWith('@tinybubbles_webdav_url');
+    expect(asyncStorageMocks.setItem).not.toHaveBeenCalledWith('@tinybubbles_sync_backend', 'webdav');
     expect(storageMocks.saveData).not.toHaveBeenCalled();
     expect(externalCalendarMocks.getExternalCalendars).not.toHaveBeenCalled();
     expect(externalCalendarMocks.saveExternalCalendars).not.toHaveBeenCalled();
@@ -396,7 +396,7 @@ describe('mobile sync-service runtime', () => {
 
   it('does not persist candidate remote data when a mobile activation probe write fails', async () => {
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
-      if (key === '@mindwtr_sync_backend') return 'off';
+      if (key === '@tinybubbles_sync_backend') return 'off';
       return null;
     });
     coreMocks.webdavGetJson.mockResolvedValue(remoteChangedData);
@@ -408,7 +408,7 @@ describe('mobile sync-service runtime', () => {
       configOverride: {
         backend: 'webdav',
         webdav: {
-          url: 'https://pending.example.com/mindwtr',
+          url: 'https://pending.example.com/tinybubbles',
           username: 'pending-user',
           password: 'pending-password',
           allowInsecureHttp: false,
@@ -493,11 +493,11 @@ describe('mobile sync-service runtime', () => {
     });
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'webdav',
-        '@mindwtr_webdav_url': 'https://sync.example.com/data.json',
-        '@mindwtr_webdav_username': 'user',
-        '@mindwtr_webdav_password': 'pass',
-        '@mindwtr_fast_sync_state_v1': JSON.stringify({
+        '@tinybubbles_sync_backend': 'webdav',
+        '@tinybubbles_webdav_url': 'https://sync.example.com/data.json',
+        '@tinybubbles_webdav_username': 'user',
+        '@tinybubbles_webdav_password': 'pass',
+        '@tinybubbles_fast_sync_state_v1': JSON.stringify({
           scope,
           localFingerprint: computeSyncPayloadFingerprint(emptyData),
           remoteFingerprint,
@@ -523,7 +523,7 @@ describe('mobile sync-service runtime', () => {
     expect(coreMocks.webdavGetJson).not.toHaveBeenCalled();
     expect(coreMocks.webdavHeadFile).toHaveBeenCalledTimes(1);
     expect(storeStateRef.current.updateSettings).not.toHaveBeenCalled();
-    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@mindwtr_local_sync_status_v1')).toBe(true);
+    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@tinybubbles_local_sync_status_v1')).toBe(true);
   });
 
   it('manual sync reads the remote even when cached fast-check fingerprints claim no changes', async () => {
@@ -535,11 +535,11 @@ describe('mobile sync-service runtime', () => {
     });
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'webdav',
-        '@mindwtr_webdav_url': 'https://sync.example.com/data.json',
-        '@mindwtr_webdav_username': 'user',
-        '@mindwtr_webdav_password': 'pass',
-        '@mindwtr_fast_sync_state_v1': JSON.stringify({
+        '@tinybubbles_sync_backend': 'webdav',
+        '@tinybubbles_webdav_url': 'https://sync.example.com/data.json',
+        '@tinybubbles_webdav_username': 'user',
+        '@tinybubbles_webdav_password': 'pass',
+        '@tinybubbles_fast_sync_state_v1': JSON.stringify({
           scope,
           localFingerprint: computeSyncPayloadFingerprint(emptyData),
           remoteFingerprint,
@@ -578,7 +578,7 @@ describe('mobile sync-service runtime', () => {
           rev: 0,
           pushCount: 0,
           isFocusedToday: false,
-          suppressMindwtrReminders: false,
+          suppressTinyBubblesReminders: false,
           tags: [],
           contexts: [],
           attachments: [
@@ -607,10 +607,10 @@ describe('mobile sync-service runtime', () => {
     coreMocks.webdavGetJson.mockResolvedValue(syncedData);
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'webdav',
-        '@mindwtr_webdav_url': 'https://sync.example.com/data.json',
-        '@mindwtr_webdav_username': 'user',
-        '@mindwtr_webdav_password': 'pass',
+        '@tinybubbles_sync_backend': 'webdav',
+        '@tinybubbles_webdav_url': 'https://sync.example.com/data.json',
+        '@tinybubbles_webdav_username': 'user',
+        '@tinybubbles_webdav_password': 'pass',
       };
       return values[key] ?? null;
     });
@@ -642,7 +642,7 @@ describe('mobile sync-service runtime', () => {
     expect(coreMocks.webdavGetJson).toHaveBeenCalledTimes(1);
     expect(coreMocks.webdavHeadFile).not.toHaveBeenCalled();
     expect(storeStateRef.current.updateSettings).not.toHaveBeenCalled();
-    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@mindwtr_local_sync_status_v1')).toBe(true);
+    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@tinybubbles_local_sync_status_v1')).toBe(true);
   });
 
   it('reuses the local snapshot when fast and read checks fall through to a full WebDAV sync', async () => {
@@ -655,11 +655,11 @@ describe('mobile sync-service runtime', () => {
     });
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'webdav',
-        '@mindwtr_webdav_url': 'https://sync.example.com/data.json',
-        '@mindwtr_webdav_username': 'user',
-        '@mindwtr_webdav_password': 'pass',
-        '@mindwtr_fast_sync_state_v1': JSON.stringify({
+        '@tinybubbles_sync_backend': 'webdav',
+        '@tinybubbles_webdav_url': 'https://sync.example.com/data.json',
+        '@tinybubbles_webdav_username': 'user',
+        '@tinybubbles_webdav_password': 'pass',
+        '@tinybubbles_fast_sync_state_v1': JSON.stringify({
           scope,
           localFingerprint: computeSyncPayloadFingerprint(emptyData),
           remoteFingerprint,
@@ -788,7 +788,7 @@ describe('mobile sync-service runtime', () => {
     expect(result).toEqual({ success: true, stats: emptyStats });
     const lastSaved = storageMocks.saveData.mock.calls.at(-1)?.[0] as AppData | undefined;
     expect(lastSaved?.tasks[0]?.attachments).toEqual([]);
-    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@mindwtr_fast_sync_state_v1')).toBe(false);
+    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@tinybubbles_fast_sync_state_v1')).toBe(false);
   });
 
   it('records WebDAV fast-sync state from the PUT response fingerprint without a follow-up HEAD', async () => {
@@ -822,7 +822,7 @@ describe('mobile sync-service runtime', () => {
     expect(result).toEqual({ success: true, stats: emptyStats });
     expect(coreMocks.webdavPutJson).toHaveBeenCalledTimes(1);
     expect(coreMocks.webdavHeadFile).not.toHaveBeenCalled();
-    const fastStateWrite = asyncStorageMocks.setItem.mock.calls.find(([key]) => key === '@mindwtr_fast_sync_state_v1');
+    const fastStateWrite = asyncStorageMocks.setItem.mock.calls.find(([key]) => key === '@tinybubbles_fast_sync_state_v1');
     expect(fastStateWrite).toBeTruthy();
     expect(JSON.parse(fastStateWrite?.[1] as string).remoteFingerprint).toBe('webdav:v1:etag="put-rev"');
   });
@@ -845,10 +845,10 @@ describe('mobile sync-service runtime', () => {
     };
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'cloud',
-        '@mindwtr_cloud_provider': 'selfhosted',
-        '@mindwtr_cloud_url': 'https://cloud.example.com/v1/data',
-        '@mindwtr_cloud_token': 'token',
+        '@tinybubbles_sync_backend': 'cloud',
+        '@tinybubbles_cloud_provider': 'selfhosted',
+        '@tinybubbles_cloud_url': 'https://cloud.example.com/v1/data',
+        '@tinybubbles_cloud_token': 'token',
       };
       return values[key] ?? null;
     });
@@ -877,7 +877,7 @@ describe('mobile sync-service runtime', () => {
     expect(result).toEqual({ success: true, stats: emptyStats });
     expect(coreMocks.cloudPutJson).toHaveBeenCalledTimes(1);
     expect(coreMocks.cloudHeadJson).not.toHaveBeenCalled();
-    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@mindwtr_fast_sync_state_v1')).toBe(false);
+    expect(asyncStorageMocks.setItem.mock.calls.some(([key]) => key === '@tinybubbles_fast_sync_state_v1')).toBe(false);
     // The follow-up cycle is paced by at least MIN_FOLLOW_UP_DELAY_MS (1s) after the
     // first cycle completes, so give it room beyond vi.waitFor's 1s default.
     await vi.waitFor(() => expect(coreMocks.performSyncCycle).toHaveBeenCalledTimes(2), { timeout: 5_000 });
@@ -888,8 +888,8 @@ describe('mobile sync-service runtime', () => {
   it('reports Dropbox as unavailable in FOSS builds instead of falling through to self-hosted config', async () => {
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'cloud',
-        '@mindwtr_cloud_provider': 'dropbox',
+        '@tinybubbles_sync_backend': 'cloud',
+        '@tinybubbles_cloud_provider': 'dropbox',
       };
       return values[key] ?? null;
     });
@@ -942,28 +942,28 @@ describe('mobile sync-service runtime', () => {
     (Platform as { OS: string }).OS = 'ios';
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'file',
-        '@mindwtr_sync_path': 'file:///stale/MindWtr/data.json',
-        '@mindwtr_sync_path_bookmark': 'bookmark-token',
+        '@tinybubbles_sync_backend': 'file',
+        '@tinybubbles_sync_path': 'file:///stale/TinyBubbles/data.json',
+        '@tinybubbles_sync_path_bookmark': 'bookmark-token',
       };
       return values[key] ?? null;
     });
     syncPathBookmarkMocks.resolveSyncPathBookmark.mockResolvedValue({
-      uri: 'file:///resolved/MindWtr',
+      uri: 'file:///resolved/TinyBubbles',
       refreshedBookmark: null,
     });
 
-    const result = await syncServiceModule.performMobileSync('file:///stale/MindWtr/data.json');
+    const result = await syncServiceModule.performMobileSync('file:///stale/TinyBubbles/data.json');
 
     expect(result.success).toBe(true);
     expect(syncPathBookmarkMocks.resolveSyncPathBookmark).toHaveBeenCalledWith('bookmark-token');
-    expect(asyncStorageMocks.setItem).toHaveBeenCalledWith('@mindwtr_sync_path', 'file:///resolved/MindWtr/data.json');
+    expect(asyncStorageMocks.setItem).toHaveBeenCalledWith('@tinybubbles_sync_path', 'file:///resolved/TinyBubbles/data.json');
     expect(storageFileMocks.readSyncFile).toHaveBeenCalledWith(
-      'file:///resolved/MindWtr/data.json',
+      'file:///resolved/TinyBubbles/data.json',
       { bookmark: 'bookmark-token' }
     );
     expect(storageFileMocks.writeSyncFile).toHaveBeenCalledWith(
-      'file:///resolved/MindWtr/data.json',
+      'file:///resolved/TinyBubbles/data.json',
       expect.any(Object),
       { bookmark: 'bookmark-token' }
     );
@@ -973,23 +973,23 @@ describe('mobile sync-service runtime', () => {
     (Platform as { OS: string }).OS = 'ios';
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'file',
-        '@mindwtr_sync_path': 'file:///resolved/MindWtr/data.json',
-        '@mindwtr_sync_path_bookmark': 'stale-token',
+        '@tinybubbles_sync_backend': 'file',
+        '@tinybubbles_sync_path': 'file:///resolved/TinyBubbles/data.json',
+        '@tinybubbles_sync_path_bookmark': 'stale-token',
       };
       return values[key] ?? null;
     });
     syncPathBookmarkMocks.resolveSyncPathBookmark.mockResolvedValue({
-      uri: 'file:///resolved/MindWtr/data.json',
+      uri: 'file:///resolved/TinyBubbles/data.json',
       refreshedBookmark: 'fresh-token',
     });
 
     const result = await syncServiceModule.performMobileSync();
 
     expect(result.success).toBe(true);
-    expect(asyncStorageMocks.setItem).toHaveBeenCalledWith('@mindwtr_sync_path_bookmark', 'fresh-token');
+    expect(asyncStorageMocks.setItem).toHaveBeenCalledWith('@tinybubbles_sync_path_bookmark', 'fresh-token');
     expect(storageFileMocks.writeSyncFile).toHaveBeenCalledWith(
-      'file:///resolved/MindWtr/data.json',
+      'file:///resolved/TinyBubbles/data.json',
       expect.any(Object),
       { bookmark: 'fresh-token' }
     );
@@ -999,9 +999,9 @@ describe('mobile sync-service runtime', () => {
     (Platform as { OS: string }).OS = 'ios';
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'file',
-        '@mindwtr_sync_path': 'file:///stale/MindWtr/data.json',
-        '@mindwtr_sync_path_bookmark': 'dead-token',
+        '@tinybubbles_sync_backend': 'file',
+        '@tinybubbles_sync_path': 'file:///stale/TinyBubbles/data.json',
+        '@tinybubbles_sync_path_bookmark': 'dead-token',
       };
       return values[key] ?? null;
     });
@@ -1215,7 +1215,7 @@ describe('mobile sync-service runtime', () => {
     expect(storeStateRef.current.fetchData).not.toHaveBeenCalled();
     expect(storeStateRef.current.updateSettings).not.toHaveBeenCalled();
     expect(asyncStorageMocks.setItem).toHaveBeenCalledWith(
-      '@mindwtr_local_sync_status_v1',
+      '@tinybubbles_local_sync_status_v1',
       expect.stringContaining('"lastSyncStatus":"error"')
     );
   });
@@ -1446,10 +1446,10 @@ describe('mobile sync-service runtime', () => {
 
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'cloud',
-        '@mindwtr_cloud_provider': 'selfhosted',
-        '@mindwtr_cloud_url': 'https://cloud.example/v1/data',
-        '@mindwtr_cloud_token': 'token',
+        '@tinybubbles_sync_backend': 'cloud',
+        '@tinybubbles_cloud_provider': 'selfhosted',
+        '@tinybubbles_cloud_url': 'https://cloud.example/v1/data',
+        '@tinybubbles_cloud_token': 'token',
       };
       return values[key] ?? null;
     });

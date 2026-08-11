@@ -16,7 +16,7 @@ vi.mock('react-native-safe-area-context', () => ({
 
 vi.mock('@/contexts/language-context', () => ({
   useLanguage: () => ({ t: (key: string) => ({
-    'persistence.failureMessage': 'Your latest changes could not be saved. Keep Mindwtr open and try again.',
+    'persistence.failureMessage': 'Your latest changes could not be saved. Keep Tiny Bubbles open and try again.',
     'errorBoundary.retry': 'Try again',
     'persistence.retrying': 'Saving…',
   } as Record<string, string>)[key] ?? key }),

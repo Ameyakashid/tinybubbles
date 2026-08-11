@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr supports local Whisper transcription on mobile through `whisper.rn`. Two bug histories exposed the same underlying contract problem:
+Tiny Bubbles supports local Whisper transcription on mobile through `whisper.rn`. Two bug histories exposed the same underlying contract problem:
 
 - Android issue #95 was fixed only after quick capture stopped sending compressed recorder output directly to local Whisper and used a PCM/WAV capture path.
 - Android issue #424 avoided a production bundle crash by skipping the realtime helper on Android, but that made Android fall back to Expo recorder `.m4a` files. Those files could be saved as audio notes, but local Whisper returned empty or hallucinated bracket text such as `[Intro]`.
@@ -16,7 +16,7 @@ The local Whisper dependency supports file transcription, realtime transcription
 
 ## Decision
 
-Mindwtr treats mobile local ASR as an audio-contract boundary, not a model-loading detail.
+Tiny Bubbles treats mobile local ASR as an audio-contract boundary, not a model-loading detail.
 
 1. Local Whisper transcription only accepts `LocalWhisperAudio`, a prepared input produced by `prepareAudioForLocalWhisper(captured: CapturedAudio)`.
 2. `prepareAudioForLocalWhisper` reads the file bytes and validates the actual WAV header. It does not trust the file extension alone.
@@ -39,7 +39,7 @@ Mindwtr treats mobile local ASR as an audio-contract boundary, not a model-loadi
 - Android keeps the crash fix from #424 while restoring the working PCM/WAV capture behavior from #95.
 - iOS local Whisper failures are non-fatal: missing native helpers, unsupported files, realtime errors, and model-path problems are logged and handled without freezing capture inputs.
 - iOS quick capture avoids duplicate native Whisper jobs for one recording. This trades one redundant fallback attempt for native context safety; retrying the saved WAV remains available as a separate user action.
-- Model cache repair is allowed only for Mindwtr-owned local Whisper cache paths. It must not be generalized to user-selected files, attachments, or synced data.
+- Model cache repair is allowed only for Tiny Bubbles-owned local Whisper cache paths. It must not be generalized to user-selected files, attachments, or synced data.
 - The bracket-only transcript sanitizer remains as defense in depth, not as the primary audio-format fix.
 - A future converter must write a validated `LocalWhisperAudio` before it can feed local Whisper.
 

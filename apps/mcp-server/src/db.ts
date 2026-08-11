@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, rmSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { dirname } from 'path';
 
-import type { AppData, SqliteClient } from '@mindwtr/core';
+import type { AppData, SqliteClient } from '@tinybubbles/core';
 
-import { resolveMindwtrDataJsonPath, resolveMindwtrDbPath } from './paths.js';
+import { resolveTinyBubblesDataJsonPath, resolveTinyBubblesDbPath } from './paths.js';
 
 export type DbOptions = {
   dbPath?: string;
@@ -91,10 +91,10 @@ const createBootstrapSqliteClient = async (dbPath: string) => {
   };
 };
 
-async function bootstrapMindwtrDbFromJson(dbPath: string, dataJsonPath: string): Promise<void> {
+async function bootstrapTinyBubblesDbFromJson(dbPath: string, dataJsonPath: string): Promise<void> {
   const raw = await readFile(dataJsonPath, 'utf8');
   const parsed = JSON.parse(raw) as unknown;
-  const core = (await import('@mindwtr/core')) as CoreModule;
+  const core = (await import('@tinybubbles/core')) as CoreModule;
   const data = normalizeBootstrapData(core, parsed);
 
   mkdirSync(dirname(dbPath), { recursive: true });
@@ -116,22 +116,22 @@ async function bootstrapMindwtrDbFromJson(dbPath: string, dataJsonPath: string):
   }
 }
 
-export async function ensureMindwtrDbPath(options: DbOptions = {}): Promise<string> {
-  const path = resolveMindwtrDbPath(options.dbPath);
+export async function ensureTinyBubblesDbPath(options: DbOptions = {}): Promise<string> {
+  const path = resolveTinyBubblesDbPath(options.dbPath);
   if (existsSync(path)) return path;
 
-  const dataJsonPath = resolveMindwtrDataJsonPath(options.dbPath);
+  const dataJsonPath = resolveTinyBubblesDataJsonPath(options.dbPath);
   if (existsSync(dataJsonPath)) {
     try {
-      console.warn(`[mindwtr-mcp] Bootstrapping SQLite database from fallback data.json: ${dataJsonPath}`);
-      await bootstrapMindwtrDbFromJson(path, dataJsonPath);
+      console.warn(`[tinybubbles-mcp] Bootstrapping SQLite database from fallback data.json: ${dataJsonPath}`);
+      await bootstrapTinyBubblesDbFromJson(path, dataJsonPath);
       if (existsSync(path)) {
-        console.warn(`[mindwtr-mcp] Bootstrapped SQLite database at: ${path}`);
+        console.warn(`[tinybubbles-mcp] Bootstrapped SQLite database at: ${path}`);
         return path;
       }
     } catch (error) {
       throw new Error(
-        `Mindwtr database not found at: ${path}\n` +
+        `Tiny Bubbles database not found at: ${path}\n` +
         `Found fallback data at: ${dataJsonPath}\n` +
         `Failed to bootstrap SQLite from data.json: ${getErrorMessage(error)}`
       );
@@ -139,14 +139,14 @@ export async function ensureMindwtrDbPath(options: DbOptions = {}): Promise<stri
   }
 
   throw new Error(
-    `Mindwtr database not found at: ${path}\n` +
-    `Please ensure the Mindwtr app has been run at least once to create the database, ` +
-    `or specify a custom path using --db /path/to/mindwtr.db or MINDWTR_DB_PATH environment variable.`
+    `Tiny Bubbles database not found at: ${path}\n` +
+    `Please ensure the Tiny Bubbles app has been run at least once to create the database, ` +
+    `or specify a custom path using --db /path/to/tinybubbles.db or TINYBUBBLES_DB_PATH environment variable.`
   );
 }
 
-export async function openMindwtrDb(options: DbOptions = {}) {
-  const path = await ensureMindwtrDbPath(options);
+export async function openTinyBubblesDb(options: DbOptions = {}) {
+  const path = await ensureTinyBubblesDbPath(options);
 
   let db: DbClient;
   if (isBun()) {

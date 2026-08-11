@@ -1,4 +1,4 @@
-import { normalizeObsidianRelativePath, type ObsidianTask } from '@mindwtr/core';
+import { normalizeObsidianRelativePath, type ObsidianTask } from '@tinybubbles/core';
 import { createWithEqualityFn } from 'zustand/traditional';
 import {
     ObsidianService,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 const now = '2026-06-11T00:00:00.000Z';
 
@@ -27,8 +27,8 @@ const storeState = vi.hoisted(() => ({
   batchUpdateTasks: vi.fn(async () => undefined),
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   return {
     ...actual,
     shallow: Object.is,

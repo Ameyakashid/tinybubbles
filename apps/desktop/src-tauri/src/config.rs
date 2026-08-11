@@ -141,7 +141,7 @@ pub(crate) fn read_config_toml(path: &Path) -> AppConfigToml {
 
 #[cfg(test)]
 fn write_config_toml(path: &Path, config: &AppConfigToml) -> Result<(), String> {
-    write_config_toml_with_header(path, config, "# Mindwtr desktop config")
+    write_config_toml_with_header(path, config, "# Tiny Bubbles desktop config")
 }
 
 #[cfg(test)]
@@ -460,7 +460,7 @@ fn config_rollback_path(path: &Path) -> PathBuf {
         .unwrap_or("config");
     path.parent()
         .unwrap_or_else(|| Path::new("."))
-        .join(format!(".{name}.mindwtr-rollback"))
+        .join(format!(".{name}.tinybubbles-rollback"))
 }
 
 fn fingerprint_bytes(bytes: &[u8]) -> String {
@@ -523,7 +523,7 @@ where
         .ok_or_else(|| "Failed to resolve config directory".to_string())?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-config-")
+        .prefix(".tinybubbles-config-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|e| e.to_string())?;
@@ -553,7 +553,7 @@ fn config_deletion_tombstone_path(path: &Path) -> Result<PathBuf, String> {
         .ok_or_else(|| "Failed to resolve config file name".to_string())?;
     let mut tombstone_name = OsString::from(".");
     tombstone_name.push(file_name);
-    tombstone_name.push(".mindwtr-delete");
+    tombstone_name.push(".tinybubbles-delete");
     Ok(parent.join(tombstone_name))
 }
 
@@ -563,7 +563,7 @@ fn securely_clear_windows_deletion_tombstone(path: &Path) -> Result<(), String> 
         .parent()
         .ok_or_else(|| "Failed to resolve config directory".to_string())?;
     let empty_file = tempfile::Builder::new()
-        .prefix(".mindwtr-delete-empty-")
+        .prefix(".tinybubbles-delete-empty-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|error| error.to_string())?;
@@ -773,9 +773,9 @@ where
         // or replacing it so this write cannot extend the exposure window.
         restrict(path, 0o600)?;
     }
-    let content = serialize_config_toml_with_header(path, config, "# Mindwtr desktop secrets")?;
+    let content = serialize_config_toml_with_header(path, config, "# Tiny Bubbles desktop secrets")?;
     let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-secrets-")
+        .prefix(".tinybubbles-secrets-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|e| e.to_string())?;
@@ -1227,12 +1227,12 @@ where
     }
     let (public_config, secrets_config) = split_config_for_secrets(&sanitized);
     let public_content =
-        serialize_config_toml_with_header(config_path, &public_config, "# Mindwtr desktop config")?;
+        serialize_config_toml_with_header(config_path, &public_config, "# Tiny Bubbles desktop config")?;
     let secrets_content = if config_has_values(&secrets_config) {
         Some(serialize_config_toml_with_header(
             secrets_path,
             &secrets_config,
-            "# Mindwtr desktop secrets",
+            "# Tiny Bubbles desktop secrets",
         )?)
     } else {
         None
@@ -1256,10 +1256,10 @@ fn credential_fingerprint(secret: Option<&str>) -> String {
     let mut digest = Sha256::new();
     match secret {
         Some(secret) => {
-            digest.update(b"mindwtr-credential-present\0");
+            digest.update(b"tinybubbles-credential-present\0");
             digest.update(secret.as_bytes());
         }
-        None => digest.update(b"mindwtr-credential-absent\0"),
+        None => digest.update(b"tinybubbles-credential-absent\0"),
     }
     format!("{:x}", digest.finalize())
 }
@@ -2958,10 +2958,10 @@ mod tests {
 
     #[test]
     fn webdav_config_save_requires_https_for_public_urls_without_override() {
-        assert!(validate_webdav_config_url("https://dav.example.com/mindwtr", false).is_ok());
-        assert!(validate_webdav_config_url("http://nas.local:8080/mindwtr", false).is_ok());
-        assert!(validate_webdav_config_url("http://dav.example.com/mindwtr", false).is_err());
-        assert!(validate_webdav_config_url("http://dav.example.com/mindwtr", true).is_ok());
+        assert!(validate_webdav_config_url("https://dav.example.com/tinybubbles", false).is_ok());
+        assert!(validate_webdav_config_url("http://nas.local:8080/tinybubbles", false).is_ok());
+        assert!(validate_webdav_config_url("http://dav.example.com/tinybubbles", false).is_err());
+        assert!(validate_webdav_config_url("http://dav.example.com/tinybubbles", true).is_ok());
     }
 
     #[test]
@@ -2989,7 +2989,7 @@ mod tests {
             sync_path: Some("/home/user/Sync".to_string()),
             sync_path_bookmark: Some("bookmark-data".to_string()),
             sync_backend: Some("webdav".to_string()),
-            webdav_url: Some("https://dav.example.com/mindwtr".to_string()),
+            webdav_url: Some("https://dav.example.com/tinybubbles".to_string()),
             webdav_username: Some("demo".to_string()),
             // Embedded quote and backslash exercise the escaping path.
             webdav_password: Some("s3cr3t \"pass\" with \\backslash".to_string()),
@@ -3035,10 +3035,10 @@ mod tests {
         // emitted: one header comment line, then `key = "value"` lines in the
         // same order it wrote them. New code must keep reading this shape.
         let legacy_config = concat!(
-            "# Mindwtr desktop config\n",
+            "# Tiny Bubbles desktop config\n",
             "sync_path = \"/home/user/Sync\"\n",
             "sync_backend = \"webdav\"\n",
-            "webdav_url = \"https://dav.example.com/mindwtr\"\n",
+            "webdav_url = \"https://dav.example.com/tinybubbles\"\n",
             "webdav_allow_insecure_http = \"false\"\n",
             "local_api_port = \"3456\"\n",
             "disable_hardware_acceleration = \"true\"\n",
@@ -3053,7 +3053,7 @@ mod tests {
         assert_eq!(config.sync_backend.as_deref(), Some("webdav"));
         assert_eq!(
             config.webdav_url.as_deref(),
-            Some("https://dav.example.com/mindwtr")
+            Some("https://dav.example.com/tinybubbles")
         );
         assert_eq!(config.webdav_allow_insecure_http.as_deref(), Some("false"));
         assert_eq!(config.local_api_port.as_deref(), Some("3456"));
@@ -3223,7 +3223,7 @@ mod tests {
     fn secrets_publication_failure_preserves_the_existing_file() {
         let dir = tempfile::tempdir().expect("should create temp dir");
         let secrets_path = dir.path().join("secrets.toml");
-        let original = b"# Mindwtr desktop secrets\nlocal_api_token = \"old-token\"\n";
+        let original = b"# Tiny Bubbles desktop secrets\nlocal_api_token = \"old-token\"\n";
         fs::write(&secrets_path, original).expect("write existing secrets");
         let mut replacement = AppConfigToml::default();
         replacement.local_api_token = Some("new-token".to_string());
@@ -3379,7 +3379,7 @@ mod tests {
         let secrets_path = dir.path().join("secrets.toml");
         // Bare (unquoted) value: syntactically invalid TOML, as if the file
         // were hand-edited or truncated mid-write.
-        let corrupt = "# Mindwtr desktop config\nsync_backend = webdav\n";
+        let corrupt = "# Tiny Bubbles desktop config\nsync_backend = webdav\n";
         fs::write(&config_path, corrupt).expect("should write corrupt config.toml");
 
         // Reproduces the real read-modify-write flow every setter uses:
@@ -3404,8 +3404,8 @@ mod tests {
         let dir = tempfile::tempdir().expect("should create temp dir");
         let config_path = dir.path().join("config.toml");
         let secrets_path = dir.path().join("secrets.toml");
-        let public = b"# Mindwtr desktop config\nsync_backend = \"off\"\n";
-        let corrupt_secrets = b"# Mindwtr desktop secrets\nlocal_api_token = truncated-token\n";
+        let public = b"# Tiny Bubbles desktop config\nsync_backend = \"off\"\n";
+        let corrupt_secrets = b"# Tiny Bubbles desktop secrets\nlocal_api_token = truncated-token\n";
         fs::write(&config_path, public).expect("write public config");
         fs::write(&secrets_path, corrupt_secrets).expect("write corrupt secrets");
 
@@ -3549,10 +3549,10 @@ mod tests {
         };
         let (public, private) = split_config_for_secrets(&replacement);
         let public_content =
-            serialize_config_toml_with_header(&config_path, &public, "# Mindwtr desktop config")
+            serialize_config_toml_with_header(&config_path, &public, "# Tiny Bubbles desktop config")
                 .expect("serialize public");
         let private_content =
-            serialize_config_toml_with_header(&secrets_path, &private, "# Mindwtr desktop secrets")
+            serialize_config_toml_with_header(&secrets_path, &private, "# Tiny Bubbles desktop secrets")
                 .expect("serialize private");
         restore_optional_file(
             &config_rollback_path(&config_path),
@@ -3610,10 +3610,10 @@ mod tests {
         };
         let (public, private) = split_config_for_secrets(&replacement);
         let public_content =
-            serialize_config_toml_with_header(&config_path, &public, "# Mindwtr desktop config")
+            serialize_config_toml_with_header(&config_path, &public, "# Tiny Bubbles desktop config")
                 .expect("serialize public");
         let private_content =
-            serialize_config_toml_with_header(&secrets_path, &private, "# Mindwtr desktop secrets")
+            serialize_config_toml_with_header(&secrets_path, &private, "# Tiny Bubbles desktop secrets")
                 .expect("serialize private");
         restore_optional_file(
             &config_rollback_path(&config_path),

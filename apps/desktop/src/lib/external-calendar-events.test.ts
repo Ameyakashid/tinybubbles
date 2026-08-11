@@ -93,9 +93,9 @@ describe('external calendar events', () => {
         }));
     });
 
-    it('skips subscribed Mindwtr mirror calendars by default', async () => {
+    it('skips subscribed Tiny Bubbles mirror calendars by default', async () => {
         getCalendarsMock.mockResolvedValue([
-            { id: 'mirror', name: 'Mindwtr', url: 'https://calendar.example/mindwtr.ics', enabled: true },
+            { id: 'mirror', name: 'Tiny Bubbles', url: 'https://calendar.example/tinybubbles.ics', enabled: true },
             { id: 'work', name: 'Work', url: 'https://calendar.example/work.ics', enabled: true },
         ]);
 
@@ -214,17 +214,17 @@ describe('external calendar events', () => {
         expect(result.events.map((event) => event.title)).toEqual(['Team Meeting']);
     });
 
-    it('filters system Mindwtr mirror calendars and prefixed pushed events', async () => {
+    it('filters system Tiny Bubbles mirror calendars and prefixed pushed events', async () => {
         fetchSystemCalendarEventsMock.mockResolvedValue({
             permission: 'granted',
             calendars: [
-                { id: 'system:mindwtr', name: 'Mindwtr', url: 'system://mindwtr', enabled: true },
+                { id: 'system:tinybubbles', name: 'Tiny Bubbles', url: 'system://tinybubbles', enabled: true },
                 { id: 'system:personal', name: 'Personal', url: 'system://personal', enabled: true },
             ],
             events: [
                 {
-                    id: 'system:mindwtr:event-1:2026-04-26T09:00:00.000Z',
-                    sourceId: 'system:mindwtr',
+                    id: 'system:tinybubbles:event-1:2026-04-26T09:00:00.000Z',
+                    sourceId: 'system:tinybubbles',
                     title: 'Write release notes',
                     start: '2026-04-26T09:00:00.000Z',
                     end: '2026-04-26T09:30:00.000Z',
@@ -233,7 +233,7 @@ describe('external calendar events', () => {
                 {
                     id: 'system:personal:event-2:2026-04-26T10:00:00.000Z',
                     sourceId: 'system:personal',
-                    title: 'Mindwtr: Schedule review',
+                    title: 'Tiny Bubbles: Schedule review',
                     start: '2026-04-26T10:00:00.000Z',
                     end: '2026-04-26T10:30:00.000Z',
                     allDay: false,

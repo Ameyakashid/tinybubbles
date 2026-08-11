@@ -33,8 +33,8 @@ describe('attachment-paths', () => {
     });
 
     it('getBaseSyncUrl strips a trailing data.json filename', () => {
-        expect(getBaseSyncUrl('https://dav.example.com/mindwtr/data.json')).toBe('https://dav.example.com/mindwtr');
-        expect(getBaseSyncUrl('https://dav.example.com/mindwtr/')).toBe('https://dav.example.com/mindwtr');
+        expect(getBaseSyncUrl('https://dav.example.com/tinybubbles/data.json')).toBe('https://dav.example.com/tinybubbles');
+        expect(getBaseSyncUrl('https://dav.example.com/tinybubbles/')).toBe('https://dav.example.com/tinybubbles');
     });
 
     it('getCloudBaseUrl strips a trailing /data endpoint', () => {
@@ -49,6 +49,6 @@ describe('attachment-paths', () => {
         expect(getCloudBaseUrl('https://cloud.example.com/')).toBe('https://cloud.example.com/v1');
         expect(getCloudBaseUrl('https://cloud.example.com/v1')).toBe('https://cloud.example.com/v1');
         expect(getCloudBaseUrl('https://cloud.example.com/v2')).toBe('https://cloud.example.com/v2');
-        expect(getCloudBaseUrl('https://cloud.example.com/mindwtr/')).toBe('https://cloud.example.com/mindwtr/v1');
+        expect(getCloudBaseUrl('https://cloud.example.com/tinybubbles/')).toBe('https://cloud.example.com/tinybubbles/v1');
     });
 });

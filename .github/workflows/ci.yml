@@ -72,7 +72,7 @@ jobs:
           python3 scripts/ci/prepare-google-play-listing-metadata.test.py
           python3 scripts/ci/prepare-google-play-listing-metadata.py \
             metadata \
-            /tmp/mindwtr-play-listing-metadata.json
+            /tmp/tinybubbles-play-listing-metadata.json
 
       - name: Store changelog length check
         run: node scripts/ci/check-changelog-length.js
@@ -80,13 +80,13 @@ jobs:
       - name: App Store listing metadata check
         run: |
           python3 scripts/ci/validate-fastlane-metadata.test.py
-          FASTLANE_METADATA_DIR=/tmp/mindwtr-fastlane-metadata scripts/ci/prepare-fastlane-metadata.sh
+          FASTLANE_METADATA_DIR=/tmp/tinybubbles-fastlane-metadata scripts/ci/prepare-fastlane-metadata.sh
 
       - name: iOS App Intents availability check
         run: node scripts/ci/validate-ios-app-intents-availability.js
 
       - name: Run unit tests
-        run: bun run --filter @mindwtr/core test -- --coverage --coverage.thresholds.lines=70 --coverage.thresholds.statements=70 --coverage.thresholds.functions=50 --coverage.thresholds.branches=50
+        run: bun run --filter @tinybubbles/core test -- --coverage --coverage.thresholds.lines=70 --coverage.thresholds.statements=70 --coverage.thresholds.functions=50 --coverage.thresholds.branches=50
 
       - name: Core coverage summary
         if: always()
@@ -230,7 +230,7 @@ jobs:
         run: cd apps/desktop && bun run tsc --noEmit
 
       - name: Run tests
-        run: bun run --filter mindwtr test -- --coverage --coverage.thresholds.lines=50 --coverage.thresholds.statements=50 --coverage.thresholds.functions=45 --coverage.thresholds.branches=50
+        run: bun run --filter tinybubbles test -- --coverage --coverage.thresholds.lines=50 --coverage.thresholds.statements=50 --coverage.thresholds.functions=45 --coverage.thresholds.branches=50
 
       - name: Desktop coverage summary
         if: always()
@@ -352,7 +352,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Cloud TypeScript check
-        run: bun run --filter mindwtr-cloud typecheck
+        run: bun run --filter tinybubbles-cloud typecheck
 
       - name: MCP version metadata check
         run: |
@@ -393,10 +393,10 @@ jobs:
           NODE
 
       - name: MCP TypeScript check
-        run: bun run --filter mindwtr-mcp typecheck
+        run: bun run --filter tinybubbles-mcp typecheck
 
       - name: Cloud tests
-        run: bun run --filter mindwtr-cloud test:coverage
+        run: bun run --filter tinybubbles-cloud test:coverage
 
       - name: Cloud coverage summary
         if: always()
@@ -413,7 +413,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: MCP tests
-        run: bun run --filter mindwtr-mcp test:coverage
+        run: bun run --filter tinybubbles-mcp test:coverage
 
       - name: MCP coverage summary
         if: always()
@@ -529,7 +529,7 @@ jobs:
         run: cd apps/mobile && bun run lint
 
       - name: Check for lint errors (cloud)
-        run: bun run --filter mindwtr-cloud lint
+        run: bun run --filter tinybubbles-cloud lint
 
       - name: Check for lint errors (mcp)
-        run: bun run --filter mindwtr-mcp lint
+        run: bun run --filter tinybubbles-mcp lint

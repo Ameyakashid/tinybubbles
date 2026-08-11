@@ -7,8 +7,8 @@
  * controller that composes them.
  */
 import { format } from 'date-fns';
-import type { ExternalCalendarEvent, Task } from '@mindwtr/core';
-import type { CalendarDayItem } from '@mindwtr/core/calendar-day-items';
+import type { ExternalCalendarEvent, Task } from '@tinybubbles/core';
+import type { CalendarDayItem } from '@tinybubbles/core/calendar-day-items';
 
 export const DESKTOP_DAY_START_HOUR = 0;
 export const DESKTOP_DAY_END_HOUR = 24;

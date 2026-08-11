@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getEnglishI18nValue, getTranslationsSync, loadTranslations, type Language } from '@mindwtr/core';
+import { getEnglishI18nValue, getTranslationsSync, loadTranslations, type Language } from '@tinybubbles/core';
 
 import {
     labelKeyOverrides,
@@ -42,7 +42,7 @@ const reportedZhHantLabels = {
     undoNotifications: '撤銷通知',
     undoNotificationsDesc: '在將任務標記為已完成或刪除後顯示可撤銷提示。',
     launchAtStartup: '開機自動啟動',
-    launchAtStartupDesc: '登錄這台電腦時自動啟動 Mindwtr。',
+    launchAtStartupDesc: '登錄這台電腦時自動啟動 Tiny Bubbles。',
     localApiServer: '啟用本地 API 伺服器',
     localApiPortDesc: '僅限 localhost。默認：3456。',
     localApiStopped: '關閉',
@@ -55,25 +55,25 @@ const reportedZhHantLabels = {
     backup: '備份',
     backupDesc: '導出完整備份，或從備份文件恢復或合併本地數據。',
     importData: '導入數據',
-    importDataDesc: '導入 Todoist、TickTick、DGT GTD、OmniFocus 與 Mindwtr CSV 導出文件。',
+    importDataDesc: '導入 Todoist、TickTick、DGT GTD、OmniFocus 與 TinyBubbles CSV 導出文件。',
     exportBackupDesc: '將當前本地數據保存為 JSON 備份文件。',
     restoreBackup: '恢復備份',
-    restoreBackupDesc: '從 Mindwtr 備份 JSON 文件替換本地數據。',
+    restoreBackupDesc: '從 Tiny Bubbles 備份 JSON 文件替換本地數據。',
     importTodoist: '從 Todoist 導入',
-    importTodoistDesc: '將 Todoist 的 CSV 或 ZIP 導出導入為 Mindwtr 項目。',
+    importTodoistDesc: '將 Todoist 的 CSV 或 ZIP 導出導入為 Tiny Bubbles 項目。',
     importTickTick: '從 TickTick 導入',
-    importTickTickDesc: '將 TickTick 的 CSV 或 ZIP 備份導入為 Mindwtr 的領域、項目和任務。',
+    importTickTickDesc: '將 TickTick 的 CSV 或 ZIP 備份導入為 Tiny Bubbles 的領域、項目和任務。',
     importDgt: '從 DGT GTD 導入',
-    importDgtDesc: '將 DGT GTD 的 JSON 或 ZIP 導出導入為 Mindwtr 的領域、項目和任務。',
+    importDgtDesc: '將 DGT GTD 的 JSON 或 ZIP 導出導入為 Tiny Bubbles 的領域、項目和任務。',
     importOmniFocus: '從 OmniFocus 導入',
-    importOmniFocusDesc: '將 OmniFocus 的 CSV、JSON 或 ZIP 導出導入為 Mindwtr 項目和收集箱任務。',
+    importOmniFocusDesc: '將 OmniFocus 的 CSV、JSON 或 ZIP 導出導入為 Tiny Bubbles 項目和收集箱任務。',
     backgroundSync: '後台同步',
-    backgroundSyncDesc: '桌面端會在啟動時、應用重新獲得焦點時、Mindwtr 運行時每 15 分鐘一次，以及任務/項目變更後短暫延遲同步。關閉到托盤可保持運行；開機自動啟動可在登錄後啟動。退出應用會停止桌面後台同步。',
+    backgroundSyncDesc: '桌面端會在啟動時、應用重新獲得焦點時、Tiny Bubbles 運行時每 15 分鐘一次，以及任務/項目變更後短暫延遲同步。關閉到托盤可保持運行；開機自動啟動可在登錄後啟動。退出應用會停止桌面後台同步。',
     attachmentsCleanupPendingDeletes: '待處理遠程刪除',
     attachmentsCleanupPendingDeletesClear: '清除待處理刪除',
     calendarChooseLocalFile: '選擇本地 .ics 文件',
     obsidianVault: 'Obsidian 資料庫導入',
-    obsidianVaultDesc: '從本地 Obsidian 資料庫導入任務。Obsidian 保留筆記與捕獲來源，Mindwtr 管理原生承諾事項。',
+    obsidianVaultDesc: '從本地 Obsidian 資料庫導入任務。Obsidian 保留筆記與捕獲來源，Tiny Bubbles 管理原生承諾事項。',
 } as const;
 
 describe('settings label registry', () => {

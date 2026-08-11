@@ -4,7 +4,7 @@ import {
   type Area,
   type Project,
   type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 /**
  * Grouping for the mobile task lists that group by a task attribute rather than

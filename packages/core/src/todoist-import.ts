@@ -21,7 +21,7 @@ import { generateDeterministicUUID, generateUUID as uuidv4 } from './uuid';
 const TODOIST_REQUIRED_COLUMNS = ['TYPE', 'CONTENT'];
 const TODOIST_PROJECT_FALLBACK = 'Todoist Import';
 const TODOIST_IMPORT_SUFFIX = ' (Todoist)';
-const TODOIST_IMPORT_ID_NAMESPACE = 'mindwtr:todoist-import:v1';
+const TODOIST_IMPORT_ID_NAMESPACE = 'tinybubbles:todoist-import:v1';
 
 const createTodoistImportId = (kind: 'project' | 'section' | 'task', sourceKey: string): string => (
     generateDeterministicUUID(`${TODOIST_IMPORT_ID_NAMESPACE}:${kind}:${sourceKey}`)

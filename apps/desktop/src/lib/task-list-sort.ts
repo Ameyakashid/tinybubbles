@@ -1,4 +1,4 @@
-import type { TaskSortBy } from '@mindwtr/core';
+import type { TaskSortBy } from '@tinybubbles/core';
 
 export const SORT_OPTIONS: readonly TaskSortBy[] = [
     'default',

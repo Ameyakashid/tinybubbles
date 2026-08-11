@@ -1,6 +1,6 @@
 // Adding or changing a `cloudKit` mapping below (a non-null TaskCloudKitFieldSpec)
 // also requires a decision in packages/core/src/cloudkit-production-schema.json:
-// list the field's cloudKit.key under `records.MindwtrTask.pendingProduction`
+// list the field's cloudKit.key under `records.TinyBubblesTask.pendingProduction`
 // until the CloudKit Dashboard's Production container actually has it, then move
 // it to that record's `deployed` list.
 // scripts/check-synced-field-parity.ts fails if a mapped key is missing from both
@@ -197,7 +197,7 @@ const taskColumnValues = (task: Task): Record<string, unknown> => {
         isFocusedToday: toBool(task.isFocusedToday),
         timeEstimate: task.timeEstimate ?? null,
         timeSpentMinutes: task.timeSpentMinutes ?? null,
-        suppressMindwtrReminders: toBool(task.suppressMindwtrReminders),
+        suppressTinyBubblesReminders: toBool(task.suppressTinyBubblesReminders),
         reviewAt: task.reviewAt ?? null,
         completedAt: task.completedAt ?? null,
         statusBeforeProjectArchive: task.statusBeforeProjectArchive ?? null,
@@ -255,7 +255,7 @@ export const taskFromSqliteRow = (row: Record<string, unknown>): Task => {
         timeSpentMinutes: row.timeSpentMinutes === null || row.timeSpentMinutes === undefined
             ? undefined
             : Number(row.timeSpentMinutes),
-        suppressMindwtrReminders: fromBool(row.suppressMindwtrReminders),
+        suppressTinyBubblesReminders: fromBool(row.suppressTinyBubblesReminders),
         reviewAt: fromOptional(row.reviewAt as string | null),
         completedAt: fromOptional(row.completedAt as string | null),
         statusBeforeProjectArchive: fromOptional(row.statusBeforeProjectArchive as Task['statusBeforeProjectArchive'] | null),

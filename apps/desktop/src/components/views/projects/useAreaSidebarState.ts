@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { useSensor, useSensors, PointerSensor, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { Area, AppData } from '@mindwtr/core';
-import { AREA_FILTER_NONE, areaFilterSelectionToValue, isAreaFilterSelectionActive, resolveAreaFilterSelection, tFallback } from '@mindwtr/core';
+import type { Area, AppData } from '@tinybubbles/core';
+import { AREA_FILTER_NONE, areaFilterSelectionToValue, isAreaFilterSelectionActive, resolveAreaFilterSelection, tFallback } from '@tinybubbles/core';
 import { reportError } from '../../../lib/report-error';
 import type { ConfirmationRequestOptions } from '../../../hooks/useConfirmDialog';
 import {

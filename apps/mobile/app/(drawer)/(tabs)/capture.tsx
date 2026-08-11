@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { useQuickCapture } from '../../../contexts/quick-capture-context';
 

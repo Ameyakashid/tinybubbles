@@ -42,7 +42,7 @@ import {
   type Task,
   type TaskPriority,
   useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import { readQuickCaptureAddAnother, writeQuickCaptureAddAnother } from '../lib/quick-capture-preferences';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';

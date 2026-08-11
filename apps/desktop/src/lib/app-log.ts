@@ -7,13 +7,13 @@ import {
     sanitizeUrl,
     type DiagnosticsSettings,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { invokeNative } from './tauri-invoke';
 import { getManagedPath } from './managed-paths';
 
 const LOG_DIR_NAME = 'logs';
-const LOG_FILE_NAME = 'mindwtr.log';
+const LOG_FILE_NAME = 'tinybubbles.log';
 const RECENT_LOG_MAX_CHARS = 20_000;
 
 type LogEntry = {
@@ -50,7 +50,7 @@ function isLoggingEnabled(): boolean {
 
 export function isDiagnosticsEnabled(): boolean {
     if (typeof window === 'undefined') return false;
-    return (window as any).__MINDWTR_DIAGNOSTICS__ === true;
+    return (window as any).__TINYBUBBLES_DIAGNOSTICS__ === true;
 }
 
 async function appendLogLine(entry: LogEntry, options?: AppendLogOptions): Promise<string | null> {

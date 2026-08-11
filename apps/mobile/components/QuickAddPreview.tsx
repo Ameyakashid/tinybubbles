@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import type { QuickAddPreviewEntry } from '@mindwtr/core';
+import type { QuickAddPreviewEntry } from '@tinybubbles/core';
 
 import { CompactText } from '@/components/compact-text';
 import type { ThemeColors } from '@/hooks/use-theme-colors';

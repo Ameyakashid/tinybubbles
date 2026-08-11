@@ -1,4 +1,4 @@
-# Mindwtr
+# Tiny Bubbles
 
 A local-first GTD task manager (desktop, mobile, self-hosted cloud sync) built around tasks organized into projects, sections, and areas.
 

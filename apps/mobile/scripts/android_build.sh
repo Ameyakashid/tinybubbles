@@ -32,7 +32,7 @@ fi
 
 if [[ "${FOSS_BUILD}" == "1" ]]; then
   export DONATION_PROMPT_ENABLED="${DONATION_PROMPT_ENABLED:-true}"
-  export FEEDBACK_ENDPOINT_URL="${FEEDBACK_ENDPOINT_URL:-https://feedback.mindwtr.app}"
+  export FEEDBACK_ENDPOINT_URL="${FEEDBACK_ENDPOINT_URL:-}"
   node scripts/fdroid_patch_expo_application.js
 fi
 
@@ -259,7 +259,7 @@ for arch in "${ARCH_LIST[@]}"; do
   fi
   apk_path="$(ls "$APK_DIR"/app-*${arch_trimmed}*-release*.apk 2>/dev/null | head -1 || true)"
   if [[ -n "$apk_path" ]]; then
-    out_name="mindwtr-${VERSION}-${arch_trimmed}${SUFFIX}.apk"
+    out_name="tinybubbles-${VERSION}-${arch_trimmed}${SUFFIX}.apk"
     cp "$apk_path" "${OUTPUT_DIR}/${out_name}"
     echo "APK: ${OUTPUT_DIR}/${out_name}"
     found=1
@@ -272,7 +272,7 @@ if [[ "$found" -eq 0 ]]; then
     echo "No release APKs found in ${APK_DIR}" >&2
     exit 1
   fi
-  out_name="mindwtr-${VERSION}-universal${SUFFIX}.apk"
+  out_name="tinybubbles-${VERSION}-universal${SUFFIX}.apk"
   cp "$apk_path" "${OUTPUT_DIR}/${out_name}"
   echo "APK: ${OUTPUT_DIR}/${out_name}"
 fi

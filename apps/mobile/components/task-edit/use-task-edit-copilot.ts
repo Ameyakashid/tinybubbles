@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AppData, TimeEstimate } from '@mindwtr/core';
-import { createAIProvider } from '@mindwtr/core';
-import type { AIProviderId } from '@mindwtr/core';
-import type { TaskDraft, TaskDraftSetter } from '@mindwtr/core/task-draft';
+import type { AppData, TimeEstimate } from '@tinybubbles/core';
+import { createAIProvider } from '@tinybubbles/core';
+import type { AIProviderId } from '@tinybubbles/core';
+import type { TaskDraft, TaskDraftSetter } from '@tinybubbles/core/task-draft';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../../lib/ai-config';
 import { logError } from '../../lib/app-log';
 

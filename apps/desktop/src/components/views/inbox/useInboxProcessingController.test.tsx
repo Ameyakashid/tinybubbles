@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Project, Task } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
 import { useInboxProcessingController } from './useInboxProcessingController';
 
 const makeTask = (id: string, status: Task['status'] = 'inbox'): Task => ({

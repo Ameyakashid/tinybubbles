@@ -1,7 +1,7 @@
 import React from 'react';
 import renderer from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StoreActionResult, Task } from '@mindwtr/core';
+import type { StoreActionResult, Task } from '@tinybubbles/core';
 
 const mocks = vi.hoisted(() => ({
   showToast: vi.fn(),

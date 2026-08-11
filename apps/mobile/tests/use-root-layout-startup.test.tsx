@@ -69,10 +69,10 @@ vi.mock('expo-application', () => ({
   getInstallReferrerAsync,
 }));
 
-vi.mock('@mindwtr/core', async () => {
+vi.mock('@tinybubbles/core', async () => {
   // hasActiveMobileNotificationFeature is a pure predicate (packages/core/src/schedule-utils.ts):
   // passthrough the real implementation rather than re-stub it here.
-  const { hasActiveMobileNotificationFeature } = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+  const { hasActiveMobileNotificationFeature } = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     generateUUID: () => 'generated-id',
     hasActiveMobileNotificationFeature,

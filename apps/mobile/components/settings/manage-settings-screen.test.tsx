@@ -57,7 +57,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@tinybubbles/core', () => ({
   AREA_PRESET_COLORS: ['#3b82f6', '#10b981'],
   DEFAULT_AREA_COLOR: '#3b82f6',
   getPersonNameKey: (value?: string) => value?.trim().toLowerCase() ?? '',
@@ -135,7 +135,7 @@ describe('ManageSettingsScreen', () => {
       await flushEffects();
     });
 
-    expect(asyncStorageMocks.getItem).toHaveBeenCalledWith('mindwtr:settings:manage:openSections');
+    expect(asyncStorageMocks.getItem).toHaveBeenCalledWith('tinybubbles:settings:manage:openSections');
     expect(
       tree.root.findAll((node) => (node.type as unknown) === 'Text' && node.props.children === 'Design'),
     ).toHaveLength(1);
@@ -163,7 +163,7 @@ describe('ManageSettingsScreen', () => {
     });
 
     expect(asyncStorageMocks.setItem).toHaveBeenLastCalledWith(
-      'mindwtr:settings:manage:openSections',
+      'tinybubbles:settings:manage:openSections',
       JSON.stringify({ areas: true, people: false, contexts: false, tags: false }),
     );
   });

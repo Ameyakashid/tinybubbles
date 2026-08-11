@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-import { type Language, getSystemDefaultLanguage, getTranslationsSync, loadTranslations, loadStoredLanguageSync, saveStoredLanguageSync } from '@mindwtr/core';
+import { type Language, getSystemDefaultLanguage, getTranslationsSync, loadTranslations, loadStoredLanguageSync, saveStoredLanguageSync } from '@tinybubbles/core';
 export type { Language };
 
 interface LanguageContextType {

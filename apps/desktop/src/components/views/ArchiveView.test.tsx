@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { Project, Task } from '@mindwtr/core';
-import { safeFormatDate, useTaskStore } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
+import { safeFormatDate, useTaskStore } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
@@ -39,7 +39,7 @@ describe('ArchiveView', () => {
         // store, so a test that picks one would otherwise narrow every test after it.
         useUiStore.setState(initialUiState, true);
         useTaskStore.setState(initialTaskState, true);
-        window.localStorage.removeItem('mindwtr:view:archive:v1');
+        window.localStorage.removeItem('tinybubbles:view:archive:v1');
         useTaskStore.setState({
             tasks: [],
             _allTasks: [archivedTask],

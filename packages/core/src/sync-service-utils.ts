@@ -13,7 +13,7 @@ export type AutoSyncConfig = {
 };
 
 export const SYNC_FILE_NAME = 'data.json';
-export const LEGACY_SYNC_FILE_NAME = 'mindwtr-sync.json';
+export const LEGACY_SYNC_FILE_NAME = 'tinybubbles-sync.json';
 const AI_KEY_PATTERNS = [
     /sk-[A-Za-z0-9-]{10,}/g,
     /sk-ant-[A-Za-z0-9-]{10,}/g,

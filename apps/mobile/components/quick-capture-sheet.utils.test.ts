@@ -32,15 +32,15 @@ describe('quick-capture utils', () => {
     });
 
     it('builds capture file URIs inside the target directory', () => {
-        expect(buildCaptureFileUri('file:///document/audio-captures', 'mindwtr-audio.m4a'))
-            .toBe('file:///document/audio-captures/mindwtr-audio.m4a');
-        expect(buildCaptureFileUri('file:///document/audio-captures/', 'mindwtr-audio.wav'))
-            .toBe('file:///document/audio-captures/mindwtr-audio.wav');
+        expect(buildCaptureFileUri('file:///document/audio-captures', 'tinybubbles-audio.m4a'))
+            .toBe('file:///document/audio-captures/tinybubbles-audio.m4a');
+        expect(buildCaptureFileUri('file:///document/audio-captures/', 'tinybubbles-audio.wav'))
+            .toBe('file:///document/audio-captures/tinybubbles-audio.wav');
     });
 
     it('selects the first existing capture file and skips missing candidates', () => {
         const missingDestination = {
-            uri: 'file:///document/mindwtr-audio.m4a',
+            uri: 'file:///document/tinybubbles-audio.m4a',
             info: () => ({ exists: false, size: 0 }),
         };
         const originalSource = {
@@ -56,7 +56,7 @@ describe('quick-capture utils', () => {
 
     it('returns null when every capture file candidate is missing or invalid', () => {
         const missingDestination = {
-            uri: 'file:///document/mindwtr-audio.m4a',
+            uri: 'file:///document/tinybubbles-audio.m4a',
             info: () => ({ exists: false, size: 0 }),
         };
         const directoryCandidate = {

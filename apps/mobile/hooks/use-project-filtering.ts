@@ -7,7 +7,7 @@ import {
     type Project,
     type ProjectTagFilter,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 type UseProjectFilteringParams = {
     projects: Project[];

@@ -3,9 +3,9 @@ const path = require('path');
 const { withAndroidManifest, withAppBuildGradle, withDangerousMod } = require('@expo/config-plugins');
 
 const MAIN_ACTIVITY_SUFFIX = '.MainActivity';
-const SHORTCUTS_RESOURCE = '@xml/mindwtr_shortcuts';
-const SHORTCUTS_FILE_NAME = 'mindwtr_shortcuts.xml';
-const SHORTCUTS_STRINGS_FILE_NAME = 'mindwtr_shortcuts_strings.xml';
+const SHORTCUTS_RESOURCE = '@xml/tinybubbles_shortcuts';
+const SHORTCUTS_FILE_NAME = 'tinybubbles_shortcuts.xml';
+const SHORTCUTS_STRINGS_FILE_NAME = 'tinybubbles_shortcuts_strings.xml';
 const ANDROIDX_CORE_DEPENDENCY = 'implementation "androidx.core:core:1.13.1"';
 const CREATE_NOTE_ACTION = 'com.google.android.gms.actions.CREATE_NOTE';
 const VIEW_ACTION = 'android.intent.action.VIEW';
@@ -17,7 +17,7 @@ const SHORTCUTS_XML = `<?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
   <capability android:name="actions.intent.CREATE_THING">
     <intent android:action="android.intent.action.VIEW">
-      <url-template android:value="mindwtr:///capture{?title,note}" />
+      <url-template android:value="tinybubbles:///capture{?title,note}" />
       <parameter
         android:name="thing.name"
         android:key="title"
@@ -27,33 +27,33 @@ const SHORTCUTS_XML = `<?xml version="1.0" encoding="utf-8"?>
         android:key="note" />
     </intent>
     <intent android:action="android.intent.action.VIEW">
-      <url-template android:value="mindwtr:///capture" />
+      <url-template android:value="tinybubbles:///capture" />
     </intent>
   </capability>
 
   <capability android:name="actions.intent.GET_THING">
     <intent android:action="android.intent.action.VIEW">
-      <url-template android:value="mindwtr:///global-search{?q}" />
+      <url-template android:value="tinybubbles:///global-search{?q}" />
       <parameter
         android:name="thing.name"
         android:key="q"
         android:required="true" />
     </intent>
     <intent android:action="android.intent.action.VIEW">
-      <url-template android:value="mindwtr:///global-search" />
+      <url-template android:value="tinybubbles:///global-search" />
     </intent>
   </capability>
 
   <capability android:name="actions.intent.OPEN_APP_FEATURE">
     <intent android:action="android.intent.action.VIEW">
-      <url-template android:value="mindwtr:///open-feature{?feature}" />
+      <url-template android:value="tinybubbles:///open-feature{?feature}" />
       <parameter
         android:name="feature"
         android:key="feature"
         android:required="true" />
     </intent>
     <intent android:action="android.intent.action.VIEW">
-      <url-template android:value="mindwtr:///inbox" />
+      <url-template android:value="tinybubbles:///inbox" />
     </intent>
   </capability>
 
@@ -122,7 +122,7 @@ const SHORTCUTS_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:shortcutShortLabel="@string/shortcut_add_task_short">
     <intent
       android:action="android.intent.action.VIEW"
-      android:data="mindwtr:///capture-quick?mode=text" />
+      android:data="tinybubbles:///capture-quick?mode=text" />
   </shortcut>
   <shortcut
     android:enabled="true"
@@ -132,7 +132,7 @@ const SHORTCUTS_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:shortcutShortLabel="@string/shortcut_open_focus_short">
     <intent
       android:action="android.intent.action.VIEW"
-      android:data="mindwtr:///focus" />
+      android:data="tinybubbles:///focus" />
   </shortcut>
   <shortcut
     android:enabled="true"
@@ -142,7 +142,7 @@ const SHORTCUTS_XML = `<?xml version="1.0" encoding="utf-8"?>
     android:shortcutShortLabel="@string/shortcut_open_calendar_short">
     <intent
       android:action="android.intent.action.VIEW"
-      android:data="mindwtr:///calendar" />
+      android:data="tinybubbles:///calendar" />
   </shortcut>
 </shortcuts>
 `;
@@ -220,7 +220,7 @@ const ensureDeepLinkIntentFilter = (mainActivity) => {
     hasAction(filter, VIEW_ACTION)
     && hasCategory(filter, DEFAULT_CATEGORY)
     && hasCategory(filter, BROWSABLE_CATEGORY)
-    && hasSchemeData(filter, 'mindwtr')
+    && hasSchemeData(filter, 'tinybubbles')
   );
   if (existing) return;
 
@@ -230,7 +230,7 @@ const ensureDeepLinkIntentFilter = (mainActivity) => {
       { $: { 'android:name': DEFAULT_CATEGORY } },
       { $: { 'android:name': BROWSABLE_CATEGORY } },
     ],
-    data: [{ $: { 'android:scheme': 'mindwtr' } }],
+    data: [{ $: { 'android:scheme': 'tinybubbles' } }],
   });
 };
 

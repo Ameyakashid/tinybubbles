@@ -9,7 +9,7 @@ import {
     Modal,
     Pressable
 } from 'react-native';
-import { tFallback, type TaskStatus } from '@mindwtr/core';
+import { tFallback, type TaskStatus } from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import { useStatusColors } from '../hooks/use-status-colors';
 import { resolveThemeColors } from '../hooks/use-theme-colors';

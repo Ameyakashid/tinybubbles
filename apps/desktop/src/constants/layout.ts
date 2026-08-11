@@ -1,4 +1,4 @@
-export const PROJECTS_SIDEBAR_WIDTH_STORAGE_KEY = 'mindwtr:projects:sidebarWidth';
+export const PROJECTS_SIDEBAR_WIDTH_STORAGE_KEY = 'tinybubbles:projects:sidebarWidth';
 export const PROJECTS_SIDEBAR_COLLAPSED_WIDTH = 56;
 export const PROJECTS_SIDEBAR_DEFAULT_WIDTH = 304;
 export const PROJECTS_SIDEBAR_MIN_WIDTH = 240;

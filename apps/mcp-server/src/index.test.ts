@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { NotFoundError } from './errors.js';
-import { parseArgs, parseBooleanFlag, registerMindwtrTools, resolveServerConfig, resolveServerModeFlags } from './index.js';
+import { parseArgs, parseBooleanFlag, registerTinyBubblesTools, resolveServerConfig, resolveServerModeFlags } from './index.js';
 import type { Area, Person, Project, Section, Task } from './queries.js';
-import type { MindwtrService } from './service.js';
+import type { TinyBubblesService } from './service.js';
 
 type RegisteredTool = {
   name: string;
@@ -73,7 +73,7 @@ const mockPerson = (overrides: Partial<Person> = {}): Person => ({
   ...overrides,
 });
 
-const createMockService = (): MindwtrService => ({
+const createMockService = (): TinyBubblesService => ({
   listTasks: async () => [mockTask()],
   listProjects: async () => [mockProject()],
   listSections: async () => [mockSection()],
@@ -106,15 +106,15 @@ const createMockService = (): MindwtrService => ({
 
 describe('mcp server index', () => {
   test('parses CLI flags', () => {
-    const flags = parseArgs(['--db', '/tmp/mindwtr.db', '--write', '--noWait']);
-    expect(flags.db).toBe('/tmp/mindwtr.db');
+    const flags = parseArgs(['--db', '/tmp/tinybubbles.db', '--write', '--noWait']);
+    expect(flags.db).toBe('/tmp/tinybubbles.db');
     expect(flags.write).toBe(true);
     expect(flags.noWait).toBe(true);
   });
 
   test('parses --key=value CLI flags', () => {
-    const flags = parseArgs(['--db=/tmp/mindwtr.db', '--write=true']);
-    expect(flags.db).toBe('/tmp/mindwtr.db');
+    const flags = parseArgs(['--db=/tmp/tinybubbles.db', '--write=true']);
+    expect(flags.db).toBe('/tmp/tinybubbles.db');
     expect(flags.write).toBe('true');
   });
 
@@ -147,22 +147,22 @@ describe('mcp server index', () => {
 
   test('resolves self-hosted Cloud backend as read-only by default and writable with --write', () => {
     expect(resolveServerConfig(
-      parseArgs(['--cloud-url', 'https://mindwtr.example.com', '--cloud-token', 'secret', '--cloud-allow-insecure-http=false']),
+      parseArgs(['--cloud-url', 'https://tinybubbles.example.com', '--cloud-token', 'secret', '--cloud-allow-insecure-http=false']),
       {}
     )).toEqual({
       backend: 'cloud',
-      cloudUrl: 'https://mindwtr.example.com',
+      cloudUrl: 'https://tinybubbles.example.com',
       cloudToken: 'secret',
       allowInsecureHttp: false,
       keepAlive: true,
       readonly: true,
     });
     expect(resolveServerConfig(
-      parseArgs(['--cloud-url', 'https://mindwtr.example.com', '--write']),
-      { MINDWTR_MCP_CLOUD_TOKEN: 'secret' }
+      parseArgs(['--cloud-url', 'https://tinybubbles.example.com', '--write']),
+      { TINYBUBBLES_MCP_CLOUD_TOKEN: 'secret' }
     )).toEqual({
       backend: 'cloud',
-      cloudUrl: 'https://mindwtr.example.com',
+      cloudUrl: 'https://tinybubbles.example.com',
       cloudToken: 'secret',
       allowInsecureHttp: false,
       keepAlive: true,
@@ -170,28 +170,28 @@ describe('mcp server index', () => {
     });
   });
 
-  test('registers all mindwtr tools', () => {
+  test('registers all tinybubbles tools', () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
+    registerTinyBubblesTools(server, createMockService(), false);
     expect(tools.size).toBe(27);
-    expect(tools.has('mindwtr_list_tasks')).toBe(true);
-    expect(tools.has('mindwtr_add_task')).toBe(true);
-    expect(tools.has('mindwtr_restore_task')).toBe(true);
-    expect(tools.has('mindwtr_get_project')).toBe(true);
-    expect(tools.has('mindwtr_list_sections')).toBe(true);
-    expect(tools.has('mindwtr_get_section')).toBe(true);
-    expect(tools.has('mindwtr_add_section')).toBe(true);
-    expect(tools.has('mindwtr_update_section')).toBe(true);
-    expect(tools.has('mindwtr_delete_section')).toBe(true);
-    expect(tools.has('mindwtr_list_areas')).toBe(true);
-    expect(tools.has('mindwtr_list_people')).toBe(true);
-    expect(tools.has('mindwtr_get_person')).toBe(true);
-    expect(tools.has('mindwtr_add_project')).toBe(true);
-    expect(tools.has('mindwtr_delete_area')).toBe(true);
-    expect(tools.has('mindwtr_add_person')).toBe(true);
-    expect(tools.has('mindwtr_update_person')).toBe(true);
-    expect(tools.has('mindwtr_rename_person')).toBe(true);
-    expect(tools.has('mindwtr_delete_person')).toBe(true);
+    expect(tools.has('tinybubbles_list_tasks')).toBe(true);
+    expect(tools.has('tinybubbles_add_task')).toBe(true);
+    expect(tools.has('tinybubbles_restore_task')).toBe(true);
+    expect(tools.has('tinybubbles_get_project')).toBe(true);
+    expect(tools.has('tinybubbles_list_sections')).toBe(true);
+    expect(tools.has('tinybubbles_get_section')).toBe(true);
+    expect(tools.has('tinybubbles_add_section')).toBe(true);
+    expect(tools.has('tinybubbles_update_section')).toBe(true);
+    expect(tools.has('tinybubbles_delete_section')).toBe(true);
+    expect(tools.has('tinybubbles_list_areas')).toBe(true);
+    expect(tools.has('tinybubbles_list_people')).toBe(true);
+    expect(tools.has('tinybubbles_get_person')).toBe(true);
+    expect(tools.has('tinybubbles_add_project')).toBe(true);
+    expect(tools.has('tinybubbles_delete_area')).toBe(true);
+    expect(tools.has('tinybubbles_add_person')).toBe(true);
+    expect(tools.has('tinybubbles_update_person')).toBe(true);
+    expect(tools.has('tinybubbles_rename_person')).toBe(true);
+    expect(tools.has('tinybubbles_delete_person')).toBe(true);
   });
 
   test('delegates section tools to the service', async () => {
@@ -200,7 +200,7 @@ describe('mcp server index', () => {
     let addInput: unknown;
     let updateInput: unknown;
     let deletedId = '';
-    registerMindwtrTools(
+    registerTinyBubblesTools(
       server,
       {
         ...createMockService(),
@@ -224,18 +224,18 @@ describe('mcp server index', () => {
       false
     );
 
-    await tools.get('mindwtr_list_sections')?.handler({ projectId: 'p1' });
+    await tools.get('tinybubbles_list_sections')?.handler({ projectId: 'p1' });
     expect(listInput as Record<string, unknown>).toMatchObject({ projectId: 'p1' });
 
-    const addResult = await tools.get('mindwtr_add_section')?.handler({ projectId: 'p1', title: 'Phase A' });
+    const addResult = await tools.get('tinybubbles_add_section')?.handler({ projectId: 'p1', title: 'Phase A' });
     expect(addInput as Record<string, unknown>).toMatchObject({ projectId: 'p1', title: 'Phase A' });
     const addPayload = JSON.parse(addResult?.content[0]?.text || '{}');
     expect(addPayload.section).toMatchObject({ projectId: 'p1', title: 'Phase A' });
 
-    await tools.get('mindwtr_update_section')?.handler({ id: 's1', title: 'Phase B' });
+    await tools.get('tinybubbles_update_section')?.handler({ id: 's1', title: 'Phase B' });
     expect(updateInput as Record<string, unknown>).toMatchObject({ id: 's1', title: 'Phase B' });
 
-    await tools.get('mindwtr_delete_section')?.handler({ id: 's1' });
+    await tools.get('tinybubbles_delete_section')?.handler({ id: 's1' });
     expect(deletedId).toBe('s1');
   });
 
@@ -247,7 +247,7 @@ describe('mcp server index', () => {
     let updateInput: unknown;
     let renameInput: unknown;
     let deletedId = '';
-    registerMindwtrTools(
+    registerTinyBubblesTools(
       server,
       {
         ...createMockService(),
@@ -279,41 +279,41 @@ describe('mcp server index', () => {
       false
     );
 
-    await tools.get('mindwtr_list_people')?.handler({ includeDeleted: true });
+    await tools.get('tinybubbles_list_people')?.handler({ includeDeleted: true });
     expect(listInput as Record<string, unknown>).toMatchObject({ includeDeleted: true });
 
-    await tools.get('mindwtr_get_person')?.handler({ id: 'person1', includeDeleted: true });
+    await tools.get('tinybubbles_get_person')?.handler({ id: 'person1', includeDeleted: true });
     expect(getInput as Record<string, unknown>).toMatchObject({ id: 'person1', includeDeleted: true });
 
-    const addResult = await tools.get('mindwtr_add_person')?.handler({ name: 'Alex', note: 'Design lead' });
+    const addResult = await tools.get('tinybubbles_add_person')?.handler({ name: 'Alex', note: 'Design lead' });
     expect(addInput as Record<string, unknown>).toMatchObject({ name: 'Alex', note: 'Design lead' });
     const addPayload = JSON.parse(addResult?.content[0]?.text || '{}');
     expect(addPayload.person).toMatchObject({ name: 'Alex', note: 'Design lead' });
 
-    await tools.get('mindwtr_update_person')?.handler({ id: 'person1', note: null, referenceLink: 'https://example.com/alex' });
+    await tools.get('tinybubbles_update_person')?.handler({ id: 'person1', note: null, referenceLink: 'https://example.com/alex' });
     expect(updateInput as Record<string, unknown>).toMatchObject({
       id: 'person1',
       note: null,
       referenceLink: 'https://example.com/alex',
     });
 
-    await tools.get('mindwtr_rename_person')?.handler({ id: 'person1', name: 'Alexandra', updateTasks: false });
+    await tools.get('tinybubbles_rename_person')?.handler({ id: 'person1', name: 'Alexandra', updateTasks: false });
     expect(renameInput as Record<string, unknown>).toMatchObject({
       id: 'person1',
       name: 'Alexandra',
       updateTasks: false,
     });
 
-    await tools.get('mindwtr_delete_person')?.handler({ id: 'person1' });
+    await tools.get('tinybubbles_delete_person')?.handler({ id: 'person1' });
     expect(deletedId).toBe('person1');
   });
 
   test('blocks write tools when readonly', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), true);
+    registerTinyBubblesTools(server, createMockService(), true);
 
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
-    const deleteHandler = tools.get('mindwtr_delete_task')?.handler;
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
+    const deleteHandler = tools.get('tinybubbles_delete_task')?.handler;
     expect(addHandler).toBeTruthy();
     expect(deleteHandler).toBeTruthy();
 
@@ -329,8 +329,8 @@ describe('mcp server index', () => {
 
   test('validates add_task requires title or quickAdd', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
     const result = await addHandler?.({});
     expect(result?.isError).toBe(true);
@@ -341,8 +341,8 @@ describe('mcp server index', () => {
 
   test('validates add_task rejects providing both title and quickAdd', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
     const result = await addHandler?.({ title: 'Task', quickAdd: 'Task /next' });
     expect(result?.isError).toBe(true);
@@ -351,8 +351,8 @@ describe('mcp server index', () => {
 
   test('validates add_task title length', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
     const longTitle = 'x'.repeat(501);
     const result = await addHandler?.({ title: longTitle });
@@ -362,8 +362,8 @@ describe('mcp server index', () => {
 
   test('validates add_task quickAdd length', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
     const longQuickAdd = `Task ${'x'.repeat(1997)}`;
     const result = await addHandler?.({ quickAdd: longQuickAdd });
@@ -373,8 +373,8 @@ describe('mcp server index', () => {
 
   test('validates add_task rejects blank token values', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
     const result = await addHandler?.({ title: 'Task', contexts: ['   '] });
     expect(result?.isError).toBe(true);
@@ -383,8 +383,8 @@ describe('mcp server index', () => {
 
   test('validates update_task rejects overlong token values', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const updateHandler = tools.get('mindwtr_update_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const updateHandler = tools.get('tinybubbles_update_task')?.handler;
     expect(updateHandler).toBeTruthy();
     const result = await updateHandler?.({ id: 't1', tags: [`#${'x'.repeat(500)}`] });
     expect(result?.isError).toBe(true);
@@ -393,8 +393,8 @@ describe('mcp server index', () => {
 
   test('validates task recurrence inputs', async () => {
     const { server, tools } = createMockServer();
-    registerMindwtrTools(server, createMockService(), false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    registerTinyBubblesTools(server, createMockService(), false);
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
 
     for (const recurrence of [
@@ -421,7 +421,7 @@ describe('mcp server index', () => {
   test('normalizes task token values before delegating to the service', async () => {
     const { server, tools } = createMockServer();
     let receivedInput: any = null;
-    registerMindwtrTools(server, {
+    registerTinyBubblesTools(server, {
       ...createMockService(),
       addTask: async (input: any) => {
         receivedInput = input;
@@ -433,8 +433,8 @@ describe('mcp server index', () => {
       },
     }, false);
 
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
-    const updateHandler = tools.get('mindwtr_update_task')?.handler;
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
+    const updateHandler = tools.get('tinybubbles_update_task')?.handler;
     expect(addHandler).toBeTruthy();
     expect(updateHandler).toBeTruthy();
 
@@ -508,14 +508,14 @@ describe('mcp server index', () => {
   test('accepts padded quickAdd input when trimmed length is within the limit', async () => {
     const { server, tools } = createMockServer();
     let receivedInput: any = null;
-    registerMindwtrTools(server, {
+    registerTinyBubblesTools(server, {
       ...createMockService(),
       addTask: async (input: any) => {
         receivedInput = input;
         return mockTask();
       },
     }, false);
-    const addHandler = tools.get('mindwtr_add_task')?.handler;
+    const addHandler = tools.get('tinybubbles_add_task')?.handler;
     expect(addHandler).toBeTruthy();
     const paddedQuickAdd = `   ${'x'.repeat(1998)}   `;
     const result = await addHandler?.({ quickAdd: paddedQuickAdd });
@@ -532,8 +532,8 @@ describe('mcp server index', () => {
         throw new Error('boom');
       },
     };
-    registerMindwtrTools(server, failingService, false);
-    const listHandler = tools.get('mindwtr_list_tasks')?.handler;
+    registerTinyBubblesTools(server, failingService, false);
+    const listHandler = tools.get('tinybubbles_list_tasks')?.handler;
     expect(listHandler).toBeTruthy();
     const result = await listHandler?.({});
     expect(result?.isError).toBe(true);
@@ -548,8 +548,8 @@ describe('mcp server index', () => {
         throw new NotFoundError('Invalid request but found resource issue: t1');
       },
     };
-    registerMindwtrTools(server, failingService, false);
-    const getTaskHandler = tools.get('mindwtr_get_task')?.handler;
+    registerTinyBubblesTools(server, failingService, false);
+    const getTaskHandler = tools.get('tinybubbles_get_task')?.handler;
     expect(getTaskHandler).toBeTruthy();
 
     const result = await getTaskHandler?.({ id: 't1' });

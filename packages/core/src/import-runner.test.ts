@@ -83,7 +83,7 @@ describe('runImport', () => {
             severity: 'warning',
         });
 
-        const invalid = parseImportSource('mindwtr-csv', {
+        const invalid = parseImportSource('tinybubbles-csv', {
             fileName: 'export.csv',
             text: 'Status\nnext',
         });

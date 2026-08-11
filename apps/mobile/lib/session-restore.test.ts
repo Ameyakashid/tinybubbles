@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SESSION_RESTORE_WINDOW_MS } from '@mindwtr/core';
+import { SESSION_RESTORE_WINDOW_MS } from '@tinybubbles/core';
 
 const memoryStore = vi.hoisted(() => new Map<string, string>());
 
@@ -76,9 +76,9 @@ describe('mobile session restore', () => {
     });
 
     it('ignores unknown routes and malformed payloads', async () => {
-        memoryStore.set('mindwtr:session:lastRoute', JSON.stringify({ pathname: '/nope', at: Date.now() }));
+        memoryStore.set('tinybubbles:session:lastRoute', JSON.stringify({ pathname: '/nope', at: Date.now() }));
         expect(await readRestorableRoute()).toBeNull();
-        memoryStore.set('mindwtr:session:lastRoute', 'not json');
+        memoryStore.set('tinybubbles:session:lastRoute', 'not json');
         expect(await readRestorableRoute()).toBeNull();
     });
 });

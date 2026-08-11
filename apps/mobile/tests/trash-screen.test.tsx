@@ -2,7 +2,7 @@ import React from 'react';
 import { Alert } from 'react-native';
 import renderer from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StoreActionResult } from '@mindwtr/core';
+import type { StoreActionResult } from '@tinybubbles/core';
 
 import TrashScreen from '../app/(drawer)/trash';
 
@@ -49,8 +49,8 @@ vi.mock('react-native', async () => {
   };
 });
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<any>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<any>('@tinybubbles/core');
   return {
     ...actual,
     shallow: Object.is,

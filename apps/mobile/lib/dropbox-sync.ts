@@ -11,4 +11,4 @@ export {
   uploadDropboxAppData,
   uploadDropboxFile,
   type DropboxDownloadResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';

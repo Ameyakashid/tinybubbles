@@ -4,7 +4,7 @@ import {
     hasExplicitExternalCalendarColor,
     themeExternalCalendarDisplayColor,
     type ExternalCalendarSubscription,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { Ban, ExternalLink } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';

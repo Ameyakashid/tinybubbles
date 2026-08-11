@@ -1,4 +1,4 @@
-import { DEFAULT_AREA_COLOR as CORE_DEFAULT_AREA_COLOR, safeFormatDate, safeParseDate, type Area, type Project } from '@mindwtr/core';
+import { DEFAULT_AREA_COLOR as CORE_DEFAULT_AREA_COLOR, safeFormatDate, safeParseDate, type Area, type Project } from '@tinybubbles/core';
 
 export const DEFAULT_AREA_COLOR = CORE_DEFAULT_AREA_COLOR;
 

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { getMindSweepGroups, shallow, useTaskStore, type MindSweepScope } from '@mindwtr/core';
+import { getMindSweepGroups, shallow, useTaskStore, type MindSweepScope } from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';

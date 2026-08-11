@@ -17,7 +17,7 @@ Mixing binary attachment transfer directly into the main JSON snapshot would mak
 
 ## Decision
 
-Mindwtr treats attachment metadata as part of task/project data and attachment bytes as a separate transfer stream.
+Tiny Bubbles treats attachment metadata as part of task/project data and attachment bytes as a separate transfer stream.
 
 The metadata contract is:
 
@@ -42,5 +42,5 @@ The transfer contract is:
 - Device-local paths and transient transfer state do not create false conflicts.
 - Users can see whether an attachment is available, missing, uploading, or downloading on the current device.
 - Backends need attachment-specific validation and cleanup code.
-- A backend switch fails closed when Mindwtr cannot prove one of the live attachments at the candidate destination.
+- A backend switch fails closed when Tiny Bubbles cannot prove one of the live attachments at the candidate destination.
 - Future attachment work should preserve the metadata-vs-bytes split unless a new storage architecture replaces snapshot sync entirely.

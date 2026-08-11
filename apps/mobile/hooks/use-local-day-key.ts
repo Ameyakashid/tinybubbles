@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { getNextFutureStartRevealAt } from '@mindwtr/core';
+import { getNextFutureStartRevealAt } from '@tinybubbles/core';
 
 export function getLocalDayKey(now: Date = new Date()): string {
   return `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;

@@ -59,7 +59,7 @@ import {
   type SavedFilter,
   type SortField,
   type ProjectDeadlineBoost,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { SwipeableTaskItem, type TaskRowActions } from '@/components/swipeable-task-item';
 import {
   getActionFailureMessage,
@@ -89,7 +89,7 @@ import { useTaskFilterSelections } from '@/hooks/use-task-filter-selections';
 import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { PullSyncIndicator } from '@/components/PullSyncIndicator';
 import { useManualPullSync } from '@/hooks/use-manual-pull-sync';
-import { projectMatchesAreaFilterSelection } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import {
   buildFocusListLayoutFrames,
@@ -109,7 +109,7 @@ function resolveTaskRouteTab(value?: string | string[]): TaskEditTab {
   return routeValue === 'task' ? 'task' : 'view';
 }
 
-const FOCUS_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:focus:v1';
+const FOCUS_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:focus:v1';
 const FOCUS_REORDER_ITEM_HEIGHT = 80;
 const FOCUS_LIST_INITIAL_RENDER_COUNT = 12;
 const FOCUS_LIST_BATCH_RENDER_COUNT = 12;

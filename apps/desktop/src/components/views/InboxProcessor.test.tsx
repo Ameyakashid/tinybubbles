@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { AppData, Area, Project, Task } from '@mindwtr/core';
+import type { AppData, Area, Project, Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
 import { InboxProcessor } from './InboxProcessor';

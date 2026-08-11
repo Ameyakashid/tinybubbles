@@ -1,4 +1,4 @@
-import { shouldShowTaskForStart, type Task, type TaskStatus } from '@mindwtr/core';
+import { shouldShowTaskForStart, type Task, type TaskStatus } from '@tinybubbles/core';
 import type { DesktopViewId } from './navigation-events';
 
 export function resolveTaskNavigationView(task: Task, now: Date = new Date()): DesktopViewId {

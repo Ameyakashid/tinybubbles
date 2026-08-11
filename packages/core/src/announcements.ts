@@ -19,15 +19,19 @@ export type AppAnnouncement = {
 
 export const APP_ANNOUNCEMENT_DISMISSED_VALUE = 'dismissed';
 
+// Tiny Bubbles does not solicit donations and runs no funding accounts. This announcement
+// is kept because the announcement plumbing is generic and other messages may reuse it, but
+// it points at the project itself rather than asking anyone for money. It is inactive
+// unless ACTIVE_APP_ANNOUNCEMENT below is set.
 export const DONATION_PROMPT_ANNOUNCEMENT: AppAnnouncement = {
-    id: 'support-mindwtr-one-time-v1',
-    title: 'Keep Mindwtr free and independent',
-    body: 'Mindwtr has no ads, tracking, or paywalls. It is built by one person and supported by people who find it useful. If it helps you stay clear, a small donation helps keep it improving.',
+    id: 'support-tinybubbles-one-time-v1',
+    title: 'Tiny Bubbles is free and open source',
+    body: 'Tiny Bubbles has no ads, no tracking, and no paywalls, and it never asks you for money. If it helps you, the most useful thing you can do is report a bug, improve a translation, or contribute a fix.',
     dismissLabel: 'Maybe later',
     action: {
         type: 'url',
-        label: 'Support Mindwtr',
-        url: 'https://mindwtr.app/donate?src=app_prompt',
+        label: 'Visit the project',
+        url: 'https://github.com/tinybubbles-app/tinybubbles',
     },
 };
 
@@ -35,7 +39,7 @@ export const DONATION_PROMPT_ANNOUNCEMENT: AppAnnouncement = {
 export const ACTIVE_APP_ANNOUNCEMENT: AppAnnouncement | null = null;
 
 export function getAnnouncementDismissalStorageKey(id: string): string {
-    return `mindwtr:announcement-dismissed:${id.trim()}`;
+    return `tinybubbles:announcement-dismissed:${id.trim()}`;
 }
 
 export function shouldShowAppAnnouncement(

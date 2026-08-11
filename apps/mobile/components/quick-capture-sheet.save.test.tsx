@@ -77,9 +77,9 @@ const {
   };
 });
 
-vi.mock('@mindwtr/core', async () => {
+vi.mock('@tinybubbles/core', async () => {
   // The shared capture transaction is real; only its store actions are substituted.
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
   executeCaptureTransaction: actual.executeCaptureTransaction,
   prepareCaptureTask: actual.prepareCaptureTask,
@@ -582,7 +582,7 @@ describe('QuickCaptureSheet save handling', () => {
   it('knows a multi-word context created earlier in the same capture burst', async () => {
     // Real parsing: the point is which tokens the SECOND capture recognizes,
     // which depends on the known-token bag being rebuilt between captures.
-    const core = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+    const core = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
     parseQuickAdd.mockImplementation(core.parseQuickAdd as never);
     addTask.mockImplementation(async (title: string, props: Record<string, unknown>) => {
       selectStore.getState().tasks.push({ id: `task-${title}`, title, ...props } as never);

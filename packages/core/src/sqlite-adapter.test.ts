@@ -164,7 +164,7 @@ describeSqlite('SqliteAdapter', () => {
             projects: [
                 {
                     id: 'proj-1',
-                    title: 'Mindwtr',
+                    title: 'Tiny Bubbles',
                     status: 'active',
                     color: '#1D4ED8',
                     order: 0,
@@ -305,7 +305,7 @@ describeSqlite('SqliteAdapter', () => {
         expect(task.timeSpentMinutes).toBe(95);
 
         const project = loaded.projects[0];
-        expect(project.title).toBe('Mindwtr');
+        expect(project.title).toBe('Tiny Bubbles');
         expect(project.tagIds).toEqual(['tag-1']);
         expect(project.isSequential).toBe(true);
         expect(project.sequentialScope).toBe('section');

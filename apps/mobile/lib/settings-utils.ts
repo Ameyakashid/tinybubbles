@@ -1,4 +1,4 @@
-import { isDropboxUnauthorizedError } from '@mindwtr/core';
+import { isDropboxUnauthorizedError } from '@tinybubbles/core';
 import { logError, logWarn } from './app-log';
 
 export const formatError = (error: unknown) => (error instanceof Error ? error.message : String(error));

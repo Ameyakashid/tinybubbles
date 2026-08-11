@@ -79,9 +79,9 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     env:
-      EXPECTED_BUNDLE_ID: tech.dongdongbh.mindwtr
+      EXPECTED_BUNDLE_ID: app.tinybubbles
       VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY || secrets.VITE_DROPBOX_APP_KEY }}
-      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       VITE_DONATION_PROMPT_ENABLED: "true"
     steps:
       - name: Checkout code
@@ -199,7 +199,7 @@ jobs:
           APP_CERT_PWD="${MAS_CERTIFICATE_PWD:-${MAS_CERTIFICATE_PASSWORD:-${APPLE_CERTIFICATE_PASSWORD:-}}}"
           INSTALLER_CERT_B64="${MAS_INSTALLER_CERTIFICATE:-}"
           INSTALLER_CERT_PWD="${MAS_INSTALLER_CERT_PWD:-${MAS_INSTALLER_CERT_PASSWORD:-}}"
-          KEYCHAIN_PATH="$RUNNER_TEMP/mindwtr-mas.keychain-db"
+          KEYCHAIN_PATH="$RUNNER_TEMP/tinybubbles-mas.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
@@ -248,13 +248,13 @@ jobs:
           MAS_PROVISIONING_PROFILE: ${{ secrets.MAS_PROVISIONING_PROFILE }}
         run: |
           set -euo pipefail
-          PROFILE_PATH="$RUNNER_TEMP/mindwtr-mas.provisionprofile"
+          PROFILE_PATH="$RUNNER_TEMP/tinybubbles-mas.provisionprofile"
           if ! echo "$MAS_PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH" 2>/dev/null; then
             echo "$MAS_PROVISIONING_PROFILE" | base64 -D > "$PROFILE_PATH"
           fi
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/mindwtr-mas.provisionprofile"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/tinybubbles-mas.provisionprofile"
           cp "$PROFILE_PATH" apps/desktop/src-tauri/embedded.provisionprofile
 
       - name: Resolve macOS version metadata
@@ -507,7 +507,7 @@ jobs:
           APP_BUNDLE_DIR="$(dirname "$APP_PATH")"
           BUNDLE_DIR="$(dirname "$APP_BUNDLE_DIR")"
           PKG_DIR="$BUNDLE_DIR/pkg"
-          PKG_PATH="$PKG_DIR/Mindwtr-mac-appstore.pkg"
+          PKG_PATH="$PKG_DIR/TinyBubbles-mac-appstore.pkg"
           mkdir -p "$PKG_DIR"
 
           APP_INFO_PLIST="$APP_PATH/Contents/Info.plist"
@@ -532,7 +532,7 @@ jobs:
       - name: Upload package artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: mindwtr-macos-appstore-pkg
+          name: tinybubbles-macos-appstore-pkg
           path: ${{ env.PKG_PATH }}
           if-no-files-found: error
           retention-days: 28
@@ -541,8 +541,8 @@ jobs:
         if: ${{ inputs.upload }}
         env:
           RELEASE_BODY: ${{ github.event.release.body || '' }}
-          APP_SUPPORT_URL: "https://github.com/dongdongbh/Mindwtr/issues"
-          APP_MARKETING_URL: "https://github.com/dongdongbh/Mindwtr"
+          APP_SUPPORT_URL: "https://github.com/tinybubbles-app/tinybubbles/issues"
+          APP_MARKETING_URL: "https://github.com/tinybubbles-app/tinybubbles"
         run: |
           set -euo pipefail
 

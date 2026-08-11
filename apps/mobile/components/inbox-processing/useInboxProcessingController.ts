@@ -36,13 +36,13 @@ import {
   type TaskEditorFieldId,
   type TaskPriority,
   type TimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
   commitProcessInboxWorkflowEvent,
   resolveProcessInboxContainerFields,
   type ProcessInboxWorkflowEvent,
   type ProcessInboxWorkflowFields,
-} from '@mindwtr/core/process-inbox-workflow';
+} from '@tinybubbles/core/process-inbox-workflow';
 
 import type { AIResponseAction } from '../ai-response-modal';
 import {

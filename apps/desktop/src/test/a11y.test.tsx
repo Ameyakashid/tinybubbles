@@ -6,7 +6,7 @@ import { GlobalSearch } from '../components/GlobalSearch';
 import { KeybindingHelpModal } from '../components/KeybindingHelpModal';
 import { ToastHost } from '../components/ToastHost';
 import { TaskItemRecurrenceModal } from '../components/Task/TaskItemRecurrenceModal';
-import { Task, useTaskStore } from '@mindwtr/core';
+import { Task, useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 import { GLOBAL_QUICK_ADD_SHORTCUT_DEFAULT } from '../lib/global-quick-add-shortcut';
@@ -134,7 +134,7 @@ describe('Accessibility', () => {
         renderWithLanguage(<GlobalSearch onNavigate={vi.fn()} />);
 
         await act(async () => {
-            window.dispatchEvent(new Event('mindwtr:open-search'));
+            window.dispatchEvent(new Event('tinybubbles:open-search'));
             await vi.advanceTimersByTimeAsync(50);
         });
 

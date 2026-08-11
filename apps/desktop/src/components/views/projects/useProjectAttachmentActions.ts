@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type Attachment, type Project } from '@mindwtr/core';
+import { type Attachment, type Project } from '@tinybubbles/core';
 import { importPickedFileAttachment } from '../../../lib/attachment-import';
 import { openAttachmentTarget } from '../../../lib/open-attachment-target';
 import { isTauriRuntime } from '../../../lib/runtime';

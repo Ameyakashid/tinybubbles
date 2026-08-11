@@ -1,1 +1,1 @@
-export { sortDoneTasksForListView } from '@mindwtr/core';
+export { sortDoneTasksForListView } from '@tinybubbles/core';

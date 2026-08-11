@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr needs one state model that can be shared across desktop and mobile while remaining usable from React components, background sync code, notifications, widgets, and other imperative integration points.
+Tiny Bubbles needs one state model that can be shared across desktop and mobile while remaining usable from React components, background sync code, notifications, widgets, and other imperative integration points.
 
 The store also has to coordinate:
 

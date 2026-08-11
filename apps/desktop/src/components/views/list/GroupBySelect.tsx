@@ -1,4 +1,4 @@
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { ToolbarSelect } from './ToolbarSelect';
 import { getGroupAxisLabel, type TaskGroupAxis } from './next-grouping';

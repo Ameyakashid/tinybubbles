@@ -42,7 +42,7 @@ describe('review modal labels', () => {
     it('falls back to English defaults when a typed translation is missing', () => {
         const labels = getReviewLabels((key) => key);
 
-        expect(labels.calendarTasks).toBe('Mindwtr tasks (next 7 days)');
+        expect(labels.calendarTasks).toBe('Tiny Bubbles tasks (next 7 days)');
         expect(labels.moreItems).toBe('more items');
     });
 });

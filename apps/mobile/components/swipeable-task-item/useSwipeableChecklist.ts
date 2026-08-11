@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getChecklistProgress, Task, useTaskStore } from '@mindwtr/core';
+import { getChecklistProgress, Task, useTaskStore } from '@tinybubbles/core';
 import { logError } from '../../lib/app-log';
 import { getActionFailureMessage, isActionFailure } from '../store-action-result';
 

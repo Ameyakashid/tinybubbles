@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 import { useCalendarViewController } from './useCalendarViewController';
 
@@ -29,8 +29,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   return {
     ...actual,
     expandCalendarRecurringTaskSetInRange: (...args: Parameters<typeof actual.expandCalendarRecurringTaskSetInRange>) => {

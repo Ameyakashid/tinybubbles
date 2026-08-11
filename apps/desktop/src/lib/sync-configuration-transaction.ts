@@ -1,4 +1,4 @@
-import type { CloudProvider } from '@mindwtr/core';
+import type { CloudProvider } from '@tinybubbles/core';
 
 import type { CloudConfig, WebDavConfig } from './sync-attachment-backends';
 import type { SyncBackend } from './sync-service-utils';

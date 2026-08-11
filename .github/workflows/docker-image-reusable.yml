@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       image_name:
-        description: Image name suffix (e.g. mindwtr-app)
+        description: Image name suffix (e.g. tinybubbles-app)
         required: true
         type: string
       dockerfile:
@@ -79,10 +79,10 @@ jobs:
           changed_files="$(git diff --name-only "$PREVIOUS_TAG" "$CURRENT_TAG")"
           common_pattern="^(\.github/workflows/docker-image-reusable\.yml|package\.json|bun\.lock|\.bun-version|bunfig\.toml|tsconfig(\..*)?\.json|packages/core/)"
           case "$IMAGE_SUFFIX" in
-            mindwtr-app)
+            tinybubbles-app)
               image_pattern="^(\.github/workflows/docker-image-app\.yml|docker/app/|apps/desktop/)"
               ;;
-            mindwtr-cloud)
+            tinybubbles-cloud)
               image_pattern="^(\.github/workflows/docker-image-cloud\.yml|docker/cloud/|apps/cloud/)"
               ;;
             *)

@@ -9,7 +9,7 @@ import {
   type BulkOrganizeStatus,
   type BulkOrganizeTaskUpdateInput,
   type Project,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { TaskEditAreaPicker } from '../task-edit/TaskEditAreaPicker';
 import { TaskEditProjectPicker } from '../task-edit/TaskEditProjectPicker';

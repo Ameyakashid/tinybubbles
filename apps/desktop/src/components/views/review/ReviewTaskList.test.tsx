@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
-import { useTaskStore, type Task } from '@mindwtr/core';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 import { ReviewTaskList } from './ReviewTaskList';
 
 const scrollIntoViewMock = vi.fn();

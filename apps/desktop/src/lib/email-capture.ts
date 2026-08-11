@@ -1,9 +1,9 @@
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 import { invokeNative, invokeNativeOr } from './tauri-invoke';
 
 export const DEFAULT_EMAIL_CAPTURE_PORT = 993;
-export const DEFAULT_EMAIL_CAPTURE_FOLDER = 'Mindwtr';
+export const DEFAULT_EMAIL_CAPTURE_FOLDER = 'Tiny Bubbles';
 
 const DEFAULT_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_INITIAL_POLL_DELAY_MS = 20_000;

@@ -7,9 +7,9 @@ import {
   sendDailyHeartbeat,
   sendHeartbeatOptOut,
   type AppSettings,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
-const ANALYTICS_DISTINCT_ID_KEY = 'mindwtr-analytics-distinct-id';
+const ANALYTICS_DISTINCT_ID_KEY = 'tinybubbles-analytics-distinct-id';
 
 type PlatformExtras = typeof Platform & {
   isPad?: boolean;

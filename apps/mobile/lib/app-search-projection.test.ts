@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Area, Project, Task } from '@mindwtr/core';
+import type { Area, Project, Task } from '@tinybubbles/core';
 
 import {
     buildAppSearchDelta,
@@ -57,7 +57,7 @@ describe('app-search-projection', () => {
                 status: 'next',
                 dueDate: '2026-08-12',
                 parentId: 'p1',
-                deepLink: 'mindwtr://open?task=t1',
+                deepLink: 'tinybubbles://open?task=t1',
             });
         });
 

@@ -1,6 +1,6 @@
 import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Area, Project, Task } from '@mindwtr/core';
+import type { Area, Project, Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
 import { useUiStore } from '../../store/ui-store';
@@ -53,8 +53,8 @@ const storeMocks = vi.hoisted(() => {
     return { taskStoreState };
 });
 
-vi.mock('@mindwtr/core', async () => {
-    const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+    const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
     const useTaskStore = Object.assign(
         (selector: (state: typeof storeMocks.taskStoreState) => unknown) => selector({
             ...storeMocks.taskStoreState,
@@ -695,7 +695,7 @@ describe('CalendarView', () => {
         });
 
         expect(screen.queryByText('Draft planning memo')).not.toBeInTheDocument();
-        expect(window.localStorage.getItem('mindwtr.calendar.planningPanelCollapsed')).toBe('true');
+        expect(window.localStorage.getItem('tinybubbles.calendar.planningPanelCollapsed')).toBe('true');
 
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: 'Expand planning panel' }));
@@ -703,7 +703,7 @@ describe('CalendarView', () => {
         });
 
         expect(screen.getByText('Draft planning memo')).toBeInTheDocument();
-        expect(window.localStorage.getItem('mindwtr.calendar.planningPanelCollapsed')).toBe('false');
+        expect(window.localStorage.getItem('tinybubbles.calendar.planningPanelCollapsed')).toBe('false');
     });
 
     it('shows date-only start times as all-day scheduled tasks on the calendar', async () => {
@@ -769,7 +769,7 @@ describe('CalendarView', () => {
         expect(screen.getAllByText('Archived thing').length).toBeGreaterThan(0);
         // A record of what happened, not a plan that can be dragged elsewhere.
         expect(completedItem.closest('button')).toHaveAttribute('draggable', 'false');
-        expect(window.localStorage.getItem('mindwtr.calendar.showCompleted')).toBe('true');
+        expect(window.localStorage.getItem('tinybubbles.calendar.showCompleted')).toBe('true');
 
         await act(async () => {
             fireEvent.click(screen.getByRole('button', { name: 'Completed' }));

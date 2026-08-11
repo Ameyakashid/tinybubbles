@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { isValidCloudSyncToken } from '@mindwtr/core';
+import { isValidCloudSyncToken } from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 

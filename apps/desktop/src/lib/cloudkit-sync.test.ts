@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AppData } from "@mindwtr/core";
+import type { AppData } from "@tinybubbles/core";
 
 const invoke = vi.hoisted(() => vi.fn());
 const logInfo = vi.hoisted(() => vi.fn());
@@ -12,14 +12,14 @@ vi.mock("./app-log", () => ({ logInfo, logWarn, logError }));
 
 import { readRemoteCloudKit, writeRemoteCloudKit } from "./cloudkit-sync";
 
-const CHANGE_TOKEN_KEY = "@mindwtr_cloudkit_change_token";
+const CHANGE_TOKEN_KEY = "@tinybubbles_cloudkit_change_token";
 const RECORD_TYPES = {
-  task: "MindwtrTask",
-  project: "MindwtrProject",
-  section: "MindwtrSection",
-  area: "MindwtrArea",
-  person: "MindwtrPerson",
-  settings: "MindwtrSettings",
+  task: "TinyBubblesTask",
+  project: "TinyBubblesProject",
+  section: "TinyBubblesSection",
+  area: "TinyBubblesArea",
+  person: "TinyBubblesPerson",
+  settings: "TinyBubblesSettings",
 } as const;
 
 const emptyChanges = (changeToken?: string) => ({
@@ -66,7 +66,7 @@ describe("desktop CloudKit transport", () => {
     });
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
-      value: "Mindwtr macOS",
+      value: "Tiny Bubbles macOS",
     });
   });
 

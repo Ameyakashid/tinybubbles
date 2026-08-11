@@ -45,13 +45,13 @@ describe('app-search-preference', () => {
 
     it('round-trips the device-local preference', async () => {
         await writeAppSearchIndexingEnabled(true);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:appSearchIndexingEnabled', 'true');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:appSearchIndexingEnabled', 'true');
 
         mockGetItem.mockResolvedValue('true');
         expect(await readAppSearchIndexingEnabled()).toBe(true);
 
         await writeAppSearchIndexingEnabled(false);
-        expect(mockRemoveItem).toHaveBeenCalledWith('mindwtr:appSearchIndexingEnabled');
+        expect(mockRemoveItem).toHaveBeenCalledWith('tinybubbles:appSearchIndexingEnabled');
     });
 
     it('is inert when unsupported (old Android, or non-Android)', async () => {

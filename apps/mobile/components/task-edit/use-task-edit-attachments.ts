@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Platform } from 'react-native';
-import type { Attachment, Task } from '@mindwtr/core';
+import type { Attachment, Task } from '@tinybubbles/core';
 import {
     DEFAULT_PROJECT_COLOR,
     buildTaskUpdatesFromSpeechResult,
@@ -10,10 +10,10 @@ import {
     translateWithFallback,
     useTaskStore,
     validateAttachmentForUpload,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     toTaskDraftDateTimeLocalValue,
-} from '@mindwtr/core/task-draft';
+} from '@tinybubbles/core/task-draft';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';

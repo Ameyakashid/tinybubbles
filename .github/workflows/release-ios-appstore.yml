@@ -89,16 +89,16 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 90
     env:
-      EXPECTED_TEAM_ID: 5X9JC5PL7T
-      EXPECTED_BUNDLE_ID: tech.dongdongbh.mindwtr
-      EXPECTED_WIDGET_BUNDLE_ID: tech.dongdongbh.mindwtr.MindwtrWidgets
-      EXPECTED_SHARE_EXTENSION_BUNDLE_ID: tech.dongdongbh.mindwtr.share-extension
-      EXPECTED_APP_GROUP: group.tech.dongdongbh.mindwtr
-      EXPECTED_ICLOUD_CONTAINER: iCloud.tech.dongdongbh.mindwtr
+      EXPECTED_TEAM_ID: APPLE_TEAM_ID_PLACEHOLDER
+      EXPECTED_BUNDLE_ID: app.tinybubbles
+      EXPECTED_WIDGET_BUNDLE_ID: app.tinybubbles.TinyBubblesWidgets
+      EXPECTED_SHARE_EXTENSION_BUNDLE_ID: app.tinybubbles.share-extension
+      EXPECTED_APP_GROUP: group.app.tinybubbles
+      EXPECTED_ICLOUD_CONTAINER: iCloud.app.tinybubbles
       ANALYTICS_HEARTBEAT_URL: ${{ secrets.ANALYTICS_HEARTBEAT_URL }}
       ANALYTICS_RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
       DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY || secrets.DROPBOX_APP_KEY }}
-      FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       DONATION_PROMPT_ENABLED: "true"
     steps:
       - name: Checkout code
@@ -194,7 +194,7 @@ jobs:
             fi
           done
           if [ -z "${IOS_WIDGET_PROVISIONING_PROFILE:-}" ]; then
-            echo "::warning::IOS_WIDGET_PROVISIONING_PROFILE is not set. Falling back to IOS_PROVISIONING_PROFILE for MindwtrWidgets."
+            echo "::warning::IOS_WIDGET_PROVISIONING_PROFILE is not set. Falling back to IOS_PROVISIONING_PROFILE for TinyBubblesWidgets."
           fi
           for key in IOS_ASC_KEY_ID IOS_ASC_ISSUER_ID IOS_ASC_PRIVATE_KEY; do
             if [ -z "${!key:-}" ]; then
@@ -319,7 +319,7 @@ jobs:
           set -euo pipefail
 
 
-          KEYCHAIN_PATH="$RUNNER_TEMP/mindwtr-ios.keychain-db"
+          KEYCHAIN_PATH="$RUNNER_TEMP/tinybubbles-ios.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
           CERT_PATH="$RUNNER_TEMP/ios-distribution.p12"
 
@@ -384,12 +384,12 @@ jobs:
             fi
           }
 
-          APP_PROFILE_PATH="$RUNNER_TEMP/mindwtr-ios-app.mobileprovision"
-          APP_PROFILE_PLIST="$RUNNER_TEMP/mindwtr-ios-app-profile.plist"
-          WIDGET_PROFILE_PATH="$RUNNER_TEMP/mindwtr-ios-widget.mobileprovision"
-          WIDGET_PROFILE_PLIST="$RUNNER_TEMP/mindwtr-ios-widget-profile.plist"
-          SHARE_EXTENSION_PROFILE_PATH="$RUNNER_TEMP/mindwtr-ios-share-extension.mobileprovision"
-          SHARE_EXTENSION_PROFILE_PLIST="$RUNNER_TEMP/mindwtr-ios-share-extension-profile.plist"
+          APP_PROFILE_PATH="$RUNNER_TEMP/tinybubbles-ios-app.mobileprovision"
+          APP_PROFILE_PLIST="$RUNNER_TEMP/tinybubbles-ios-app-profile.plist"
+          WIDGET_PROFILE_PATH="$RUNNER_TEMP/tinybubbles-ios-widget.mobileprovision"
+          WIDGET_PROFILE_PLIST="$RUNNER_TEMP/tinybubbles-ios-widget-profile.plist"
+          SHARE_EXTENSION_PROFILE_PATH="$RUNNER_TEMP/tinybubbles-ios-share-extension.mobileprovision"
+          SHARE_EXTENSION_PROFILE_PLIST="$RUNNER_TEMP/tinybubbles-ios-share-extension-profile.plist"
 
           bash scripts/ci/decode-base64-to-file.sh "$IOS_PROVISIONING_PROFILE" "$APP_PROFILE_PATH"
           security cms -D -i "$APP_PROFILE_PATH" > "$APP_PROFILE_PLIST"
@@ -510,7 +510,7 @@ jobs:
       - name: Apply iOS version and build number
         run: |
           set -euo pipefail
-          APP_INFO_PLIST="apps/mobile/ios/Mindwtr/Info.plist"
+          APP_INFO_PLIST="apps/mobile/ios/TinyBubbles/Info.plist"
           if [ ! -f "$APP_INFO_PLIST" ]; then
             echo "::error::Info.plist not found at $APP_INFO_PLIST"
             exit 1
@@ -586,16 +586,16 @@ jobs:
       - name: Apply CI signing settings to Xcode project
         run: |
           set -euo pipefail
-          export PROJECT_FILE="apps/mobile/ios/Mindwtr.xcodeproj/project.pbxproj"
+          export PROJECT_FILE="apps/mobile/ios/TinyBubbles.xcodeproj/project.pbxproj"
           ruby <<'RUBY'
           project_file = ENV.fetch('PROJECT_FILE')
           targets = {
-            'Mindwtr' => {
+            'TinyBubbles' => {
               bundle: ENV.fetch('EXPECTED_BUNDLE_ID'),
               profile_name: ENV.fetch('APP_PROFILE_NAME'),
               profile_uuid: ENV.fetch('APP_PROFILE_UUID')
             },
-            'MindwtrWidgets' => {
+            'TinyBubblesWidgets' => {
               bundle: ENV.fetch('EXPECTED_WIDGET_BUNDLE_ID'),
               profile_name: ENV.fetch('WIDGET_PROFILE_NAME'),
               profile_uuid: ENV.fetch('WIDGET_PROFILE_UUID')
@@ -638,7 +638,7 @@ jobs:
           end
 
           if config_to_target.empty?
-            puts "DEBUG: Could not map any build configurations to Mindwtr targets."
+            puts "DEBUG: Could not map any build configurations to TinyBubbles targets."
             lines.each do |line|
               if line.include?('Build configuration list for PBXNativeTarget')
                 puts "DEBUG: #{line.strip}"
@@ -726,14 +726,14 @@ jobs:
         timeout-minutes: 25
         run: |
           set -euo pipefail
-          ARCHIVE_PATH="$RUNNER_TEMP/Mindwtr.xcarchive"
+          ARCHIVE_PATH="$RUNNER_TEMP/TinyBubbles.xcarchive"
           ARCHIVE_LOG="$RUNNER_TEMP/ios-xcodebuild-archive.log"
           echo "ARCHIVE_LOG=$ARCHIVE_LOG" >> "$GITHUB_ENV"
 
           set +e
           xcodebuild \
-            -workspace "apps/mobile/ios/Mindwtr.xcworkspace" \
-            -scheme "Mindwtr" \
+            -workspace "apps/mobile/ios/TinyBubbles.xcworkspace" \
+            -scheme "TinyBubbles" \
             -configuration "Release" \
             -sdk "iphoneos" \
             -destination "generic/platform=iOS" \
@@ -757,7 +757,7 @@ jobs:
             exit "$ARCHIVE_STATUS"
           fi
 
-          ARCHIVE_INFO_PLIST="$ARCHIVE_PATH/Products/Applications/Mindwtr.app/Info.plist"
+          ARCHIVE_INFO_PLIST="$ARCHIVE_PATH/Products/Applications/TinyBubbles.app/Info.plist"
           if [ ! -f "$ARCHIVE_INFO_PLIST" ]; then
             echo "::error::Archived app Info.plist not found: $ARCHIVE_INFO_PLIST"
             exit 1
@@ -784,7 +784,7 @@ jobs:
           fi
 
           {
-            echo "Mindwtr iOS dSYM UUIDs"
+            echo "Tiny Bubbles iOS dSYM UUIDs"
             echo "App version: ${APP_VERSION}"
             echo "Build number: ${APP_BUILD_NUMBER}"
             echo "Git SHA: ${GITHUB_SHA}"
@@ -812,8 +812,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: mindwtr-ios-appstore-dsyms-${{ github.run_id }}
-          path: ${{ runner.temp }}/Mindwtr.xcarchive/dSYMs/
+          name: tinybubbles-ios-appstore-dsyms-${{ github.run_id }}
+          path: ${{ runner.temp }}/TinyBubbles.xcarchive/dSYMs/
           if-no-files-found: error
           retention-days: 90
 
@@ -865,7 +865,7 @@ jobs:
             exit 1
           fi
 
-          WIDGET_PATH="$APP_PATH/PlugIns/MindwtrWidgets.appex"
+          WIDGET_PATH="$APP_PATH/PlugIns/TinyBubblesWidgets.appex"
           if [ ! -d "$WIDGET_PATH" ]; then
             echo "::error::Widget extension not found in IPA at $WIDGET_PATH."
             exit 1
@@ -884,7 +884,7 @@ jobs:
 
           if ! grep -q "<plist" "$WIDGET_ENTITLEMENTS"; then
             echo "::error::Widget extension is missing signed entitlements."
-            echo "::error::Ensure archive/export are code-signed for MindwtrWidgets (bundle $EXPECTED_WIDGET_BUNDLE_ID) with a valid provisioning profile."
+            echo "::error::Ensure archive/export are code-signed for TinyBubblesWidgets (bundle $EXPECTED_WIDGET_BUNDLE_ID) with a valid provisioning profile."
             exit 1
           fi
 
@@ -903,7 +903,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: mindwtr-ios-xcodebuild-logs
+          name: tinybubbles-ios-xcodebuild-logs
           path: ${{ runner.temp }}/ios-xcodebuild-*.log
           if-no-files-found: warn
           retention-days: 28
@@ -912,8 +912,8 @@ jobs:
         if: ${{ inputs.upload }}
         env:
           RELEASE_BODY: ${{ github.event.release.body || '' }}
-          APP_SUPPORT_URL: "https://mindwtr.app/support"
-          APP_MARKETING_URL: "https://mindwtr.app/"
+          APP_SUPPORT_URL: "https://github.com/tinybubbles-app/tinybubbles/issues"
+          APP_MARKETING_URL: "https://github.com/tinybubbles-app/tinybubbles"
         run: |
           set -euo pipefail
           export FASTLANE_METADATA_DIR="$RUNNER_TEMP/fastlane_metadata"
@@ -1277,7 +1277,7 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: mindwtr-ios-appstore-ipa
+          name: tinybubbles-ios-appstore-ipa
           path: ${{ env.IPA_PATH }}
           if-no-files-found: error
           retention-days: 28

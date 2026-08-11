@@ -5,8 +5,8 @@ fn write_log_line(app: &tauri::AppHandle, line: &str) -> Result<String, String> 
     if let Err(err) = std::fs::create_dir_all(&log_dir) {
         return Err(err.to_string());
     }
-    let log_path = log_dir.join("mindwtr.log");
-    let rotated_path = log_dir.join("mindwtr.log.1");
+    let log_path = log_dir.join("tinybubbles.log");
+    let rotated_path = log_dir.join("tinybubbles.log.1");
     let max_bytes: u64 = 5 * 1024 * 1024;
 
     if let Ok(meta) = std::fs::metadata(&log_path) {
@@ -61,7 +61,7 @@ pub(crate) fn append_log_line(app: tauri::AppHandle, line: String) -> Result<Str
 
 #[tauri::command]
 pub(crate) fn clear_log_file(app: tauri::AppHandle) -> Result<String, String> {
-    let log_path = get_data_dir(&app).join("logs").join("mindwtr.log");
+    let log_path = get_data_dir(&app).join("logs").join("tinybubbles.log");
     if log_path.exists() {
         if let Err(err) = std::fs::remove_file(&log_path) {
             return Err(err.to_string());

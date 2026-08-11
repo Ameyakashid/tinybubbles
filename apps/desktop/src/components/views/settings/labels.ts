@@ -1,4 +1,4 @@
-import { resolveI18nText, type TranslateFn } from '@mindwtr/core';
+import { resolveI18nText, type TranslateFn } from '@tinybubbles/core';
 
 // The keys settings pages read through the `t` prop. Every key resolves to a
 // `settings.<key>` string in packages/core/src/i18n (or an explicit override
@@ -324,8 +324,8 @@ export const SETTINGS_LABEL_KEYS = [
     'importDgtDesc',
     'importOmniFocus',
     'importOmniFocusDesc',
-    'importMindwtrCsv',
-    'importMindwtrCsvDesc',
+    'importTinyBubblesCsv',
+    'importTinyBubblesCsvDesc',
     'diagnostics',
     'diagnosticsDesc',
     'analyticsHeartbeat',

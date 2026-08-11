@@ -21,7 +21,7 @@ type ImportSectionProps = Pick<
     | 'onImportTickTick'
     | 'onImportDgt'
     | 'onImportOmniFocus'
-    | 'onImportMindwtrCsv'
+    | 'onImportTinyBubblesCsv'
 >;
 
 function TransferActionButton({
@@ -115,7 +115,7 @@ export function BackupSection({
 
 export function ImportSection({
     onImportDgt,
-    onImportMindwtrCsv,
+    onImportTinyBubblesCsv,
     onImportOmniFocus,
     onImportTickTick,
     onImportTodoist,
@@ -176,11 +176,11 @@ export function ImportSection({
             />
             <TransferActionButton
                 disabled={disabled}
-                settingsKey="importMindwtrCsv"
-                label={t.importMindwtrCsv}
-                description={t.importMindwtrCsvDesc}
-                statusText={transferAction === 'import:mindwtr-csv' ? t.syncing : null}
-                onClick={() => void onImportMindwtrCsv()}
+                settingsKey="importTinyBubblesCsv"
+                label={t.importTinyBubblesCsv}
+                description={t.importTinyBubblesCsvDesc}
+                statusText={transferAction === 'import:tinybubbles-csv' ? t.syncing : null}
+                onClick={() => void onImportTinyBubblesCsv()}
             />
         </SettingsDisclosureCard>
     );

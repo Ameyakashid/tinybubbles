@@ -84,7 +84,7 @@
     --badge-info-fg: 220 10% 30%;
 
     --radius: 0.5rem;
-    --mindwtr-text-scale: 1;
+    --tinybubbles-text-scale: 1;
   }
 
   .dark {
@@ -466,25 +466,25 @@
   }
 
   html {
-    font-size: calc(16px * var(--mindwtr-text-scale));
+    font-size: calc(16px * var(--tinybubbles-text-scale));
     overflow-x: clip;
     /* Ensure consistent sizing on WebKitGTK */
   }
 
   html[data-text-size='default'] {
-    --mindwtr-text-scale: 1;
+    --tinybubbles-text-scale: 1;
   }
 
   html[data-text-size='small'] {
-    --mindwtr-text-scale: 0.875;
+    --tinybubbles-text-scale: 0.875;
   }
 
   html[data-text-size='large'] {
-    --mindwtr-text-scale: 1.125;
+    --tinybubbles-text-scale: 1.125;
   }
 
   html[data-text-size='extra-large'] {
-    --mindwtr-text-scale: 1.25;
+    --tinybubbles-text-scale: 1.25;
   }
 
   html,
@@ -503,19 +503,19 @@
   }
 
   html[data-text-size] .text-\[10px\] {
-    font-size: calc(10px * var(--mindwtr-text-scale));
+    font-size: calc(10px * var(--tinybubbles-text-scale));
   }
 
   html[data-text-size] .text-\[11px\] {
-    font-size: calc(11px * var(--mindwtr-text-scale));
+    font-size: calc(11px * var(--tinybubbles-text-scale));
   }
 
   html[data-text-size] .text-\[13px\] {
-    font-size: calc(13px * var(--mindwtr-text-scale));
+    font-size: calc(13px * var(--tinybubbles-text-scale));
   }
 
   html[data-text-size] .text-\[15px\] {
-    font-size: calc(15px * var(--mindwtr-text-scale));
+    font-size: calc(15px * var(--tinybubbles-text-scale));
   }
 
   body {

@@ -7,34 +7,36 @@ import { isFlatpakRuntime, isTauriRuntime } from "./runtime";
 import { invokeNative } from "./tauri-invoke";
 
 const GITHUB_RELEASES_API =
-  "https://api.github.com/repos/dongdongbh/Mindwtr/releases/latest";
+  "https://api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest";
 const GITHUB_RELEASES_URL =
-  "https://github.com/dongdongbh/Mindwtr/releases/latest";
-const MS_STORE_PRODUCT_ID = "9N0V5B0B6FRX";
+  "https://github.com/tinybubbles-app/tinybubbles/releases/latest";
+// Empty until Tiny Bubbles has its own Microsoft Store listing; an empty id makes the
+// store update check no-op instead of querying a different product.
+const MS_STORE_PRODUCT_ID = "";
 const MS_STORE_URL = `ms-windows-store://pdp/?ProductId=${MS_STORE_PRODUCT_ID}`;
 const MS_STORE_UPDATES_URL = "ms-windows-store://downloadsandupdates";
 const WINGET_MANIFESTS_API =
-  "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/dongdongbh/Mindwtr";
+  "https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/d/dongdongbh/TinyBubbles";
 const WINGET_PACKAGE_URL =
-  "https://github.com/microsoft/winget-pkgs/tree/master/manifests/d/dongdongbh/Mindwtr";
-const HOMEBREW_CASK_API = "https://formulae.brew.sh/api/cask/mindwtr.json";
-const HOMEBREW_CASK_URL = "https://formulae.brew.sh/cask/mindwtr";
+  "https://github.com/microsoft/winget-pkgs/tree/master/manifests/d/dongdongbh/TinyBubbles";
+const HOMEBREW_CASK_API = "https://formulae.brew.sh/api/cask/tinybubbles.json";
+const HOMEBREW_CASK_URL = "https://formulae.brew.sh/cask/tinybubbles";
 const CHOCOLATEY_PACKAGE_API =
-  "https://community.chocolatey.org/api/v2/Packages()?$filter=Id%20eq%20%27mindwtr%27%20and%20IsLatestVersion";
+  "https://community.chocolatey.org/api/v2/Packages()?$filter=Id%20eq%20%27tinybubbles%27%20and%20IsLatestVersion";
 const CHOCOLATEY_PACKAGE_URL =
-  "https://community.chocolatey.org/packages/mindwtr";
+  "https://community.chocolatey.org/packages/tinybubbles";
 const AUR_SOURCE_RPC_API =
-  "https://aur.archlinux.org/rpc/?v=5&type=info&arg%5B%5D=mindwtr";
-const AUR_SOURCE_PACKAGE_URL = "https://aur.archlinux.org/packages/mindwtr";
+  "https://aur.archlinux.org/rpc/?v=5&type=info&arg%5B%5D=tinybubbles";
+const AUR_SOURCE_PACKAGE_URL = "https://aur.archlinux.org/packages/tinybubbles";
 const AUR_BIN_RPC_API =
-  "https://aur.archlinux.org/rpc/?v=5&type=info&arg%5B%5D=mindwtr-bin";
-const AUR_BIN_PACKAGE_URL = "https://aur.archlinux.org/packages/mindwtr-bin";
-const FLATHUB_PACKAGE_URL = "https://flathub.org/apps/tech.dongdongbh.mindwtr";
-const SNAPCRAFT_PACKAGE_URL = "https://snapcraft.io/mindwtr";
-const APP_STORE_BUNDLE_ID = "tech.dongdongbh.mindwtr";
+  "https://aur.archlinux.org/rpc/?v=5&type=info&arg%5B%5D=tinybubbles-bin";
+const AUR_BIN_PACKAGE_URL = "https://aur.archlinux.org/packages/tinybubbles-bin";
+const FLATHUB_PACKAGE_URL = "https://flathub.org/apps/app.tinybubbles";
+const SNAPCRAFT_PACKAGE_URL = "https://snapcraft.io/tinybubbles";
+const APP_STORE_BUNDLE_ID = "app.tinybubbles";
 const APP_STORE_LOOKUP_URL = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(APP_STORE_BUNDLE_ID)}&country=US`;
 const APP_STORE_LOOKUP_FALLBACK_URL = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(APP_STORE_BUNDLE_ID)}`;
-const APP_STORE_LISTING_URL = "https://apps.apple.com/app/mindwtr/id6758597144";
+const APP_STORE_LISTING_URL = "https://github.com/tinybubbles-app/tinybubbles/releases";
 
 export type InstallSource =
   | "unknown"
@@ -372,7 +374,7 @@ const fetchGithubLatestRelease = async (): Promise<GitHubRelease> => {
   const response = await fetchForUpdates(GITHUB_RELEASES_API, {
     headers: {
       Accept: "application/vnd.github.v3+json",
-      "User-Agent": "Mindwtr-App",
+      "User-Agent": "TinyBubbles-App",
     },
   });
   if (!response.ok) {
@@ -385,7 +387,7 @@ const fetchHomebrewLatestVersion = async (): Promise<SourceVersionResult> => {
   const response = await fetchForUpdates(HOMEBREW_CASK_API, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "Mindwtr-App",
+      "User-Agent": "TinyBubbles-App",
     },
   });
   if (!response.ok) {
@@ -406,14 +408,14 @@ const fetchChocolateyLatestVersion = async (): Promise<SourceVersionResult> => {
   const response = await fetchForUpdates(CHOCOLATEY_PACKAGE_API, {
     headers: {
       Accept: "application/atom+xml",
-      "User-Agent": "Mindwtr-App",
+      "User-Agent": "TinyBubbles-App",
     },
   });
   if (!response.ok) {
     throw new Error(`Chocolatey API error: ${response.status}`);
   }
   const payload = await response.text();
-  const match = payload.match(/Packages\(Id='mindwtr',Version='([^']+)'\)/i);
+  const match = payload.match(/Packages\(Id='tinybubbles',Version='([^']+)'\)/i);
   const version = normalizeComparableVersion(match?.[1] ?? "");
   if (!version) throw new Error("Chocolatey API returned no version.");
   return {
@@ -427,7 +429,7 @@ const fetchWingetLatestVersion = async (): Promise<SourceVersionResult> => {
   const response = await fetchForUpdates(WINGET_MANIFESTS_API, {
     headers: {
       Accept: "application/vnd.github.v3+json",
-      "User-Agent": "Mindwtr-App",
+      "User-Agent": "TinyBubbles-App",
     },
   });
   if (!response.ok) {
@@ -466,7 +468,7 @@ const fetchAurLatestVersion = async (
   const response = await fetchForUpdates(target.rpcApi, {
     headers: {
       Accept: "application/json",
-      "User-Agent": "Mindwtr-App",
+      "User-Agent": "TinyBubbles-App",
     },
   });
   if (!response.ok) {
@@ -495,7 +497,7 @@ const fetchAppStoreLatestVersion = async (): Promise<SourceVersionResult> => {
     const response = await fetchForUpdates(url, {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Mindwtr-App",
+        "User-Agent": "TinyBubbles-App",
       },
     });
     if (!response.ok) {

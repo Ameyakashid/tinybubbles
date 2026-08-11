@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { TaskMetadataFilterVisibility } from '@mindwtr/core';
+import type { TaskMetadataFilterVisibility } from '@tinybubbles/core';
 
 vi.mock('lucide-react-native', () => ({
   X: () => null,

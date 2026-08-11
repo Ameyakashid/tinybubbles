@@ -24,7 +24,7 @@ vi.mock('@/contexts/language-context', () => ({
         'settings.syncQueued': 'Sync queued',
         'settings.syncQueuedBody': 'Local changes arrived during sync. A retry was queued automatically.',
         'settings.syncSkippedOffline': 'No internet connection. Sync skipped.',
-        'settings.syncServerUnreachable': "Couldn't reach the sync server. Check that Mindwtr is allowed to use the network (cellular data, VPN, or firewall).",
+        'settings.syncServerUnreachable': "Couldn't reach the sync server. Check that Tiny Bubbles is allowed to use the network (cellular data, VPN, or firewall).",
       }[key] ?? key),
   }),
 }));
@@ -151,7 +151,7 @@ describe('useManualPullSync', () => {
     expect(latest?.indicatorState).toBe('error');
     expect(mocked.showToast).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Notice',
-      message: "Couldn't reach the sync server. Check that Mindwtr is allowed to use the network (cellular data, VPN, or firewall).",
+      message: "Couldn't reach the sync server. Check that Tiny Bubbles is allowed to use the network (cellular data, VPN, or firewall).",
       tone: 'warning',
     }));
   });

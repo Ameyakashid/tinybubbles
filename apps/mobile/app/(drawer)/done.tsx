@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { translateWithFallback } from '@mindwtr/core';
+import { translateWithFallback } from '@tinybubbles/core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { TaskList } from '../../components/task-list';

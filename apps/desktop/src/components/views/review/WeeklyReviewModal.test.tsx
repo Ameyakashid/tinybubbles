@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTests, useTaskStore, type Task } from '@mindwtr/core';
+import { resetForTests, useTaskStore, type Task } from '@tinybubbles/core';
 
 import { WeeklyReviewGuideModal } from './WeeklyReviewModal';
 

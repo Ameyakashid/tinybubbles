@@ -5,7 +5,7 @@
  * Expo native modules. Provides readRemote/writeRemote functions that plug
  * into the existing SyncService sync cycle.
  */
-import { CLOUDKIT_ATTACHMENT_RECORD_TYPE, type AppData } from '@mindwtr/core';
+import { CLOUDKIT_ATTACHMENT_RECORD_TYPE, type AppData } from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { logInfo, logWarn, logError } from './app-log';
 import { invokeNative } from './tauri-invoke';
@@ -39,18 +39,18 @@ export type CloudKitAttachmentMetadata = {
 
 // Record type names (must match the ObjC bridge / CloudKitRecordMapper)
 const RECORD_TYPES = {
-    task: 'MindwtrTask',
-    project: 'MindwtrProject',
-    section: 'MindwtrSection',
-    area: 'MindwtrArea',
-    person: 'MindwtrPerson',
-    settings: 'MindwtrSettings',
+    task: 'TinyBubblesTask',
+    project: 'TinyBubblesProject',
+    section: 'TinyBubblesSection',
+    area: 'TinyBubblesArea',
+    person: 'TinyBubblesPerson',
+    settings: 'TinyBubblesSettings',
 } as const;
 
 // LocalStorage keys (same semantics as mobile's AsyncStorage keys)
-const CLOUDKIT_CHANGE_TOKEN_KEY = '@mindwtr_cloudkit_change_token';
-const CLOUDKIT_SEEDED_KEY = '@mindwtr_cloudkit_seeded';
-const CLOUDKIT_ZONE_CREATED_KEY = '@mindwtr_cloudkit_zone_created';
+const CLOUDKIT_CHANGE_TOKEN_KEY = '@tinybubbles_cloudkit_change_token';
+const CLOUDKIT_SEEDED_KEY = '@tinybubbles_cloudkit_seeded';
+const CLOUDKIT_ZONE_CREATED_KEY = '@tinybubbles_cloudkit_zone_created';
 
 // ---------------------------------------------------------------------------
 // Tauri invoke helper

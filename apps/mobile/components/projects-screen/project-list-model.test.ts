@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Area, Project } from '@mindwtr/core';
+import type { Area, Project } from '@tinybubbles/core';
 
 import { buildProjectListRows } from './project-list-model';
 

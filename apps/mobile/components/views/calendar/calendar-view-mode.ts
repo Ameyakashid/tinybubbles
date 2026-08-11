@@ -2,7 +2,7 @@ import {
   addCalendarMonths,
   startOfCalendarMonth,
   type CalendarSystemSetting,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export type CalendarViewMode = 'month' | 'day' | 'week' | 'schedule';
 

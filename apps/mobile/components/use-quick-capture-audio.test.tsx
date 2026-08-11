@@ -118,7 +118,7 @@ vi.mock('expo-file-system', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   // Only the id and clock are pinned, so attachment names stay deterministic;
   // `buildTaskUpdatesFromSpeechResult` runs for real.
@@ -249,7 +249,7 @@ describe('useQuickCaptureAudio', () => {
       size: 77704715,
     });
     speechMocks.prepareAudioForLocalWhisper.mockResolvedValue({
-      uri: 'file:///document/audio-captures/mindwtr-audio-20260629-090027.wav',
+      uri: 'file:///document/audio-captures/tinybubbles-audio-20260629-090027.wav',
       format: 'wav-pcm',
       sampleRate: 16000,
       channels: 1,

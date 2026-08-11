@@ -14,8 +14,8 @@ import {
     taskMatchesAreaFilterSelection,
     tFallback,
     useTaskStore,
-} from '@mindwtr/core';
-import type { FilterCriteria, Task, Project, TimeEstimate } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { FilterCriteria, Task, Project, TimeEstimate } from '@tinybubbles/core';
 
 import { CheckSquare, Filter, SlidersHorizontal, Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
@@ -107,7 +107,7 @@ const ArchiveProjectRow = memo(function ArchiveProjectRow({
 type ArchiveSegment = 'tasks' | 'projects';
 
 // Archive keeps its own collapse key, as every list does (#963).
-const ARCHIVE_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:archive:v1';
+const ARCHIVE_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:archive:v1';
 
 // App-wide flash duration for the shared highlight (#916).
 const HIGHLIGHT_FLASH_MS = 4000;

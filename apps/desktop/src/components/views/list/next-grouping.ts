@@ -4,8 +4,8 @@ import {
     DEFAULT_AREA_COLOR,
     getContextColor,
     tFallback,
-} from '@mindwtr/core';
-import type { Area, Project, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { Area, Project, Task, TaskEnergyLevel, TaskPriority, TaskStatus } from '@tinybubbles/core';
 
 // The rosters are data, and the types are derived from them — never the other
 // way round. One array per view is what the dropdown renders AND what the

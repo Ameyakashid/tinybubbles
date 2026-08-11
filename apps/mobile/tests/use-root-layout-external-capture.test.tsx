@@ -14,7 +14,7 @@ const storeTasksById = vi.hoisted(() => new Map<string, any>());
 const storeProjectsById = vi.hoisted(() => new Map<string, any>());
 const storeAreasById = vi.hoisted(() => new Map<string, any>());
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   return mockCore(importOriginal, () => ({
     _tasksById: storeTasksById,
@@ -239,7 +239,7 @@ describe('useRootLayoutExternalCapture', () => {
   it('copies a shared file into attachments and opens capture with it attached', async () => {
     const resetShareIntent = vi.fn();
     persistAttachmentLocallyDetailed.mockImplementation(async (attachment: { uri: string }) => ({
-      attachment: { ...attachment, uri: 'file:///data/mindwtr/attachments/copied.pdf' },
+      attachment: { ...attachment, uri: 'file:///data/tinybubbles/attachments/copied.pdf' },
       status: 'copied',
     }));
 
@@ -272,7 +272,7 @@ describe('useRootLayoutExternalCapture', () => {
     expect(props.attachments[0]).toMatchObject({
       kind: 'file',
       title: 'Invoice March.pdf',
-      uri: 'file:///data/mindwtr/attachments/copied.pdf',
+      uri: 'file:///data/tinybubbles/attachments/copied.pdf',
     });
     expect(showToast).not.toHaveBeenCalled();
     expect(resetShareIntent).toHaveBeenCalledTimes(1);
@@ -281,7 +281,7 @@ describe('useRootLayoutExternalCapture', () => {
   it('prefers the email subject as the title over the filename for file shares', async () => {
     const resetShareIntent = vi.fn();
     persistAttachmentLocallyDetailed.mockImplementation(async (attachment: { uri: string }) => ({
-      attachment: { ...attachment, uri: 'file:///data/mindwtr/attachments/copied.pdf' },
+      attachment: { ...attachment, uri: 'file:///data/tinybubbles/attachments/copied.pdf' },
       status: 'copied',
     }));
 
@@ -337,7 +337,7 @@ describe('useRootLayoutExternalCapture', () => {
 
   it('skips blocked file types even when the share reports no size', async () => {
     persistAttachmentLocallyDetailed.mockImplementation(async (attachment: { uri: string }) => ({
-      attachment: { ...attachment, uri: 'file:///data/mindwtr/attachments/copied.bin' },
+      attachment: { ...attachment, uri: 'file:///data/tinybubbles/attachments/copied.bin' },
       status: 'copied',
     }));
 
@@ -367,7 +367,7 @@ describe('useRootLayoutExternalCapture', () => {
     let resolveCopy!: (value: { uri: string }) => void;
     persistAttachmentLocallyDetailed.mockImplementation((attachment: { uri: string }) => new Promise((resolve) => {
       resolveCopy = () => resolve({
-        attachment: { ...attachment, uri: 'file:///data/mindwtr/attachments/copied.pdf' },
+        attachment: { ...attachment, uri: 'file:///data/tinybubbles/attachments/copied.pdf' },
         status: 'copied',
       });
     }));
@@ -421,7 +421,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr:///capture?title=Call%20dentist&note=Tomorrow&tags=phone&project=Home"
+          incomingUrl="tinybubbles:///capture?title=Call%20dentist&note=Tomorrow&tags=phone&project=Home"
           router={router}
           showToast={showToast}
         />
@@ -449,7 +449,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       tree = create(
         <TestHarness
-          incomingUrl="mindwtr:///capture?title=Call%20dentist&requestId=first"
+          incomingUrl="tinybubbles:///capture?title=Call%20dentist&requestId=first"
           router={router}
           showToast={showToast}
         />
@@ -459,7 +459,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       tree.update(
         <TestHarness
-          incomingUrl="mindwtr:///capture?title=Call%20dentist&requestId=second"
+          incomingUrl="tinybubbles:///capture?title=Call%20dentist&requestId=second"
           router={router}
           showToast={showToast}
         />
@@ -485,7 +485,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr:///open-feature?feature=focus"
+          incomingUrl="tinybubbles:///open-feature?feature=focus"
           router={router}
           showToast={showToast}
         />
@@ -509,7 +509,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://open?task=task-1"
+          incomingUrl="tinybubbles://open?task=task-1"
           router={router}
           showToast={showToast}
         />
@@ -529,7 +529,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr:///open?project=proj-1"
+          incomingUrl="tinybubbles:///open?project=proj-1"
           router={router}
           showToast={showToast}
         />
@@ -548,7 +548,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://open?area=area-1"
+          incomingUrl="tinybubbles://open?area=area-1"
           router={router}
           showToast={showToast}
         />
@@ -564,7 +564,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://open?task=task-unknown"
+          incomingUrl="tinybubbles://open?task=task-unknown"
           router={router}
           showToast={showToast}
         />
@@ -576,7 +576,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://open?task=task-deleted"
+          incomingUrl="tinybubbles://open?task=task-deleted"
           router={router}
           showToast={showToast}
         />
@@ -589,7 +589,7 @@ describe('useRootLayoutExternalCapture', () => {
     act(() => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://open?bogus=1"
+          incomingUrl="tinybubbles://open?bogus=1"
           router={router}
           showToast={showToast}
         />

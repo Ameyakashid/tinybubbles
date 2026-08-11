@@ -1,9 +1,9 @@
 import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Area } from '@mindwtr/core';
+import type { Area } from '@tinybubbles/core';
 
-import { AREA_FILTER_NONE } from '@mindwtr/core';
+import { AREA_FILTER_NONE } from '@tinybubbles/core';
 import { SidebarAreaFilter } from './SidebarAreaFilter';
 
 const areas: Area[] = [

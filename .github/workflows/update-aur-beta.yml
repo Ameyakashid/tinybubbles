@@ -4,13 +4,13 @@ on:
   workflow_call:
     inputs:
       tag:
-        description: "RC or stable tag to prepare for mindwtr-bin-beta (e.g., v1.0.5-rc.1 or v1.0.5)"
+        description: "RC or stable tag to prepare for tinybubbles-bin-beta (e.g., v1.0.5-rc.1 or v1.0.5)"
         required: true
         type: string
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing RC or stable tag to prepare for mindwtr-bin-beta"
+        description: "Existing RC or stable tag to prepare for tinybubbles-bin-beta"
         required: true
         type: string
 
@@ -27,7 +27,7 @@ concurrency:
 jobs:
   update-aur-beta:
     runs-on: ubuntu-latest
-    name: Prepare mindwtr-bin-beta proposal
+    name: Prepare tinybubbles-bin-beta proposal
     timeout-minutes: 45
     steps:
       - name: Checkout repo
@@ -50,7 +50,7 @@ jobs:
           # Stable tags are allowed too: every stable release also lands in the
           # beta channels so beta users never have to hop back to stay current.
           if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
-            echo "mindwtr-bin-beta must be updated from an RC or stable tag like v1.0.5-rc.1 or v1.0.5; got: $TAG" >&2
+            echo "tinybubbles-bin-beta must be updated from an RC or stable tag like v1.0.5-rc.1 or v1.0.5; got: $TAG" >&2
             exit 1
           fi
 
@@ -58,8 +58,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf aur-mindwtr-bin-beta
-          git clone https://aur.archlinux.org/mindwtr-bin-beta.git aur-mindwtr-bin-beta
+          rm -rf aur-tinybubbles-bin-beta
+          git clone https://aur.archlinux.org/tinybubbles-bin-beta.git aur-tinybubbles-bin-beta
 
       - name: Generate beta PKGBUILD
         shell: bash
@@ -83,7 +83,7 @@ jobs:
               .replace('__PKGVER__', os.environ['PKGVER'])
               .replace('__RELEASE_TAG__', os.environ['TAG'])
               .replace('__ASSET_VERSION__', os.environ['VERSION']))
-          Path('aur-mindwtr-bin-beta/PKGBUILD').write_text(text, encoding='utf-8')
+          Path('aur-tinybubbles-bin-beta/PKGBUILD').write_text(text, encoding='utf-8')
           PY
 
       - name: Resolve release asset checksum
@@ -93,15 +93,15 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          URL_DEB="https://github.com/${{ github.repository }}/releases/download/${TAG}/mindwtr_${VERSION}_amd64.deb"
+          URL_DEB="https://github.com/${{ github.repository }}/releases/download/${TAG}/tinybubbles_${VERSION}_amd64.deb"
           URL_SUMS="https://github.com/${{ github.repository }}/releases/download/${TAG}/SHA256SUMS"
-          ASSET_NAME="mindwtr_${VERSION}_amd64.deb"
+          ASSET_NAME="tinybubbles_${VERSION}_amd64.deb"
           echo "Waiting for release assets to become available..."
           for attempt in $(seq 1 10); do
             if curl -fsI "$URL_DEB" >/dev/null && curl -fsSL "$URL_SUMS" -o SHA256SUMS; then
               CHECKSUM="$(awk -v asset="$ASSET_NAME" '$2 == asset || $2 == "./" asset { print $1 }' SHA256SUMS)"
               if [[ "$CHECKSUM" =~ ^[0-9a-fA-F]{64}$ ]] && [ "$(printf '%s\n' "$CHECKSUM" | wc -l)" -eq 1 ]; then
-                sed -i "s/__SHA256__/${CHECKSUM}/" aur-mindwtr-bin-beta/PKGBUILD
+                sed -i "s/__SHA256__/${CHECKSUM}/" aur-tinybubbles-bin-beta/PKGBUILD
                 echo "Resolved the exact release-manifest checksum for ${ASSET_NAME}."
                 exit 0
               fi
@@ -123,7 +123,7 @@ jobs:
           docker run --rm \
             -e HOST_UID="$HOST_UID" \
             -e HOST_GID="$HOST_GID" \
-            -v "$PWD/aur-mindwtr-bin-beta:/aur" \
+            -v "$PWD/aur-tinybubbles-bin-beta:/aur" \
             -w /aur \
             archlinux:latest \
             bash -lc '
@@ -142,15 +142,15 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/ci/prepare-aur-proposal.sh \
-            aur-mindwtr-bin-beta \
-            mindwtr-bin-beta \
+            aur-tinybubbles-bin-beta \
+            tinybubbles-bin-beta \
             "${{ steps.version.outputs.tag }}" \
             aur-proposal
 
       - name: Preserve exact AUR proposal for reviewed publication
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: aur-proposal-mindwtr-bin-beta-${{ steps.version.outputs.tag }}
+          name: aur-proposal-tinybubbles-bin-beta-${{ steps.version.outputs.tag }}
           path: aur-proposal/
           include-hidden-files: true
           if-no-files-found: error

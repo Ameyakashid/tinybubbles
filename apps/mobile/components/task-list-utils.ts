@@ -1,4 +1,4 @@
-import { compareTasksByProjectOrder } from '@mindwtr/core';
+import { compareTasksByProjectOrder } from '@tinybubbles/core';
 
 export const getBulkActionFailureMessage = (error: unknown, fallback: string): string => {
     const message = error instanceof Error ? error.message : String(error ?? '');

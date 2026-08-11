@@ -16,7 +16,7 @@ const useTaskStoreMock = vi.hoisted(() => ({
     },
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     return {
         ...actual,

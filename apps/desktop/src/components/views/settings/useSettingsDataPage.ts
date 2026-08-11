@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { safeFormatDate, useTaskStore, type AppData } from '@mindwtr/core';
+import { safeFormatDate, useTaskStore, type AppData } from '@tinybubbles/core';
 
 import { clearLog } from '../../../lib/app-log';
 import {

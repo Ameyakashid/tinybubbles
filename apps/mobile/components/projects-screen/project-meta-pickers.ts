@@ -1,4 +1,4 @@
-import { Area, Project, translateWithFallback, type TranslateFn, tFallback } from '@mindwtr/core';
+import { Area, Project, translateWithFallback, type TranslateFn, tFallback } from '@tinybubbles/core';
 import { ActionSheetIOS, Alert, Keyboard, Platform } from 'react-native';
 
 import type { ToastOptions } from '@/contexts/toast-context';

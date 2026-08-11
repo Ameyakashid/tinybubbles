@@ -235,7 +235,7 @@ describe('ProjectsView', () => {
             expect(layout).toHaveStyle({ maxWidth: '1416px' });
         });
         await waitFor(() => {
-            expect(window.localStorage.getItem('mindwtr:projects:sidebarWidth')).toBe('328');
+            expect(window.localStorage.getItem('tinybubbles:projects:sidebarWidth')).toBe('328');
         });
 
         if (originalClientWidthDescriptor) {
@@ -347,7 +347,7 @@ describe('ProjectsView', () => {
         expect(screen.getByRole('button', { name: 'Expand projects panel' })).toBeInTheDocument();
         expect(layout).toHaveStyle({ maxWidth: '1592px' });
         expect(screen.queryByRole('separator', { name: 'Resize projects panel' })).not.toBeInTheDocument();
-        expect(window.localStorage.getItem('mindwtr:view:projects:v1')).toContain('"projectsSidebarCollapsed":true');
+        expect(window.localStorage.getItem('tinybubbles:view:projects:v1')).toContain('"projectsSidebarCollapsed":true');
 
         fireEvent.click(screen.getByRole('button', { name: 'Expand projects panel' }));
 

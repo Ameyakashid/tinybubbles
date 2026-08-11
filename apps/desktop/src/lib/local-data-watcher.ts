@@ -7,7 +7,7 @@ import {
     normalizeAppData,
     runSerializedSyncDocumentWriteOperation,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { invokeNative } from './tauri-invoke';
 import { getDesktopTimerHost, isTauriRuntime } from './runtime';
 import { hashString, toStableJson } from './sync-service-utils';
@@ -340,7 +340,7 @@ export const createLocalDataWatcherController = (
             // Ignore iCloud placeholder stubs (.filename.icloud)
             if (name.endsWith('.icloud')) return false;
             // Ignore our own advisory lock file
-            if (name === '.mindwtr.lock') return false;
+            if (name === '.tinybubbles.lock') return false;
             // Ignore temp files from atomic writes
             if (name.endsWith('.tmp')) return false;
             return true;

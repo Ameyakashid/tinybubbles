@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { type Task, type TaskStatus, useTaskStore, isTaskInActiveProject, getSequentialFirstTaskIds, isSequentialChainStatus } from '@mindwtr/core';
+import { type Task, type TaskStatus, useTaskStore, isTaskInActiveProject, getSequentialFirstTaskIds, isSequentialChainStatus } from '@tinybubbles/core';
 import { useConditionalMemo } from './useConditionalMemo';
 import { useProgressiveComputation } from './useProgressiveComputation';
 

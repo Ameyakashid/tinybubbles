@@ -27,7 +27,7 @@ const legacyAcceptedReferenceGroupBy = (value: unknown): boolean => (
 async function hydrate(stored: Record<string, unknown>) {
     window.localStorage.clear();
     vi.resetModules();
-    window.localStorage.setItem('mindwtr:list-options:v1', JSON.stringify(stored));
+    window.localStorage.setItem('tinybubbles:list-options:v1', JSON.stringify(stored));
     const { useUiStore } = await import('./ui-store');
     return useUiStore.getState().listOptions;
 }
@@ -39,7 +39,7 @@ describe('useUiStore list options', () => {
     });
 
     it('hydrates persisted Focus/list view options', async () => {
-        window.localStorage.setItem('mindwtr:list-options:v1', JSON.stringify({
+        window.localStorage.setItem('tinybubbles:list-options:v1', JSON.stringify({
             showDetails: true,
             nextGroupBy: 'project',
             referenceGroupBy: 'context',
@@ -129,7 +129,7 @@ describe('useUiStore project layouts (#1019)', () => {
     });
 
     it('hydrates the per-project layout and drops entries it does not recognize', async () => {
-        window.localStorage.setItem('mindwtr:project-layouts:v1', JSON.stringify({
+        window.localStorage.setItem('tinybubbles:project-layouts:v1', JSON.stringify({
             'project-1': 'columns',
             'project-2': 'list',
             'project-3': 'kanban',
@@ -145,7 +145,7 @@ describe('useUiStore project layouts (#1019)', () => {
     });
 
     it('persists a layout change without disturbing other projects', async () => {
-        window.localStorage.setItem('mindwtr:project-layouts:v1', JSON.stringify({ 'project-1': 'columns' }));
+        window.localStorage.setItem('tinybubbles:project-layouts:v1', JSON.stringify({ 'project-1': 'columns' }));
         const { PROJECT_LAYOUTS_STORAGE_KEY, useUiStore } = await import('./ui-store');
 
         useUiStore.getState().setProjectLayout('project-2', 'columns');

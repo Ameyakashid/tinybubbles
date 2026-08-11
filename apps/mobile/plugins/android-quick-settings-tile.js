@@ -2,19 +2,19 @@ const fs = require('fs');
 const path = require('path');
 const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
 
-const CAPTURE_URI = 'mindwtr:///capture-quick?mode=text';
+const CAPTURE_URI = 'tinybubbles:///capture-quick?mode=text';
 const SERVICE_NAME = '.quicksettings.CaptureTileService';
 const SERVICE_PERMISSION = 'android.permission.BIND_QUICK_SETTINGS_TILE';
 const QS_TILE_ACTION = 'android.service.quicksettings.action.QS_TILE';
 const TILE_LABEL = '@string/quick_settings_capture_tile_label';
 const TILE_ICON = '@drawable/ic_quick_settings_capture';
-const STRINGS_FILE_NAME = 'mindwtr_quick_settings_tile_strings.xml';
+const STRINGS_FILE_NAME = 'tinybubbles_quick_settings_tile_strings.xml';
 const ICON_FILE_NAME = 'ic_quick_settings_capture.xml';
 
 const buildTileStringsXml = () => `<?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="quick_settings_capture_tile_label" translatable="false">Capture</string>
-  <string name="quick_settings_capture_tile_description" translatable="false">Open Mindwtr quick capture</string>
+  <string name="quick_settings_capture_tile_description" translatable="false">Open Tiny Bubbles quick capture</string>
 </resources>
 `;
 

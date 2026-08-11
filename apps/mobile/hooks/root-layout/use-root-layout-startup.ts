@@ -7,7 +7,7 @@ import {
     hasActiveMobileNotificationFeature,
     SQLITE_SCHEMA_VERSION,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { startMobileNotifications } from '@/lib/notification-service';
 import { getMobileStartupSnapshotFromBackup } from '@/lib/storage-adapter';

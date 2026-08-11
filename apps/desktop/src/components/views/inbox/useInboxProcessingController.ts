@@ -20,7 +20,7 @@ import {
     type ProcessInboxWorkflowFields,
     type StoreActionResult,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { InboxProcessingQuickPanelProps } from '../../InboxProcessingQuickPanel';
 import type { InboxProcessingWizardProps, ProcessingStep } from '../../InboxProcessingWizard';

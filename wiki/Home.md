@@ -1,23 +1,23 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/dongdongbh/Mindwtr/main/apps/mobile/assets/images/icon.png" width="120" alt="Mindwtr Logo">
+<img src="https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/mobile/assets/images/icon.png" width="120" alt="Tiny Bubbles Logo">
 
-# Mindwtr Documentation
+# Tiny Bubbles Documentation
 
 **A complete Getting Things Done (GTD) productivity system for desktop and mobile.**
 
 *Mind Like Water*
 
-[![GitHub](https://img.shields.io/badge/GitHub-Mindwtr-blue?logo=github)](https://github.com/dongdongbh/Mindwtr)
-[![License](https://img.shields.io/badge/License-AGPL%20v3-blue)](https://github.com/dongdongbh/Mindwtr/blob/main/LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-Tiny Bubbles-blue?logo=github)](https://github.com/tinybubbles-app/tinybubbles)
+[![License](https://img.shields.io/badge/License-AGPL%20v3-blue)](https://github.com/tinybubbles-app/tinybubbles/blob/main/LICENSE)
 
 </div>
 
 ---
 
-> **This wiki has moved.** All documentation now lives at **[docs.mindwtr.app](https://docs.mindwtr.app/)** — searchable, always current, and mobile-friendly.
+> **This wiki has moved.** Tiny Bubbles documentation lives in the [`docs/`](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs) directory of this repository. For the inherited functionality this fork shares with upstream, the [Mindwtr documentation site](https://docs.mindwtr.app/) is more detailed — note that it documents upstream, not this fork.
 >
-> **Main website:** [mindwtr.app](https://mindwtr.app/)
+> **Main website:** [the project repository](https://github.com/tinybubbles-app/tinybubbles)
 
 Use the table of contents below to jump straight to the page you need.
 
@@ -29,10 +29,10 @@ Use the table of contents below to jump straight to the page you need.
 - [Beta Channels](https://docs.mindwtr.app/start/beta-channels)
 - [FAQ](https://docs.mindwtr.app/start/faq)
 
-## ✅ Using Mindwtr
+## ✅ Using Tiny Bubbles
 
 - [GTD Overview](https://docs.mindwtr.app/use/gtd-overview)
-- [GTD Workflow in Mindwtr](https://docs.mindwtr.app/use/gtd-workflow)
+- [GTD Workflow in Tiny Bubbles](https://docs.mindwtr.app/use/gtd-workflow)
 - [Desktop User Guide](https://docs.mindwtr.app/use/desktop)
 - [Mobile User Guide](https://docs.mindwtr.app/use/mobile)
 - [Keyboard Shortcuts](https://docs.mindwtr.app/use/keyboard-shortcuts)

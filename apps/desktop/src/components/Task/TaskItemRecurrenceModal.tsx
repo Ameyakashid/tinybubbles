@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { translateWithFallback, type RecurrenceWeekday } from '@mindwtr/core';
+import { translateWithFallback, type RecurrenceWeekday } from '@tinybubbles/core';
 
 import { cn } from '../../lib/utils';
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from '../ui/Dialog';

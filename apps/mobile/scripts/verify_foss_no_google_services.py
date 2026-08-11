@@ -16,7 +16,7 @@ DISALLOWED_CLASS_PACKAGES = {
     "Play Integrity": b"com/google/android/play/integrity",
     "Play Billing": b"com/android/billingclient",
     "Play Install Referrer": b"com/android/installreferrer",
-    "Play Store update module": b"tech/dongdongbh/mindwtr/playstoreupdates",
+    "Play Store update module": b"app/tinybubbles/playstoreupdates",
 }
 
 

@@ -7,9 +7,9 @@ final class CloudKitSyncManager {
 
     static let shared = CloudKitSyncManager()
 
-    let containerID = "iCloud.tech.dongdongbh.mindwtr"
-    let zoneName = "MindwtrZone"
-    let subscriptionID = "MindwtrZoneSubscription"
+    let containerID = "iCloud.app.tinybubbles"
+    let zoneName = "TinyBubblesZone"
+    let subscriptionID = "TinyBubblesZoneSubscription"
 
     private(set) lazy var container = CKContainer(identifier: containerID)
     private(set) lazy var privateDB = container.privateCloudDatabase
@@ -22,13 +22,13 @@ final class CloudKitSyncManager {
 
     private init() {}
 
-    private let attachmentRecordType = "MindwtrAttachment"
+    private let attachmentRecordType = "TinyBubblesAttachment"
     private let attachmentAssetField = "asset"
 
     private func fileURL(from path: String) throws -> URL {
         if path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw NSError(
-                domain: "MindwtrCloudKit",
+                domain: "TinyBubblesCloudKit",
                 code: 1001,
                 userInfo: [NSLocalizedDescriptionKey: "Attachment file path is empty"]
             )
@@ -134,14 +134,14 @@ final class CloudKitSyncManager {
         let fetched = try await fetchRecordsByID([recordID])
         guard let record = fetched[recordID] else {
             throw NSError(
-                domain: "MindwtrCloudKit",
+                domain: "TinyBubblesCloudKit",
                 code: 1002,
                 userInfo: [NSLocalizedDescriptionKey: "Attachment asset record not found"]
             )
         }
         guard let asset = record[attachmentAssetField] as? CKAsset, let sourceURL = asset.fileURL else {
             throw NSError(
-                domain: "MindwtrCloudKit",
+                domain: "TinyBubblesCloudKit",
                 code: 1003,
                 userInfo: [NSLocalizedDescriptionKey: "Attachment asset is missing"]
             )
@@ -307,7 +307,7 @@ final class CloudKitSyncManager {
             op.qualityOfService = .userInitiated
 
             // Serialize per-record callbacks — CloudKit dispatches on arbitrary queues.
-            let cbQueue = DispatchQueue(label: "tech.dongdongbh.mindwtr.savecb")
+            let cbQueue = DispatchQueue(label: "app.tinybubbles.savecb")
 
             let (batchConflicts, batchErrors) = try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<([String], [Error]), Error>) in
@@ -372,7 +372,7 @@ final class CloudKitSyncManager {
         let op = CKFetchRecordsOperation(recordIDs: ids)
         op.qualityOfService = .userInitiated
 
-        let cbQueue = DispatchQueue(label: "tech.dongdongbh.mindwtr.fetchcb")
+        let cbQueue = DispatchQueue(label: "app.tinybubbles.fetchcb")
 
         return try await withCheckedThrowingContinuation { continuation in
             var results: [CKRecord.ID: CKRecord] = [:]
@@ -437,7 +437,7 @@ final class CloudKitSyncManager {
 
             let op = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: batch)
             op.qualityOfService = .utility
-            let cbQueue = DispatchQueue(label: "tech.dongdongbh.mindwtr.deletecb")
+            let cbQueue = DispatchQueue(label: "app.tinybubbles.deletecb")
 
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 var realErrors: [Error] = []

@@ -1,11 +1,11 @@
 services:
-  mindwtr-cloud:
-    image: ghcr.io/dongdongbh/mindwtr-cloud:latest
+  tinybubbles-cloud:
+    image: ghcr.io/tinybubbles-app/tinybubbles-cloud:latest
     build:
       context: ..
       dockerfile: docker/cloud/Dockerfile
-    container_name: mindwtr-cloud
-    hostname: mindwtr-cloud
+    container_name: tinybubbles-cloud
+    hostname: tinybubbles-cloud
     restart: always
     cpus: "1.0"
     mem_limit: 512m
@@ -18,23 +18,23 @@ services:
     ports:
       - 8787:8787
     environment:
-      - MINDWTR_CLOUD_AUTH_TOKENS=${MINDWTR_CLOUD_AUTH_TOKENS:?MINDWTR_CLOUD_AUTH_TOKENS must be set}
-      - MINDWTR_CLOUD_CORS_ORIGIN=${MINDWTR_CLOUD_CORS_ORIGIN:?MINDWTR_CLOUD_CORS_ORIGIN must be set}
+      - TINYBUBBLES_CLOUD_AUTH_TOKENS=${TINYBUBBLES_CLOUD_AUTH_TOKENS:?TINYBUBBLES_CLOUD_AUTH_TOKENS must be set}
+      - TINYBUBBLES_CLOUD_CORS_ORIGIN=${TINYBUBBLES_CLOUD_CORS_ORIGIN:?TINYBUBBLES_CLOUD_CORS_ORIGIN must be set}
     volumes:
       - ./data:/app/cloud_data
 
-  mindwtr-app:
-    image: ghcr.io/dongdongbh/mindwtr-app:latest
+  tinybubbles-app:
+    image: ghcr.io/tinybubbles-app/tinybubbles-app:latest
     build:
       context: ..
       dockerfile: docker/app/Dockerfile
-    container_name: mindwtr-app
-    hostname: mindwtr-app
+    container_name: tinybubbles-app
+    hostname: tinybubbles-app
     restart: always
     cpus: "1.0"
     mem_limit: 512m
     depends_on:
-      mindwtr-cloud:
+      tinybubbles-cloud:
         condition: service_healthy
     ports:
       - 5173:5173

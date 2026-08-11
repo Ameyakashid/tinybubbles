@@ -28,7 +28,7 @@ deferred until 1+2 are measured.
 Replace expo-sqlite with `@op-engineering/op-sqlite` behind the existing
 `SqliteClient` seam; the core `SqliteAdapter` (rev-guarded upserts, fingerprint
 cache, FTS) is untouched. The client opens the same file expo-sqlite created
-(`<documentDirectory>/SQLite/mindwtr.db`), so existing installs upgrade in
+(`<documentDirectory>/SQLite/tinybubbles.db`), so existing installs upgrade in
 place with no migration. FTS5 is enabled via the `op-sqlite` package.json
 config (off by default). expo-sqlite is removed entirely rather than kept as a
 fallback: op-sqlite documents iOS pod conflicts with other packages that link

@@ -32,7 +32,7 @@ const parseHttpPort = (raw: string | undefined): number | undefined => {
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
     throw new ValidationError(
-      `Invalid --http-port/MINDWTR_MCP_HTTP_PORT: "${raw}" (must be an integer between 1 and 65535)`
+      `Invalid --http-port/TINYBUBBLES_MCP_HTTP_PORT: "${raw}" (must be an integer between 1 and 65535)`
     );
   }
   return parsed;
@@ -40,22 +40,22 @@ const parseHttpPort = (raw: string | undefined): number | undefined => {
 
 /**
  * Resolves opt-in HTTP transport settings from CLI flags/env. HTTP mode is enabled by
- * `--http`/`MINDWTR_MCP_HTTP`, or implicitly by setting any of --http-host/--http-port/--http-token.
+ * `--http`/`TINYBUBBLES_MCP_HTTP`, or implicitly by setting any of --http-host/--http-port/--http-token.
  * Returns undefined when HTTP mode is off (the default), in which case the caller keeps the
  * existing stdio behavior untouched.
  */
 export const resolveHttpConfig = (flags: FlagMap, env: FlagEnv = process.env): HttpServerConfig | undefined => {
-  const explicitHttp = parseBooleanFlag(readFlagValue(flags, 'http') ?? env.MINDWTR_MCP_HTTP);
-  const host = readStringFlag(flags, 'http-host', 'httpHost') ?? env.MINDWTR_MCP_HTTP_HOST;
-  const portRaw = readStringFlag(flags, 'http-port', 'httpPort') ?? env.MINDWTR_MCP_HTTP_PORT;
-  const token = readStringFlag(flags, 'http-token', 'httpToken') ?? env.MINDWTR_MCP_HTTP_TOKEN;
+  const explicitHttp = parseBooleanFlag(readFlagValue(flags, 'http') ?? env.TINYBUBBLES_MCP_HTTP);
+  const host = readStringFlag(flags, 'http-host', 'httpHost') ?? env.TINYBUBBLES_MCP_HTTP_HOST;
+  const portRaw = readStringFlag(flags, 'http-port', 'httpPort') ?? env.TINYBUBBLES_MCP_HTTP_PORT;
+  const token = readStringFlag(flags, 'http-token', 'httpToken') ?? env.TINYBUBBLES_MCP_HTTP_TOKEN;
 
   const httpEnabled = explicitHttp ?? Boolean(host || portRaw || token);
   if (!httpEnabled) return undefined;
 
   if (!token || token.length < MIN_HTTP_TOKEN_LENGTH) {
     throw new ValidationError(
-      `HTTP mode requires --http-token (or MINDWTR_MCP_HTTP_TOKEN) of at least ${MIN_HTTP_TOKEN_LENGTH} characters. ` +
+      `HTTP mode requires --http-token (or TINYBUBBLES_MCP_HTTP_TOKEN) of at least ${MIN_HTTP_TOKEN_LENGTH} characters. ` +
       'Generate one with: openssl rand -hex 32'
     );
   }
@@ -228,7 +228,7 @@ export const createHttpRequestListener = (deps: HttpMcpDeps) => {
 };
 
 /** Creates (but does not start) the node:http server for the stateless MCP HTTP transport. */
-export const createMindwtrHttpServer = (deps: HttpMcpDeps): Server => {
+export const createTinyBubblesHttpServer = (deps: HttpMcpDeps): Server => {
   const listener = createHttpRequestListener(deps);
   const logError = deps.logError ?? (() => {});
   return createServer((req, res) => {

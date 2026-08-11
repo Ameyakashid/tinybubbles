@@ -1,4 +1,4 @@
-import { hasTimeComponent, safeParseDate, type Task } from '@mindwtr/core';
+import { hasTimeComponent, safeParseDate, type Task } from '@tinybubbles/core';
 
 export const calendarDateKey = (date: Date): string => (
   `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`

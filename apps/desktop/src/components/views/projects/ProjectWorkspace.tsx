@@ -13,7 +13,7 @@ import { Attachment,
     type TaskSortBy,
     generateUUID,
     sortTasksBy,
-    splitCompletedTasks, tFallback, } from '@mindwtr/core';
+    splitCompletedTasks, tFallback, } from '@tinybubbles/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronRight, Columns3, FileText, Folder, PanelLeftOpen, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -513,7 +513,7 @@ export function ProjectWorkspace({
 
     const openProjectQuickAdd = useCallback((sectionId?: string | null) => {
         if (!selectedProject) return;
-        window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+        window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
             detail: {
                 initialProps: {
                     projectId: selectedProject.id,

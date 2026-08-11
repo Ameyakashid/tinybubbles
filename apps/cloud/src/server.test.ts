@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, 
 import { dirname, join } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
-import { CLOUD_SYNC_TOKEN_PATTERN, cloudHeadJson, cloudPutJson, TASK_SORT_BY_VALUES, type AppData, type Task } from '@mindwtr/core';
+import { CLOUD_SYNC_TOKEN_PATTERN, cloudHeadJson, cloudPutJson, TASK_SORT_BY_VALUES, type AppData, type Task } from '@tinybubbles/core';
 import {
     getAuthFailureRateKey,
     getAuthFailureTokenRateKey,
@@ -139,7 +139,7 @@ describe('cloud server utils', () => {
     });
 
     test('startup logs do not expose the configured cloud data path', async () => {
-        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-startup-log-'));
+        const sandbox = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-startup-log-'));
         const privateDataDir = join(sandbox, 'operator-private', 'cloud-root');
         const captured: string[] = [];
         const stdoutSpy = spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
@@ -246,7 +246,7 @@ describe('cloud server utils', () => {
     });
 
     test('resolves auth tokens from both current and legacy env var names', () => {
-        const tempDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-auth-'));
+        const tempDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-auth-'));
         const authTokensFile = join(tempDir, 'auth-tokens.txt');
         const legacyTokenFile = join(tempDir, 'legacy-token.txt');
         try {
@@ -254,46 +254,46 @@ describe('cloud server utils', () => {
             writeFileSync(legacyTokenFile, 'legacy-file-token-1234567890\n');
 
             const primaryOnly = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_AUTH_TOKENS: 'primary-alpha-1234567890,primary-beta-1234567890',
+                TINYBUBBLES_CLOUD_AUTH_TOKENS: 'primary-alpha-1234567890,primary-beta-1234567890',
             });
             expect(primaryOnly).not.toBeNull();
             expect(isAuthorizedToken('primary-alpha-1234567890', primaryOnly)).toBe(true);
             expect(isAuthorizedToken('primary-beta-1234567890', primaryOnly)).toBe(true);
 
             const legacyOnly = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_TOKEN: 'legacy-token-1234567890',
+                TINYBUBBLES_CLOUD_TOKEN: 'legacy-token-1234567890',
             });
             expect(legacyOnly).not.toBeNull();
             expect(isAuthorizedToken('legacy-token-1234567890', legacyOnly)).toBe(true);
 
             const combined = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_AUTH_TOKENS: 'combined-new-1234567890',
-                MINDWTR_CLOUD_TOKEN: 'legacy-token-1234567890',
+                TINYBUBBLES_CLOUD_AUTH_TOKENS: 'combined-new-1234567890',
+                TINYBUBBLES_CLOUD_TOKEN: 'legacy-token-1234567890',
             });
             expect(isAuthorizedToken('combined-new-1234567890', combined)).toBe(true);
             expect(isAuthorizedToken('legacy-token-1234567890', combined)).toBe(true);
 
             const fileOnly = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_AUTH_TOKENS_FILE: authTokensFile,
+                TINYBUBBLES_CLOUD_AUTH_TOKENS_FILE: authTokensFile,
             });
             expect(isAuthorizedToken('file-alpha-1234567890', fileOnly)).toBe(true);
             expect(isAuthorizedToken('file-beta-1234567890', fileOnly)).toBe(true);
 
             const legacyFileOnly = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_TOKEN_FILE: legacyTokenFile,
+                TINYBUBBLES_CLOUD_TOKEN_FILE: legacyTokenFile,
             });
             expect(isAuthorizedToken('legacy-file-token-1234567890', legacyFileOnly)).toBe(true);
 
             const mixedWithFile = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_AUTH_TOKENS: 'inline-token-1234567890',
-                MINDWTR_CLOUD_AUTH_TOKENS_FILE: authTokensFile,
+                TINYBUBBLES_CLOUD_AUTH_TOKENS: 'inline-token-1234567890',
+                TINYBUBBLES_CLOUD_AUTH_TOKENS_FILE: authTokensFile,
             });
             expect(isAuthorizedToken('inline-token-1234567890', mixedWithFile)).toBe(true);
             expect(isAuthorizedToken('file-alpha-1234567890', mixedWithFile)).toBe(true);
             expect(isAuthorizedToken('file-beta-1234567890', mixedWithFile)).toBe(true);
 
             const allowAny = resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_ALLOW_ANY_TOKEN: 'true',
+                TINYBUBBLES_CLOUD_ALLOW_ANY_TOKEN: 'true',
             });
             expect(allowAny).toBeNull();
 
@@ -302,7 +302,7 @@ describe('cloud server utils', () => {
             );
 
             expect(() => resolveAllowedAuthTokensFromEnv({
-                MINDWTR_CLOUD_AUTH_TOKENS: 'too-short',
+                TINYBUBBLES_CLOUD_AUTH_TOKENS: 'too-short',
             })).toThrow('Configured auth token #1 is invalid');
         } finally {
             rmSync(tempDir, { recursive: true, force: true });
@@ -603,7 +603,7 @@ describe('cloud server utils', () => {
             assignedTo: 'person-1',
             projectId: 'p1',
             showFutureRecurrence: true,
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         }).ok).toBe(true);
 
         const invalid = validateEntityProps('task', 'create', {
@@ -624,7 +624,7 @@ describe('cloud server utils', () => {
             energyLevel: 'low',
             assignedTo: 'person-2',
             order: 1,
-            suppressMindwtrReminders: false,
+            suppressTinyBubblesReminders: false,
         }).ok).toBe(true);
 
         const invalid = validateEntityProps('task', 'patch', {
@@ -776,8 +776,8 @@ describe('cloud server utils', () => {
         const parsed = await readJsonBody(req, 10);
         expect(isBodyReadError(parsed)).toBe(true);
         if (!isBodyReadError(parsed)) throw new Error('Expected body read error');
-        expect(parsed.__mindwtrError.message).toBe('Payload too large');
-        expect(parsed.__mindwtrError.status).toBe(413);
+        expect(parsed.__tinybubblesError.message).toBe('Payload too large');
+        expect(parsed.__tinybubblesError.status).toBe(413);
     });
 
     test('returns request timeout when body read is aborted', async () => {
@@ -799,8 +799,8 @@ describe('cloud server utils', () => {
         const parsed = await readJsonBody(req, 1024, controller.signal);
         expect(isBodyReadError(parsed)).toBe(true);
         if (!isBodyReadError(parsed)) throw new Error('Expected body read error');
-        expect(parsed.__mindwtrError.message).toBe('Request timed out');
-        expect(parsed.__mindwtrError.status).toBe(408);
+        expect(parsed.__tinybubblesError.message).toBe('Request timed out');
+        expect(parsed.__tinybubblesError.status).toBe(408);
     });
 
     test('normalizes attachment paths with allowlist and segment checks', () => {
@@ -821,7 +821,7 @@ describe('cloud server utils', () => {
     });
 
     test('detects symlink segments in attachment paths', () => {
-        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-symlink-check-'));
+        const sandbox = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-symlink-check-'));
         const root = join(sandbox, 'root');
         const outside = join(sandbox, 'outside');
         mkdirSync(root, { recursive: true });
@@ -839,7 +839,7 @@ describe('cloud server utils', () => {
     });
 
     test('does not create attachment roots through a symlinked namespace', () => {
-        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-root-'));
+        const sandbox = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-attachment-root-'));
         const dataDirForTest = join(sandbox, 'data');
         const outside = join(sandbox, 'outside');
         const key = 'namespace-key';
@@ -861,7 +861,7 @@ describe('cloud server utils', () => {
     // namespace directory — which both exempted it from ensureNamespaceWriteAllowed
     // and consumed a maxAnyTokenNamespaces slot, without ever storing data.
     test('resolves a read-only attachment path without creating the namespace directory', () => {
-        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-readonly-resolve-'));
+        const sandbox = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-attachment-readonly-resolve-'));
         const dataDirForTest = join(sandbox, 'data');
         mkdirSync(dataDirForTest, { recursive: true });
         const key = 'namespace-key-readonly';
@@ -900,7 +900,7 @@ describe('cloud server utils', () => {
     });
 
     test('bounds cross-process lock files independently of attacker-controlled keys', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-shards-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-lock-shards-'));
         try {
             const withWriteLock = createWriteLockRunner(dir);
             for (let index = 0; index < 96; index += 1) {
@@ -956,7 +956,7 @@ describe('cloud server utils', () => {
     });
 
     test('cancels a cross-process lock poll when its request is aborted', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-abort-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-lock-abort-'));
         const holderLock = createWriteLockRunner(dir);
         const waiterLock = createWriteLockRunner(dir);
         let releaseHolder!: () => void;
@@ -997,7 +997,7 @@ describe('cloud server utils', () => {
     });
 
     test('releases the cross-process write lock immediately when its owner crashes', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-crash-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-lock-crash-'));
         const workerPath = join(testDirectory, 'test-fixtures', 'cloud-lock-worker.ts');
         const holderReadyPath = join(dir, 'holder-ready');
         const contenderReadyPath = join(dir, 'contender-ready');
@@ -1040,7 +1040,7 @@ describe('cloud server utils', () => {
     });
 
     test('serializes a real two-process read-modify-write stress run', async () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-lock-stress-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-lock-stress-'));
         const workerPath = join(testDirectory, 'test-fixtures', 'cloud-lock-worker.ts');
         const firstDonePath = join(dir, 'first-done');
         const secondDonePath = join(dir, 'second-done');
@@ -1069,7 +1069,7 @@ describe('cloud server utils', () => {
     });
 
     test('writeData atomically replaces the JSON file and cleans up temp files', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-write-data-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-write-data-'));
         const filePath = join(dir, 'data.json');
 
         writeData(filePath, { ok: true, version: 1 });
@@ -1083,7 +1083,7 @@ describe('cloud server utils', () => {
     });
 
     test('caches parsed app data for unchanged data files without leaking caller mutations', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-load-cache-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-load-cache-'));
         const filePath = join(dir, 'data.json');
         const iso = '2026-01-01T00:00:00.000Z';
         const data: AppData = {
@@ -1122,7 +1122,7 @@ describe('cloud server utils', () => {
     });
 
     test('does not cache write caller object references', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-write-cache-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-write-cache-'));
         const filePath = join(dir, 'data.json');
         const iso = '2026-01-01T00:00:00.000Z';
         const data: AppData = {
@@ -1159,7 +1159,7 @@ describe('cloud server utils', () => {
     });
 
     test('bounds parsed app data cache entries', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-cache-bound-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-cache-bound-'));
         const iso = '2026-01-01T00:00:00.000Z';
 
         try {
@@ -1189,7 +1189,7 @@ describe('cloud server utils', () => {
     });
 
     test('promotes parsed app data cache hits before eviction', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-cache-lru-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-cache-lru-'));
         const iso = '2026-01-01T00:00:00.000Z';
 
         try {
@@ -1236,7 +1236,7 @@ describe('cloud server utils', () => {
     });
 
     test('bounds validated data and metadata cache entries with LRU promotion', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-cache-bound-all-'));
+        const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-cache-bound-all-'));
         const iso = '2026-01-01T00:00:00.000Z';
 
         try {
@@ -1338,7 +1338,7 @@ describe('cloud server utils', () => {
 
 describe('cloud server namespace mode', () => {
     test('keeps arbitrary HEAD probes from allocating unbounded lock files or namespaces', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-head-lock-growth-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-head-lock-growth-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -1368,7 +1368,7 @@ describe('cloud server namespace mode', () => {
     });
 
     test('admits only one concurrent first writer when a single any-token namespace remains', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-race-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-namespace-race-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -1429,7 +1429,7 @@ describe('cloud server namespace mode', () => {
     });
 
     test('enforces namespace admission across two cloud server processes', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-process-race-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-namespace-process-race-'));
         const workerPath = join(testDirectory, 'test-fixtures', 'cloud-server-worker.ts');
         const readyPaths = [join(tempDataDir, 'server-one-ready'), join(tempDataDir, 'server-two-ready')];
         const workers = readyPaths.map((readyPath) => spawn(
@@ -1488,7 +1488,7 @@ describe('cloud server namespace mode', () => {
     });
 
     test('caps new namespace creation when any-token mode is enabled', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-test-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-namespace-test-'));
         const firstToken = 'namespace-token-one-1234567890';
         const secondToken = 'namespace-token-two-1234567890';
         const server = await startCloudServer({
@@ -1567,7 +1567,7 @@ describe('cloud server namespace mode', () => {
     ];
 
     test('enforces the namespace cap and the rate limiter on every namespaced write route', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-routes-test-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-namespace-routes-test-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -1606,7 +1606,7 @@ describe('cloud server namespace mode', () => {
     // consume the any-token namespace cap by planting an attachments directory as a
     // side effect of path resolution, starving a legitimate first writer.
     test('attachment reads and cleanup never consume the any-token namespace cap', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-cap-bypass-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-attachment-cap-bypass-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -1642,7 +1642,7 @@ describe('cloud server namespace mode', () => {
     });
 
     test('rate limits a namespaced write route the same as its read route', async () => {
-        const tempDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-namespace-rate-test-'));
+        const tempDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-namespace-rate-test-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -1697,7 +1697,7 @@ describe('cloud server api', () => {
     };
 
     beforeEach(async () => {
-        dataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-test-'));
+        dataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-test-'));
         completionRecords = [];
         const server = await startCloudServer({
             host: '127.0.0.1',
@@ -1823,7 +1823,7 @@ describe('cloud server api', () => {
     });
 
     test('correlates rate-limit and timeout responses with their completion records', async () => {
-        const isolatedDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-correlation-'));
+        const isolatedDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-correlation-'));
         const isolatedToken = 'correlation-token-1234567890';
         const isolatedRecords: CloudRequestCompletion[] = [];
         const isolatedServer = await startCloudServer({
@@ -1895,7 +1895,7 @@ describe('cloud server api', () => {
         expect(response.status).toBe(200);
         const body = await response.json();
         expect(body.ok).toBe(true);
-        expect(body.etag).toMatch(/^W\/"mindwtr-/);
+        expect(body.etag).toMatch(/^W\/"tinybubbles-/);
         expect(body.remoteFingerprint).toBe(`cloud:v1:etag=${body.etag}`);
         expect(body.serverMergedRemoteData).toBe(false);
         expect(body.contentLength).toBeTruthy();
@@ -2214,7 +2214,7 @@ describe('cloud server api', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(response.headers.get('etag')).toMatch(/^W\/"mindwtr-/);
+        expect(response.headers.get('etag')).toMatch(/^W\/"tinybubbles-/);
         expect(response.headers.get('last-modified')).toBeTruthy();
         const getResponse = await fetch(`${baseUrl}/v1/data`, {
             method: 'GET',
@@ -2262,7 +2262,7 @@ describe('cloud server api', () => {
     });
 
     test('caches unchanged stat-based data metadata by file stats', () => {
-        const tempDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-head-cache-'));
+        const tempDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-head-cache-'));
         const filePath = join(tempDir, 'data.json');
         try {
             writeFileSync(filePath, JSON.stringify({ version: 1 }));
@@ -2270,7 +2270,7 @@ describe('cloud server api', () => {
             const second = dataMetadataResponse(filePath);
 
             expect(second.headers.get('etag')).toBe(first.headers.get('etag'));
-            expect(first.headers.get('etag')).toMatch(/^W\/"mindwtr-/);
+            expect(first.headers.get('etag')).toMatch(/^W\/"tinybubbles-/);
             expect(__serverDataCacheTestUtils.getDataMetadataCacheSize()).toBeGreaterThan(0);
         } finally {
             rmSync(tempDir, { recursive: true, force: true });
@@ -3228,7 +3228,7 @@ describe('cloud server api', () => {
         });
         expect(unsafeResponse.status).toBe(400);
 
-        const isolatedDataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-directory-failure-'));
+        const isolatedDataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-directory-failure-'));
         const sensitivePath = join(isolatedDataDir, 'private-namespace', 'attachments');
         const captured: string[] = [];
         const stderrSpy = spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
@@ -3393,7 +3393,7 @@ describe('cloud server api', () => {
     test('does not garbage-collect through a symlinked attachment root', async () => {
         const key = tokenToKey(integrationToken);
         const namespaceDir = join(dataDir, key);
-        const outsideDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-outside-'));
+        const outsideDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-outside-'));
         const outsideFile = join(outsideDir, 'private.bin');
         mkdirSync(namespaceDir, { recursive: true });
         writeFileSync(outsideFile, 'private');
@@ -3470,7 +3470,7 @@ describe('cloud server api', () => {
         const attachmentDir = join(dataDir, key, 'attachments', 'folder');
         mkdirSync(attachmentDir, { recursive: true });
 
-        const outsideDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-outside-'));
+        const outsideDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-outside-'));
         const outsideFile = join(outsideDir, 'outside.bin');
         writeFileSync(outsideFile, 'original');
         const symlinkPath = join(attachmentDir, 'link.bin');
@@ -3493,7 +3493,7 @@ describe('cloud server api', () => {
         const attachmentRoot = join(dataDir, key, 'attachments');
         mkdirSync(attachmentRoot, { recursive: true });
 
-        const outsideDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-outside-parent-'));
+        const outsideDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-outside-parent-'));
         const symlinkedParent = join(attachmentRoot, 'folder');
         symlinkSync(outsideDir, symlinkedParent);
 
@@ -4174,7 +4174,7 @@ describe('cloud server calendar feed', () => {
     const authHeaders = { Authorization: `Bearer ${FEED_TOKEN}` };
 
     const startFeedServer = async (options: { maxPerWindow?: number } = {}) => {
-        const dataDir = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-calendar-feed-'));
+        const dataDir = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-calendar-feed-'));
         const server = await startCloudServer({
             host: '127.0.0.1',
             port: 0,
@@ -4228,7 +4228,7 @@ describe('cloud server calendar feed', () => {
             const ics = await feedResponse.text();
             expect(ics).toContain('BEGIN:VCALENDAR');
             expect(ics).toContain('SUMMARY:Publish the feed');
-            expect(ics).toContain(`UID:${scheduledTask.id}-start@mindwtr.app`);
+            expect(ics).toContain(`UID:${scheduledTask.id}-start@tinybubbles.app`);
             expect(ics).not.toContain('private note');
 
             const rotated = await fetch(`${url}/v1/calendar/feed`, { method: 'POST', headers: authHeaders });

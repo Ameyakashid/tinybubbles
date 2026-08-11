@@ -2,7 +2,7 @@
 
 Audit base: `faea7edc3e7d04d67540ada3a59ce4d367133377`
 
-These plans preserve Mindwtr's automatic, progressively disclosed UX. They do not add settings, confirmation prompts, or new concurrent transfer behavior.
+These plans preserve Tiny Bubbles's automatic, progressively disclosed UX. They do not add settings, confirmation prompts, or new concurrent transfer behavior.
 
 ## P1: Surface terminal persistence failures globally with retry
 
@@ -33,7 +33,7 @@ Desktop and mobile collapse all importers into `import`; mobile also collapses a
 
 ### Scope and design
 
-- Replace the coarse state with explicit operation IDs: `export`, `restore`, `merge`, `import:todoist`, `import:ticktick`, `import:dgt`, `import:omnifocus`, `import:mindwtr-csv`, plus `snapshot:<stable-name>` on mobile.
+- Replace the coarse state with explicit operation IDs: `export`, `restore`, `merge`, `import:todoist`, `import:ticktick`, `import:dgt`, `import:omnifocus`, `import:tinybubbles-csv`, plus `snapshot:<stable-name>` on mobile.
 - Set and clear the exact ID across picker, preview, cancellation, confirmation, success, and error paths.
 - Continue disabling competing actions, but render progress and accessibility busy state only on the active row.
 - Do not parse an operation ID from translated display text.

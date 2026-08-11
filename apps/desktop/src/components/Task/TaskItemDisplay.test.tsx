@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render } from '@testing-library/react';
-import type { Project, Task } from '@mindwtr/core';
-import { hasTimeComponent, safeFormatDate, useTaskStore } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
+import { hasTimeComponent, safeFormatDate, useTaskStore } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
 import { TaskItemDisplay } from './TaskItemDisplay';

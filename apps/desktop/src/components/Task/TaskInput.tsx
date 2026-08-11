@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react';
-import type { Area, Project } from '@mindwtr/core';
+import type { Area, Project } from '@tinybubbles/core';
 import { cn } from '../../lib/utils';
 import {
     compareAutocompleteLabels,

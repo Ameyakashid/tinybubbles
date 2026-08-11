@@ -3,7 +3,7 @@ import type { RefObject } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Switch, TextInput, TouchableOpacity, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { AtSign, CalendarDays, ChevronDown, ChevronUp, Clock, FileText, Flag, Folder, Layers, Mic, SlidersHorizontal, Square, X } from 'lucide-react-native';
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 import { ToastViewport } from '@/contexts/toast-context';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText, CompactTextInput } from '@/components/compact-text';

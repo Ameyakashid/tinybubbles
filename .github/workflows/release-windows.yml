@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MS_IDENTITY_NAME: "DongdaLi.Mindwtr"
+  MS_IDENTITY_NAME: "MS_STORE_IDENTITY_PLACEHOLDER"
   MS_PUBLISHER_ID: "CN=76AC9B15-7A1B-49FF-9342-2BE80735A1E6"
   MS_PUBLISHER_DISPLAY_NAME: "Dongda Li"
 
@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 120
     env:
       VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY || secrets.VITE_DROPBOX_APP_KEY }}
-      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       VITE_DONATION_PROMPT_ENABLED: "true"
       # Hoisted so step-level `if` can gate on their presence (secrets context
       # is unavailable in step conditions).
@@ -104,7 +104,7 @@ jobs:
               Remove-Item -Recurse -Force
           }
           cd apps/desktop
-          # Stop at the loose mindwtr.exe. Bundling is a separate step below so
+          # Stop at the loose tinybubbles.exe. Bundling is a separate step below so
           # Authenticode signing can run in between: the NSIS installer embeds
           # its own copy of the exe, and a copy baked in before signing stays
           # unsigned on every machine that installs it.
@@ -135,11 +135,11 @@ jobs:
       # release-signing asks for two approvals per release.
       - name: Stage unsigned app binary for signing
         id: stage-unsigned-exe
-        if: ${{ vars.SIGNPATH_SIGNING_ENABLED == 'true' && github.repository == 'dongdongbh/Mindwtr' && env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '' || github.event.inputs.tag != '') }}
+        if: ${{ vars.SIGNPATH_SIGNING_ENABLED == 'true' && github.repository == 'tinybubbles-app/tinybubbles' && env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '' || github.event.inputs.tag != '') }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path signing-unsigned-exe | Out-Null
-          Copy-Item "apps/desktop/src-tauri/target/release/mindwtr.exe" "signing-unsigned-exe/mindwtr.exe"
+          Copy-Item "apps/desktop/src-tauri/target/release/tinybubbles.exe" "signing-unsigned-exe/tinybubbles.exe"
 
       - name: Upload unsigned app binary
         id: upload-unsigned-exe
@@ -157,9 +157,9 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: Mindwtr
+          project-slug: SIGNPATH_PROJECT_PLACEHOLDER
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
-          # Single-file config (zip -> pe-file mindwtr.exe). Pinned so the
+          # Single-file config (zip -> pe-file tinybubbles.exe). Pinned so the
           # project default can never silently decide what gets signed.
           artifact-configuration-slug: initial
           github-artifact-id: ${{ steps.upload-unsigned-exe.outputs.artifact-id }}
@@ -173,8 +173,8 @@ jobs:
         if: ${{ steps.stage-unsigned-exe.outcome == 'success' }}
         shell: pwsh
         run: |
-          $exePath = "apps/desktop/src-tauri/target/release/mindwtr.exe"
-          Copy-Item "signing-signed-exe/mindwtr.exe" $exePath -Force
+          $exePath = "apps/desktop/src-tauri/target/release/tinybubbles.exe"
+          Copy-Item "signing-signed-exe/tinybubbles.exe" $exePath -Force
           $policy = "${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}"
           $sig = Get-AuthenticodeSignature $exePath
           if ($null -eq $sig.SignerCertificate) { throw "Not signed: $exePath" }
@@ -225,7 +225,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path signing-unsigned-installer | Out-Null
           # Stable name so the SignPath artifact configuration never has to
           # track version-suffixed file names.
-          Copy-Item -LiteralPath $nsisPath -Destination "signing-unsigned-installer/mindwtr-setup.exe"
+          Copy-Item -LiteralPath $nsisPath -Destination "signing-unsigned-installer/tinybubbles-setup.exe"
 
       - name: Upload unsigned installer
         id: upload-unsigned-installer
@@ -243,9 +243,9 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: Mindwtr
+          project-slug: SIGNPATH_PROJECT_PLACEHOLDER
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
-          # Single-file config (zip -> pe-file mindwtr-setup.exe).
+          # Single-file config (zip -> pe-file tinybubbles-setup.exe).
           artifact-configuration-slug: windows-installer
           github-artifact-id: ${{ steps.upload-unsigned-installer.outputs.artifact-id }}
           wait-for-completion: true
@@ -257,7 +257,7 @@ jobs:
         shell: pwsh
         run: |
           $nsisPath = "${{ steps.current-installer.outputs.installer_path }}"
-          Copy-Item -LiteralPath "signing-signed-installer/mindwtr-setup.exe" -Destination $nsisPath -Force
+          Copy-Item -LiteralPath "signing-signed-installer/tinybubbles-setup.exe" -Destination $nsisPath -Force
           $policy = "${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}"
 
           # Unpack the installer and check the exe it will drop in Program
@@ -275,9 +275,9 @@ jobs:
           & $sevenZip x $nsisPath "-o$extractDir" -y | Out-Null
           # 7-Zip exits 1 on non-fatal warnings; only 2+ is a real failure.
           if ($LASTEXITCODE -gt 1) { throw "Failed to unpack $nsisPath (7z exit $LASTEXITCODE)" }
-          $payload = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter mindwtr.exe |
+          $payload = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter tinybubbles.exe |
             Select-Object -First 1
-          if (-not $payload) { throw "mindwtr.exe not found inside $nsisPath" }
+          if (-not $payload) { throw "tinybubbles.exe not found inside $nsisPath" }
 
           foreach ($file in @($nsisPath, $payload.FullName)) {
             $sig = Get-AuthenticodeSignature $file
@@ -294,24 +294,24 @@ jobs:
         run: |
           $buildDir = "apps/desktop/src-tauri/target/release"
           $portableDir = "portable-staging"
-          $zipPath = "mindwtr_${{ steps.version.outputs.version }}_windows_x64_portable.zip"
+          $zipPath = "tinybubbles_${{ steps.version.outputs.version }}_windows_x64_portable.zip"
 
           Remove-Item -Recurse -Force $portableDir -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "$portableDir\profile\config" | Out-Null
           New-Item -ItemType Directory -Force -Path "$portableDir\profile\data" | Out-Null
 
-          Copy-Item "$buildDir/mindwtr.exe" -Destination "$portableDir\mindwtr.exe"
+          Copy-Item "$buildDir/tinybubbles.exe" -Destination "$portableDir\tinybubbles.exe"
           if (Test-Path "$buildDir/WebView2Loader.dll") {
             Copy-Item "$buildDir/WebView2Loader.dll" -Destination "$portableDir"
           }
 
-          Set-Content -Path "$portableDir\portable.txt" -NoNewline -Value "Mindwtr portable mode marker. Keep this file next to mindwtr.exe."
+          Set-Content -Path "$portableDir\portable.txt" -NoNewline -Value "Tiny Bubbles portable mode marker. Keep this file next to tinybubbles.exe."
           @(
-            "Mindwtr Portable for Windows",
+            "Tiny Bubbles Portable for Windows",
             "",
             "- Extract this ZIP to a writable folder.",
-            "- Keep portable.txt next to mindwtr.exe.",
-            "- Mindwtr stores all local data beside the executable: tasks, attachments, and logs under profile\data, settings under profile\config, and the WebView2 browser profile under profile\webview.",
+            "- Keep portable.txt next to tinybubbles.exe.",
+            "- Tiny Bubbles stores all local data beside the executable: tasks, attachments, and logs under profile\data, settings under profile\config, and the WebView2 browser profile under profile\webview.",
             "- Portable mode keeps secrets in the local profile instead of Windows Credential Manager.",
             "- Windows WebView2 is still required."
           ) | Set-Content -Path "$portableDir\README-portable.txt"
@@ -341,7 +341,7 @@ jobs:
           $nsisName = Split-Path -Leaf $nsisPath
           $target = Resolve-ReleaseAssetName -Name $nsisName
           Copy-Item -LiteralPath $nsisPath -Destination "release-artifacts/$target"
-          Get-ChildItem "mindwtr_*_windows_x64_portable.zip" -ErrorAction SilentlyContinue | ForEach-Object {
+          Get-ChildItem "tinybubbles_*_windows_x64_portable.zip" -ErrorAction SilentlyContinue | ForEach-Object {
             Copy-Item $_.FullName "release-artifacts/$($_.Name)"
           }
           Get-ChildItem release-artifacts
@@ -381,7 +381,7 @@ jobs:
           Remove-Item -Recurse -Force $outDir -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $outDir | Out-Null
           New-Item -ItemType Directory -Force -Path "$outDir\Assets" | Out-Null
-          Copy-Item "$buildDir/mindwtr.exe" -Destination "$outDir\mindwtr.exe"
+          Copy-Item "$buildDir/tinybubbles.exe" -Destination "$outDir\tinybubbles.exe"
           if (Test-Path "$buildDir/WebView2Loader.dll") {
             Copy-Item "$buildDir/WebView2Loader.dll" -Destination "$outDir"
           }
@@ -403,7 +403,7 @@ jobs:
                       Publisher="$env:MS_PUBLISHER_ID" 
                       Version="${{ steps.version.outputs.msix_version }}" />
             <Properties>
-              <DisplayName>Mindwtr</DisplayName>
+              <DisplayName>Tiny Bubbles</DisplayName>
               <PublisherDisplayName>$env:MS_PUBLISHER_DISPLAY_NAME</PublisherDisplayName>
               <Logo>Assets\StoreLogo.png</Logo>
             </Properties>
@@ -414,8 +414,8 @@ jobs:
               <Resource Language="en-us" />
             </Resources>
             <Applications>
-              <Application Id="App" Executable="mindwtr.exe" EntryPoint="Windows.FullTrustApplication">
-                <uap:VisualElements DisplayName="Mindwtr"
+              <Application Id="App" Executable="tinybubbles.exe" EntryPoint="Windows.FullTrustApplication">
+                <uap:VisualElements DisplayName="Tiny Bubbles"
                                     Description="Local-first GTD application"
                                     BackgroundColor="transparent"
                                     Square150x150Logo="Assets\Square150x150Logo.png"
@@ -423,8 +423,8 @@ jobs:
                 </uap:VisualElements>
                 <Extensions>
                   <!-- TaskId must match STORE_STARTUP_TASK_ID in src-tauri/src/autostart.rs -->
-                  <uap5:Extension Category="windows.startupTask" Executable="mindwtr.exe" EntryPoint="Windows.FullTrustApplication">
-                    <uap5:StartupTask TaskId="MindwtrStartup" Enabled="false" DisplayName="Mindwtr" />
+                  <uap5:Extension Category="windows.startupTask" Executable="tinybubbles.exe" EntryPoint="Windows.FullTrustApplication">
+                    <uap5:StartupTask TaskId="TinyBubblesStartup" Enabled="false" DisplayName="Tiny Bubbles" />
                   </uap5:Extension>
                 </Extensions>
               </Application>
@@ -440,7 +440,7 @@ jobs:
         if: (startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')) || inputs.run_msstore
         shell: pwsh
         run: |
-          $msixPath = "mindwtr_${{ steps.version.outputs.version }}_x64.msix"
+          $msixPath = "tinybubbles_${{ steps.version.outputs.version }}_x64.msix"
           $makeappx = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Filter "makeappx.exe" -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -match "\\x64\\makeappx.exe$" } |
             Select-Object -First 1 -ExpandProperty FullName
@@ -456,7 +456,7 @@ jobs:
           MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
           MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
           MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
-          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID || '9N0V5B0B6FRX' }}
+          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID }}
         run: |
           $required = @('MS_TENANT_ID','MS_CLIENT_ID','MS_CLIENT_SECRET','MS_STORE_APP_ID')
           foreach ($name in $required) {
@@ -473,7 +473,7 @@ jobs:
           MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
           MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
           MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
-          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID || '9N0V5B0B6FRX' }}
+          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID }}
         run: |
           $tokenBody = @{
             grant_type    = 'client_credentials'
@@ -547,14 +547,14 @@ jobs:
           MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
           MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
           MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
-          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID || '9N0V5B0B6FRX' }}
+          MS_STORE_APP_ID: ${{ secrets.MS_STORE_APP_ID }}
           APP_VERSION: ${{ steps.version.outputs.version }}
           MSIX_VERSION: ${{ steps.version.outputs.msix_version }}
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
 
-          $msixPath = (Resolve-Path "mindwtr_$($env:APP_VERSION)_x64.msix").Path
+          $msixPath = (Resolve-Path "tinybubbles_$($env:APP_VERSION)_x64.msix").Path
           $msixFileName = [System.IO.Path]::GetFileName($msixPath)
           $msixVersion = $env:MSIX_VERSION
 
@@ -1060,9 +1060,9 @@ jobs:
           function Apply-PublicSupportPropertiesIfPresent {
             param([Parameter(Mandatory = $false)]$Object)
             if (-not $Object) { return }
-            Set-SubmissionPropertyIfPresent -Object $Object -Names @('privacyPolicyUrl', 'PrivacyPolicyUrl', 'privacyPolicy', 'PrivacyPolicy') -Value 'https://mindwtr.app/privacy'
-            Set-SubmissionPropertyIfPresent -Object $Object -Names @('websiteUrl', 'WebsiteUrl', 'website', 'Website') -Value 'https://mindwtr.app/'
-            Set-SubmissionPropertyIfPresent -Object $Object -Names @('supportContactInfo', 'SupportContactInfo', 'supportContact', 'SupportContact') -Value 'support@mindwtr.app'
+            Set-SubmissionPropertyIfPresent -Object $Object -Names @('privacyPolicyUrl', 'PrivacyPolicyUrl', 'privacyPolicy', 'PrivacyPolicy') -Value 'https://github.com/tinybubbles-app/tinybubbles/blob/main/docs/PRIVACY.md'
+            Set-SubmissionPropertyIfPresent -Object $Object -Names @('websiteUrl', 'WebsiteUrl', 'website', 'Website') -Value 'https://github.com/tinybubbles-app/tinybubbles'
+            Set-SubmissionPropertyIfPresent -Object $Object -Names @('supportContactInfo', 'SupportContactInfo', 'supportContact', 'SupportContact') -Value 'SUPPORT_CONTACT_PLACEHOLDER'
             Set-SubmissionPropertyIfPresent -Object $Object -Names @('phoneNumber', 'PhoneNumber', 'phone', 'Phone') -Value ''
             Set-SubmissionPropertyIfPresent -Object $Object -Names @('address', 'Address', 'addressLine1', 'AddressLine1', 'addressLine2', 'AddressLine2', 'postalCode', 'PostalCode', 'zipCode', 'ZipCode', 'city', 'City', 'state', 'State', 'stateOrProvince', 'StateOrProvince', 'province', 'Province', 'country', 'Country', 'countryOrRegion', 'CountryOrRegion') -Value ''
           }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LockKeyhole } from 'lucide-react-native';
-import { translateWithFallback } from '@mindwtr/core';
+import { translateWithFallback } from '@tinybubbles/core';
 
 import { useLanguage } from '@/contexts/language-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -45,7 +45,7 @@ export function MobileAppLockGate({ enabled, children }: MobileAppLockGateProps)
     setErrorKey(null);
     try {
       const result = await authenticateWithDeviceLock({
-        promptMessage: resolveText('appLock.prompt', 'Unlock Mindwtr'),
+        promptMessage: resolveText('appLock.prompt', 'Unlock Tiny Bubbles'),
         cancelLabel: resolveText('common.cancel', 'Cancel'),
         fallbackLabel: resolveText('appLock.useDevicePasscode', 'Use device passcode'),
       });
@@ -130,9 +130,9 @@ export function MobileAppLockGate({ enabled, children }: MobileAppLockGateProps)
     ? resolveText(errorKey, errorKey === 'appLock.unavailable'
       ? 'Set up a device passcode or biometrics to use app lock.'
       : errorKey === 'appLock.cancelled'
-        ? 'Mindwtr is still locked.'
+        ? 'Tiny Bubbles is still locked.'
         : 'Authentication failed. Try again.')
-    : resolveText('appLock.description', 'Use your device lock to open Mindwtr. This protects the app view, not the on-device database.');
+    : resolveText('appLock.description', 'Use your device lock to open Tiny Bubbles. This protects the app view, not the on-device database.');
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: tc.bg }]} edges={['top', 'right', 'bottom', 'left']}>
@@ -140,7 +140,7 @@ export function MobileAppLockGate({ enabled, children }: MobileAppLockGateProps)
         <View style={[styles.iconWrap, { borderColor: tc.border, backgroundColor: tc.filterBg }]}>
           <LockKeyhole size={34} color={tc.tint} strokeWidth={2.2} />
         </View>
-        <Text style={[styles.title, { color: tc.text }]}>{resolveText('appLock.title', 'Mindwtr is locked')}</Text>
+        <Text style={[styles.title, { color: tc.text }]}>{resolveText('appLock.title', 'Tiny Bubbles is locked')}</Text>
         <Text style={[styles.description, { color: tc.secondaryText }]}>{message}</Text>
         <TouchableOpacity
           activeOpacity={0.85}

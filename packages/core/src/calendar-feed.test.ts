@@ -36,12 +36,12 @@ describe('buildCalendarFeedEvents', () => {
         expect(uids([
             task({ id: 'a', startTime: '2026-05-06T09:00:00.000Z' }),
             task({ id: 'b', dueDate: '2026-05-07' }),
-        ])).toEqual(['a-start@mindwtr.app', 'b-due@mindwtr.app']);
+        ])).toEqual(['a-start@tinybubbles.app', 'b-due@tinybubbles.app']);
     });
 
     it('collapses a task scheduled and due on the same day to its scheduled block', () => {
         expect(uids([task({ id: 'a', startTime: '2026-05-06', dueDate: '2026-05-06' })]))
-            .toEqual(['a-start@mindwtr.app']);
+            .toEqual(['a-start@tinybubbles.app']);
     });
 
     it('does not let the server time zone hide a mixed timed/date-only deadline', () => {
@@ -56,8 +56,8 @@ describe('buildCalendarFeedEvents', () => {
         };
 
         try {
-            expect(buildIn('UTC')).toEqual(['a-due@mindwtr.app', 'a-start@mindwtr.app']);
-            expect(buildIn('America/New_York')).toEqual(['a-due@mindwtr.app', 'a-start@mindwtr.app']);
+            expect(buildIn('UTC')).toEqual(['a-due@tinybubbles.app', 'a-start@tinybubbles.app']);
+            expect(buildIn('America/New_York')).toEqual(['a-due@tinybubbles.app', 'a-start@tinybubbles.app']);
         } finally {
             if (previousTimeZone === undefined) delete process.env.TZ;
             else process.env.TZ = previousTimeZone;
@@ -66,7 +66,7 @@ describe('buildCalendarFeedEvents', () => {
 
     it('keeps both events when the start and due dates differ', () => {
         expect(uids([task({ id: 'a', startTime: '2026-05-06T09:00:00.000Z', dueDate: '2026-05-09' })]))
-            .toEqual(['a-start@mindwtr.app', 'a-due@mindwtr.app']);
+            .toEqual(['a-start@tinybubbles.app', 'a-due@tinybubbles.app']);
     });
 
     it('excludes tasks the Calendar view hides', () => {
@@ -92,7 +92,7 @@ describe('buildCalendarFeedEvents', () => {
             startTime: '2026-05-06T09:00:00.000Z',
             recurrence: 'daily',
             showFutureRecurrence: true,
-        })])).toEqual(['a-start@mindwtr.app', 'a:projected-recurrence-start@mindwtr.app']);
+        })])).toEqual(['a-start@tinybubbles.app', 'a:projected-recurrence-start@tinybubbles.app']);
     });
 
     it('treats a date-only start as an all-day event and a timed start as a timed block', () => {
@@ -117,7 +117,7 @@ describe('buildCalendarFeed', () => {
 
         expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
         expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
-        expect(ics).toContain('UID:a-start@mindwtr.app');
+        expect(ics).toContain('UID:a-start@tinybubbles.app');
         expect(ics).toContain('DTSTAMP:20260504T120000Z');
         expect(ics).toContain('DTSTART:20260506T090000Z');
         expect(ics).toContain('DTEND:20260506T093000Z');

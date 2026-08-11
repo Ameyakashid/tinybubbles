@@ -13,7 +13,7 @@ import {
     type Project,
     type StoreActionResult,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     executeComposerSave,
     openComposerAt,
@@ -29,7 +29,7 @@ import {
     type CalendarComposerError,
     type CalendarComposerMode,
     type CalendarComposerState,
-} from '@mindwtr/core/calendar-composer';
+} from '@tinybubbles/core/calendar-composer';
 
 import { reportError } from '../../../lib/report-error';
 import { combineDateAndTime, formatDateInputValue } from './calendar-primitives';

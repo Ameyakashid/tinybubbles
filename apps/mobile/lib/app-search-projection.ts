@@ -1,5 +1,5 @@
-import type { Area, Project, Task } from '@mindwtr/core';
-import { isTaskVisible } from '@mindwtr/core';
+import type { Area, Project, Task } from '@tinybubbles/core';
+import { isTaskVisible } from '@tinybubbles/core';
 
 /**
  * Pure projection logic for the Android AppSearch secondary index (#1017).
@@ -22,7 +22,7 @@ export type AppSearchDoc = {
     dueDate?: string;
     /** The owning project or area id, when the entity has one. */
     parentId?: string;
-    /** mindwtr:// URL opened when the system-search result is tapped. */
+    /** tinybubbles:// URL opened when the system-search result is tapped. */
     deepLink: string;
 };
 
@@ -57,7 +57,7 @@ export function buildTaskDoc(task: Task): AppSearchDoc | null {
         status: task.status,
         ...(task.dueDate ? { dueDate: task.dueDate } : {}),
         ...(task.projectId ? { parentId: task.projectId } : task.areaId ? { parentId: task.areaId } : {}),
-        deepLink: `mindwtr://open?task=${encodeURIComponent(task.id)}`,
+        deepLink: `tinybubbles://open?task=${encodeURIComponent(task.id)}`,
     };
 }
 
@@ -69,7 +69,7 @@ export function buildProjectDoc(project: Project): AppSearchDoc | null {
         title: project.title,
         status: project.status,
         ...(project.areaId ? { parentId: project.areaId } : {}),
-        deepLink: `mindwtr://open?project=${encodeURIComponent(project.id)}`,
+        deepLink: `tinybubbles://open?project=${encodeURIComponent(project.id)}`,
     };
 }
 
@@ -79,7 +79,7 @@ export function buildAreaDoc(area: Area): AppSearchDoc | null {
         id: appSearchDocId('area', area.id),
         kind: 'area',
         title: area.name,
-        deepLink: `mindwtr://open?area=${encodeURIComponent(area.id)}`,
+        deepLink: `tinybubbles://open?area=${encodeURIComponent(area.id)}`,
     };
 }
 

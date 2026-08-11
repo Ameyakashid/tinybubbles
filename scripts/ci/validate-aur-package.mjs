@@ -170,7 +170,7 @@ export function validatePackageDir({ packageDir, packageName, policyPath }) {
     const validKeys = fields.get("validpgpkeys") ?? [];
     if (!validKeys.includes(policy.releaseSigningKeyFingerprint)) {
       throw new Error(
-        `${packageName} signature sources do not trust the documented Mindwtr signing key`,
+        `${packageName} signature sources do not trust the documented Tiny Bubbles signing key`,
       );
     }
   }

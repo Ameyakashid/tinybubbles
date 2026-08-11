@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_IMPORT_SOURCE_LIMITS, getBackupSourceFileDiagnostic, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@mindwtr/core';
-import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, getBackupSourceFileDiagnostic, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@tinybubbles/core';
+import type { ParsedTodoistProject } from '@tinybubbles/core/todoist-import';
 
 const emptyData: AppData = {
   tasks: [],
@@ -40,8 +40,8 @@ const fileSystemMocks = vi.hoisted(() => ({
   readAsStringAsync: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     ...actual,
     flushPendingSave: coreMocks.flushPendingSave,
@@ -123,7 +123,7 @@ import {
   createMobileRecoverySnapshot,
   importTodoistData,
   inspectBackupDocument,
-  inspectMindwtrCsvDocument,
+  inspectTinyBubblesCsvDocument,
   listLocalDataSnapshots,
   restoreLocalDataSnapshot,
 } from './data-transfer';
@@ -255,7 +255,7 @@ describe('mobile data transfer', () => {
       size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
     });
 
-    await expect(inspectMindwtrCsvDocument({
+    await expect(inspectTinyBubblesCsvDocument({
       fileName: 'large.csv',
       size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
       uri: 'content://large.csv',
@@ -333,7 +333,7 @@ describe('mobile data transfer', () => {
       size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
     });
 
-    await expect(inspectMindwtrCsvDocument({
+    await expect(inspectTinyBubblesCsvDocument({
       fileName: 'large.csv',
       size: null,
       uri: 'file://cache/large.csv',
@@ -346,7 +346,7 @@ describe('mobile data transfer', () => {
   it('rejects a size-less import when its copied URI size cannot be verified', async () => {
     fileSystemMocks.getInfoAsync.mockResolvedValue({ exists: true });
 
-    await expect(inspectMindwtrCsvDocument({
+    await expect(inspectTinyBubblesCsvDocument({
       fileName: 'unknown.csv',
       size: null,
       uri: 'file://cache/unknown.csv',

@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { describe, expect, it } from 'vitest';
-import { buildQuickAddPreviewEntries, parseQuickAdd, type QuickAddPreviewEntry } from '@mindwtr/core';
+import { buildQuickAddPreviewEntries, parseQuickAdd, type QuickAddPreviewEntry } from '@tinybubbles/core';
 
 import { QuickAddPreview } from './QuickAddPreview';
 

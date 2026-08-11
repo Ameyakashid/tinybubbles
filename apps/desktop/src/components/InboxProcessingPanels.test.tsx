@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
-import { createTaskDraft, setTaskDraftField, type Task, type TaskDraft } from '@mindwtr/core';
+import { createTaskDraft, setTaskDraftField, type Task, type TaskDraft } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../contexts/language-context';
 import { InboxProcessingQuickPanel, type InboxProcessingQuickPanelProps } from './InboxProcessingQuickPanel';

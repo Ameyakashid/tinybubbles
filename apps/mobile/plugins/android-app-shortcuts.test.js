@@ -12,11 +12,11 @@ const {
 describe('android-app-shortcuts', () => {
   it('generates App Actions capabilities and open-feature inline inventory', () => {
     expect(SHORTCUTS_XML).toContain('actions.intent.CREATE_THING');
-    expect(SHORTCUTS_XML).toContain('mindwtr:///capture{?title,note}');
+    expect(SHORTCUTS_XML).toContain('tinybubbles:///capture{?title,note}');
     expect(SHORTCUTS_XML).toContain('actions.intent.GET_THING');
-    expect(SHORTCUTS_XML).toContain('mindwtr:///global-search{?q}');
+    expect(SHORTCUTS_XML).toContain('tinybubbles:///global-search{?q}');
     expect(SHORTCUTS_XML).toContain('actions.intent.OPEN_APP_FEATURE');
-    expect(SHORTCUTS_XML).toContain('mindwtr:///open-feature{?feature}');
+    expect(SHORTCUTS_XML).toContain('tinybubbles:///open-feature{?feature}');
     expect(SHORTCUTS_XML).toContain('android:value="@array/app_action_feature_focus_names"');
     expect(SHORTCUTS_STRINGS_XML).toContain('<item>Today</item>');
     expect(SHORTCUTS_STRINGS_XML).toContain('<item>Quick capture</item>');
@@ -51,7 +51,7 @@ describe('android-app-shortcuts', () => {
       {
         $: {
           'android:name': 'android.app.shortcuts',
-          'android:resource': '@xml/mindwtr_shortcuts',
+          'android:resource': '@xml/tinybubbles_shortcuts',
         },
       },
     ]);
@@ -61,7 +61,7 @@ describe('android-app-shortcuts', () => {
         { $: { 'android:name': 'android.intent.category.DEFAULT' } },
         { $: { 'android:name': 'android.intent.category.BROWSABLE' } },
       ],
-      data: [{ $: { 'android:scheme': 'mindwtr' } }],
+      data: [{ $: { 'android:scheme': 'tinybubbles' } }],
     });
     expect(mainActivity['intent-filter']).toContainEqual({
       action: [{ $: { 'android:name': 'com.google.android.gms.actions.CREATE_NOTE' } }],

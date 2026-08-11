@@ -1,14 +1,14 @@
 Pod::Spec.new do |s|
   s.name = 'CloudKitSync'
   s.version = '1.0.0'
-  s.summary = 'Mindwtr CloudKit sync Expo module'
-  s.description = 'CloudKit sync native module used by Mindwtr on iOS.'
-  s.homepage = 'https://github.com/dongdongbh/Mindwtr'
+  s.summary = 'Tiny Bubbles CloudKit sync Expo module'
+  s.description = 'CloudKit sync native module used by Tiny Bubbles on iOS.'
+  s.homepage = 'https://github.com/tinybubbles-app/tinybubbles'
   s.license = { type: 'AGPL-3.0-only' }
-  s.author = { 'Mindwtr' => 'dongdongli@dongdongli.com' }
+  s.author = { 'Tiny Bubbles' => 'MAINTAINER_EMAIL_PLACEHOLDER' }
   s.platform = :ios, '15.1'
   s.swift_version = '5.0'
-  s.source = { git: 'https://github.com/dongdongbh/Mindwtr.git' }
+  s.source = { git: 'https://github.com/tinybubbles-app/tinybubbles.git' }
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'

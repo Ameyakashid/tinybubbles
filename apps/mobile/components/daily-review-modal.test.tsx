@@ -62,8 +62,8 @@ vi.mock('react-native', async () => {
     };
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@tinybubbles/core')>();
     return {
         ...actual,
         useTaskStore: Object.assign(() => storeState, { getState: () => storeState }),

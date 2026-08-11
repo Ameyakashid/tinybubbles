@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { type AppData, type Language, useTaskStore } from '@mindwtr/core';
+import { type AppData, type Language, useTaskStore } from '@tinybubbles/core';
 import { requestWidgetUpdate, type WidgetInfo } from 'react-native-android-widget';
 import * as ReactNativeWidgetKit from 'react-native-widgetkit';
 

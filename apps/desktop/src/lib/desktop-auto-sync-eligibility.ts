@@ -1,4 +1,4 @@
-import { canAutoSync, type SyncBackend } from '@mindwtr/core';
+import { canAutoSync, type SyncBackend } from '@tinybubbles/core';
 import type { CloudProvider } from './sync-service';
 
 type SyncServiceLike = {

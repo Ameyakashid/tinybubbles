@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { RangeSelectionOptions, Task } from '@mindwtr/core';
+import type { RangeSelectionOptions, Task } from '@tinybubbles/core';
 import { StoreTaskItem } from '../list/StoreTaskItem';
 
 type ReviewTaskListProps = {

@@ -1,8 +1,8 @@
-import { shouldRestoreLastView } from '@mindwtr/core';
+import { shouldRestoreLastView } from '@tinybubbles/core';
 
 // Device-local UI-session state (P14): which screen was open and when it was
 // last seen. Never part of the synced settings document.
-const LAST_VIEW_STORAGE_KEY = 'mindwtr-last-view';
+const LAST_VIEW_STORAGE_KEY = 'tinybubbles-last-view';
 
 // Settings is a transient destination and Obsidian depends on device config;
 // both fall back to the default view instead of restoring. Exported so

@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/react';
 import { useCallback, useEffect, useState } from 'react';
-import { useTaskStore } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 import { LanguageProvider } from './language-context';
 import { useTaskListScope } from '../components/views/list/task-list-scope';
 import { KeybindingProvider } from './keybinding-context';
 import { useKeybindings } from './keybinding-context';
 import { useUiStore } from '../store/ui-store';
-import { AREA_FILTER_ALL } from '@mindwtr/core';
+import { AREA_FILTER_ALL } from '@tinybubbles/core';
 
 const DummyList = ({ focusAddInput, openSelected, setStatusSelected }: { focusAddInput?: () => boolean; openSelected?: () => void; setStatusSelected?: (status: string) => void } = {}) => {
     const { registerTaskListScope } = useKeybindings();
@@ -197,7 +197,7 @@ describe('KeybindingProvider (vim)', () => {
 
     it('triggers quick add with Ctrl+Alt+M', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -210,13 +210,13 @@ describe('KeybindingProvider (vim)', () => {
         fireEvent.keyDown(window, { key: 'm', code: 'KeyM', ctrlKey: true, altKey: true });
 
         expect(quickAddListener).toHaveBeenCalledTimes(1);
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it.each(['vim', 'emacs'] as const)('a focuses the scope add input instead of the global quick add in %s style (#978)', (style) => {
         const focusAddInput = vi.fn(() => true);
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
         useTaskStore.setState((state) => ({
             settings: {
                 ...state.settings,
@@ -236,13 +236,13 @@ describe('KeybindingProvider (vim)', () => {
 
         expect(focusAddInput).toHaveBeenCalledTimes(1);
         expect(quickAddListener).not.toHaveBeenCalled();
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('a clicks the view add-task trigger when the scope has no add input (#978)', () => {
         const quickAddListener = vi.fn();
         const triggerClick = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
         useTaskStore.setState((state) => ({
             settings: {
                 ...state.settings,
@@ -265,12 +265,12 @@ describe('KeybindingProvider (vim)', () => {
 
         expect(triggerClick).toHaveBeenCalledTimes(1);
         expect(quickAddListener).not.toHaveBeenCalled();
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('a falls back to the global quick add when the view has no add affordance', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
         useTaskStore.setState((state) => ({
             settings: {
                 ...state.settings,
@@ -289,12 +289,12 @@ describe('KeybindingProvider (vim)', () => {
         fireEvent.keyDown(window, { key: 'a' });
 
         expect(quickAddListener).toHaveBeenCalledTimes(1);
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('does not use o as an add-task shortcut', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -307,7 +307,7 @@ describe('KeybindingProvider (vim)', () => {
         fireEvent.keyDown(window, { key: 'o' });
 
         expect(quickAddListener).not.toHaveBeenCalled();
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('opens settings with Cmd+,', () => {
@@ -327,7 +327,7 @@ describe('KeybindingProvider (vim)', () => {
 
     it('dispatches global edit cancel on Escape while editing', () => {
         const cancelListener = vi.fn();
-        window.addEventListener('mindwtr:cancel-task-edit', cancelListener);
+        window.addEventListener('tinybubbles:cancel-task-edit', cancelListener);
         useUiStore.setState({ editingTaskId: 'task-123' });
 
         render(
@@ -343,7 +343,7 @@ describe('KeybindingProvider (vim)', () => {
         expect(cancelListener).toHaveBeenCalledTimes(1);
         const event = cancelListener.mock.calls[0]?.[0] as CustomEvent<{ taskId: string }>;
         expect(event.detail.taskId).toBe('task-123');
-        window.removeEventListener('mindwtr:cancel-task-edit', cancelListener);
+        window.removeEventListener('tinybubbles:cancel-task-edit', cancelListener);
     });
 
     it('switches the global area filter with a number chord in sidebar order', async () => {
@@ -584,7 +584,7 @@ describe('KeybindingProvider (vim)', () => {
             },
         }));
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -604,7 +604,7 @@ describe('KeybindingProvider (vim)', () => {
         await waitFor(() => {
             expect(useTaskStore.getState().settings?.filters?.areaId).toBe('area-home');
         });
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('can switch area filters repeatedly with A number chords', async () => {
@@ -960,7 +960,7 @@ describe('KeybindingProvider (vim)', () => {
     it('finishes the status chord with a as archived instead of opening quick add', () => {
         const setStatusSelected = vi.fn();
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -976,7 +976,7 @@ describe('KeybindingProvider (vim)', () => {
 
         expect(setStatusSelected).toHaveBeenCalledWith('archived');
         expect(quickAddListener).not.toHaveBeenCalled();
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('does not navigate when s starts the status chord after g navigation chords', () => {
@@ -1002,7 +1002,7 @@ describe('KeybindingProvider (vim)', () => {
     it('focuses the add-task input with Insert', () => {
         const focusAddInput = vi.fn(() => true);
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -1017,13 +1017,13 @@ describe('KeybindingProvider (vim)', () => {
 
         expect(focusAddInput).toHaveBeenCalledTimes(1);
         expect(quickAddListener).not.toHaveBeenCalled();
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('falls back to quick add on Insert when the registered list has no add input', () => {
         const focusAddInput = vi.fn(() => false);
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -1038,12 +1038,12 @@ describe('KeybindingProvider (vim)', () => {
 
         expect(focusAddInput).toHaveBeenCalledTimes(1);
         expect(quickAddListener).toHaveBeenCalledTimes(1);
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('falls back to quick add on Insert when the scope has no add input', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         render(
             <LanguageProvider>
@@ -1057,7 +1057,7 @@ describe('KeybindingProvider (vim)', () => {
         fireEvent.keyDown(window, { key: 'Insert' });
 
         expect(quickAddListener).toHaveBeenCalledTimes(1);
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('moves the selected task with the status chord and offers undo', async () => {

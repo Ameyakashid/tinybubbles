@@ -4,8 +4,8 @@ import {
     runDataTransferTransactionWithoutSnapshot,
     setStorageAdapter,
     useTaskStore,
-} from '@mindwtr/core';
-import type { AppData, StorageAdapter } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { AppData, StorageAdapter } from '@tinybubbles/core';
 import {
     __localDataWatcherTestUtils,
     createLocalDataWatcherController,
@@ -180,15 +180,15 @@ describe('local-data-watcher', () => {
             logWarn: () => undefined,
         });
 
-        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
-        expect(watchFile.mock.calls.map(([path]) => path)).toEqual(['/tmp/mindwtr/data.json', '/tmp/mindwtr']);
+        await controller.start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
+        expect(watchFile.mock.calls.map(([path]) => path)).toEqual(['/tmp/tinybubbles/data.json', '/tmp/tinybubbles']);
 
         await flushScheduledTimers();
 
         expect(watchFile.mock.calls.map(([path]) => path)).toEqual([
-            '/tmp/mindwtr/data.json',
-            '/tmp/mindwtr',
-            '/tmp/mindwtr',
+            '/tmp/tinybubbles/data.json',
+            '/tmp/tinybubbles',
+            '/tmp/tinybubbles',
         ]);
         controller.stop();
         expect(dataUnwatch).toHaveBeenCalledTimes(1);
@@ -215,13 +215,13 @@ describe('local-data-watcher', () => {
             logWarn: () => undefined,
         });
 
-        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await controller.start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
         await flushScheduledTimers();
 
         expect(watchFile.mock.calls.map(([path]) => path)).toEqual([
-            '/tmp/mindwtr/data.json',
-            '/tmp/mindwtr',
-            '/tmp/mindwtr/data.json',
+            '/tmp/tinybubbles/data.json',
+            '/tmp/tinybubbles',
+            '/tmp/tinybubbles/data.json',
         ]);
         controller.stop();
         expect(dataUnwatch).toHaveBeenCalledTimes(1);
@@ -245,7 +245,7 @@ describe('local-data-watcher', () => {
             logWarn: () => undefined,
         });
 
-        const starting = controller.start('/tmp/mindwtr/data.json');
+        const starting = controller.start('/tmp/tinybubbles/data.json');
         controller.stop();
         resolveRegistration?.(lateUnwatch);
         await starting;
@@ -276,8 +276,8 @@ describe('local-data-watcher', () => {
             logWarn: () => undefined,
         });
 
-        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
-        callbacks[1]?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        await controller.start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
+        callbacks[1]?.({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
 
         expect(() => controller.stop()).not.toThrow();
         expect(dataUnwatch).toHaveBeenCalledTimes(1);
@@ -305,18 +305,18 @@ describe('local-data-watcher', () => {
             logWarn: () => undefined,
         });
 
-        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await controller.start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
         const staleSqliteCallback = callbacks[1];
         controller.stop();
 
-        staleSqliteCallback?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        staleSqliteCallback?.({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         expect(scheduledTimers.size).toBe(0);
 
-        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
-        staleSqliteCallback?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        await controller.start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
+        staleSqliteCallback?.({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         expect(scheduledTimers.size).toBe(0);
 
-        callbacks[3]?.({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        callbacks[3]?.({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         expect(scheduledTimers.size).toBe(1);
         controller.stop();
     });
@@ -472,7 +472,7 @@ describe('local-data-watcher', () => {
             logWarn: () => undefined,
         });
 
-        await controller.start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await controller.start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
         expect(() => controller.stop()).not.toThrow();
         expect(cancelSchedule).toHaveBeenCalledTimes(1);
@@ -565,8 +565,8 @@ describe('local-data-watcher', () => {
         await flushNextSqliteTimer();
         expect(refreshStorageData).toHaveBeenCalledTimes(3);
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushNextSqliteTimer();
         await flushNextSqliteTimer();
         await flushNextSqliteTimer();
@@ -615,11 +615,11 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
-        expect(watchers.map((watcher) => watcher.path)).toEqual(['/tmp/mindwtr/data.json', '/tmp/mindwtr']);
+        expect(watchers.map((watcher) => watcher.path)).toEqual(['/tmp/tinybubbles/data.json', '/tmp/tinybubbles']);
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
         await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
@@ -698,7 +698,7 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
         const documentWrite = runDataTransferTransactionWithoutSnapshot({
             operation: 'test concurrent document write',
@@ -716,7 +716,7 @@ describe('local-data-watcher', () => {
         });
 
         await documentWriteStarted;
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
 
         try {
             await flushScheduledTimers();
@@ -750,14 +750,14 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-shm'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-shm'] });
         await flushScheduledTimers();
 
         expect(refreshStorageData).not.toHaveBeenCalled();
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
         await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
@@ -779,14 +779,14 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
         markLocalSqliteWrite();
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         expect(refreshStorageData).not.toHaveBeenCalled();
 
         nowMs = 2100;
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         expect(refreshStorageData).not.toHaveBeenCalled();
 
         nowMs = 15100;
@@ -812,22 +812,22 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
         await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
         await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(2);
 
         nowMs = 2100;
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(3);
@@ -871,14 +871,14 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
         await firstRefreshStarted;
 
         diskTasks = [externalTask];
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
 
         releaseFirstRefresh?.();
         await __localDataWatcherTestUtils.waitForPendingSqliteRefreshForTests();
@@ -916,16 +916,16 @@ describe('local-data-watcher', () => {
             logInfo,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
         logInfo.mockClear();
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
         expect(logInfo).not.toHaveBeenCalledWith('[local-data-watcher] Refreshed after SQLite change');
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);
@@ -946,11 +946,11 @@ describe('local-data-watcher', () => {
             refreshStorageData,
         });
 
-        await start('/tmp/mindwtr/data.json', '/tmp/mindwtr/mindwtr.db');
+        await start('/tmp/tinybubbles/data.json', '/tmp/tinybubbles/tinybubbles.db');
 
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         markLocalSqliteWrite();
-        watchers[1]?.callback({ paths: ['/tmp/mindwtr/mindwtr.db-wal'] });
+        watchers[1]?.callback({ paths: ['/tmp/tinybubbles/tinybubbles.db-wal'] });
         await flushScheduledTimers();
 
         expect(refreshStorageData).toHaveBeenCalledTimes(1);

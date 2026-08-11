@@ -25,7 +25,7 @@ describe('android-system-bars plugin', () => {
     expect(getColors(setSystemBarColor(colors, DARK_BACKGROUND))[SYSTEM_BAR_BACKGROUND]).toBe(DARK_BACKGROUND);
   });
 
-  it('points Android status and navigation bars at the Mindwtr theme resource', () => {
+  it('points Android status and navigation bars at the Tiny Bubbles theme resource', () => {
     const styles = {
       resources: {
         style: [

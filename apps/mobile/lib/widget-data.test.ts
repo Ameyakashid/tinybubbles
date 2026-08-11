@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 import { buildShortcutsSnapshot, buildWidgetPayload, resolveWidgetLanguage, SHORTCUTS_SNAPSHOT_ITEM_CAP, SHORTCUTS_SNAPSHOT_PROJECT_CAP } from './widget-data';
 
 const baseData: AppData = {

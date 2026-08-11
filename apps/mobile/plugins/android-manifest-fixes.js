@@ -5,11 +5,11 @@ const MAIN_ACTIVITY = '.MainActivity';
 // Fully qualified: these classes live in the local context-automation Expo
 // module (apps/mobile/modules/context-automation), not the app's own package,
 // so the manifest-relative `.ClassName` shorthand no longer resolves.
-const CONTEXT_AUTOMATION_HEADLESS_SERVICE = 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationHeadlessService';
-const CONTEXT_AUTOMATION_RECEIVER = 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationReceiver';
+const CONTEXT_AUTOMATION_HEADLESS_SERVICE = 'app.tinybubbles.contextautomation.ContextAutomationHeadlessService';
+const CONTEXT_AUTOMATION_RECEIVER = 'app.tinybubbles.contextautomation.ContextAutomationReceiver';
 const CONTEXT_INTENT_ACTIONS = [
-  'tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT',
-  'tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT',
+  'app.tinybubbles.action.ACTIVATE_CONTEXT',
+  'app.tinybubbles.action.DEACTIVATE_CONTEXT',
 ];
 const GMS_MODULE_DEPENDENCIES_SERVICE = 'com.google.android.gms.metadata.ModuleDependencies';
 const PERMISSIONS_TO_REMOVE = [
@@ -69,15 +69,15 @@ const ensureContextIntentFilters = (activity) => {
   if (!filters.some((filter) => hasContextIntentFilter(filter))) {
     filters.push(buildContextIntentFilter());
   }
-  if (!filters.some((filter) => hasContextIntentFilter(filter, { dataScheme: 'mindwtr' }))) {
-    filters.push(buildContextIntentFilter({ dataScheme: 'mindwtr' }));
+  if (!filters.some((filter) => hasContextIntentFilter(filter, { dataScheme: 'tinybubbles' }))) {
+    filters.push(buildContextIntentFilter({ dataScheme: 'tinybubbles' }));
   }
 };
 
 const removeContextIntentFilters = (activity) => {
   if (!Array.isArray(activity['intent-filter'])) return;
   activity['intent-filter'] = activity['intent-filter'].filter((filter) => (
-    !hasContextIntentFilter(filter) && !hasContextIntentFilter(filter, { dataScheme: 'mindwtr' })
+    !hasContextIntentFilter(filter) && !hasContextIntentFilter(filter, { dataScheme: 'tinybubbles' })
   ));
 };
 

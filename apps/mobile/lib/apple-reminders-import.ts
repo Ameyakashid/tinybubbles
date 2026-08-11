@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
-import type { StoreActionResult, Task } from '@mindwtr/core';
+import type { StoreActionResult, Task } from '@tinybubbles/core';
 
-export const APPLE_REMINDERS_IMPORT_SETTINGS_KEY = 'mindwtr-apple-reminders-import-v1';
+export const APPLE_REMINDERS_IMPORT_SETTINGS_KEY = 'tinybubbles-apple-reminders-import-v1';
 
 export type AppleRemindersPermissionStatus = 'unavailable' | 'undetermined' | 'granted' | 'denied';
 

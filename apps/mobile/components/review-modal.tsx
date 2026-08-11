@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatI18nTemplate, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
+import { formatI18nTemplate, safeFormatDate, safeParseDate, type Task } from '@tinybubbles/core';
 import {
     Brain,
     Calendar as CalendarIcon,

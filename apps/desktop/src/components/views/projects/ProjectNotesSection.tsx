@@ -11,7 +11,7 @@ import {
     type MarkdownToolbarActionId,
     type MarkdownToolbarResult,
     type Project,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { ExpandedMarkdownEditor } from '../../ExpandedMarkdownEditor';
 import { MarkdownFormatToolbar } from '../../MarkdownFormatToolbar';

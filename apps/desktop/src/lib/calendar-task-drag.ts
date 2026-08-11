@@ -1,8 +1,8 @@
-export const CALENDAR_TASK_DRAG_MIME = 'application/x-mindwtr-task-id';
-export const CALENDAR_TASK_DRAG_KIND_MIME = 'application/x-mindwtr-calendar-item-kind';
+export const CALENDAR_TASK_DRAG_MIME = 'application/x-tinybubbles-task-id';
+export const CALENDAR_TASK_DRAG_KIND_MIME = 'application/x-tinybubbles-calendar-item-kind';
 
-const CALENDAR_TASK_DRAG_TEXT_PREFIX = 'mindwtr-task:';
-const CALENDAR_TASK_DRAG_PREVIEW_CLASS = 'mindwtr-calendar-drag-preview';
+const CALENDAR_TASK_DRAG_TEXT_PREFIX = 'tinybubbles-task:';
+const CALENDAR_TASK_DRAG_PREVIEW_CLASS = 'tinybubbles-calendar-drag-preview';
 
 type CalendarTaskDragDataTransfer = Pick<DataTransfer, 'getData' | 'setData'> & {
     dropEffect?: DataTransfer['dropEffect'];

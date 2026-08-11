@@ -9,7 +9,7 @@ import {
     summarizeMergeStats,
     translateWithFallback,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useMobileSyncBadge } from '@/hooks/use-mobile-sync-badge';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -260,7 +260,7 @@ function SyncSettingsView({
         if (pendingRemoteDeleteCount === 0) return;
         Alert.alert(
             tr('settings.syncMobile.clearPendingAttachmentDeletes'),
-            tr('settings.syncMobile.onlyClearTheseIfYouNoLongerWantMindwtrTo'),
+            tr('settings.syncMobile.onlyClearTheseIfYouNoLongerWantTinyBubblesTo'),
             [
                 { text: t('common.cancel'), style: 'cancel' },
                 {
@@ -424,7 +424,7 @@ function SyncSettingsView({
         handleBackup,
         handleClearLog,
         handleImportDgt,
-        handleImportMindwtrCsv,
+        handleImportTinyBubblesCsv,
         handleImportOmniFocus,
         handleImportTickTick,
         handleImportTodoist,
@@ -862,7 +862,7 @@ function SyncSettingsView({
                             handleAddGettingStartedContent={() => handleAddGettingStartedContent()}
                             handleBackup={() => void handleBackup()}
                             handleImportDgt={() => void handleImportDgt()}
-                            handleImportMindwtrCsv={() => void handleImportMindwtrCsv()}
+                            handleImportTinyBubblesCsv={() => void handleImportTinyBubblesCsv()}
                             handleImportOmniFocus={() => void handleImportOmniFocus()}
                             handleImportTickTick={() => void handleImportTickTick()}
                             handleImportTodoist={() => void handleImportTodoist()}

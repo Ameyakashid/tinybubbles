@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-pub(crate) const DEFAULT_OBSIDIAN_INBOX_FILE: &str = "Mindwtr/Inbox.md";
+pub(crate) const DEFAULT_OBSIDIAN_INBOX_FILE: &str = "Tiny Bubbles/Inbox.md";
 
 pub(crate) fn default_obsidian_inbox_file() -> String {
     DEFAULT_OBSIDIAN_INBOX_FILE.to_string()

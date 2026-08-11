@@ -9,8 +9,8 @@ import {
     setSessionSecret,
 } from './secure-secret-store';
 
-const DROPBOX_SECURESTORE_TOKENS_KEY = 'mindwtr_dropbox_tokens';
-const DROPBOX_ASYNC_TOKENS_KEY = '@mindwtr_dropbox_tokens';
+const DROPBOX_SECURESTORE_TOKENS_KEY = 'tinybubbles_dropbox_tokens';
+const DROPBOX_ASYNC_TOKENS_KEY = '@tinybubbles_dropbox_tokens';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
 
 export interface DropboxAuthTokens {

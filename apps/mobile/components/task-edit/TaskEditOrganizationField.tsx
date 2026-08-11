@@ -7,7 +7,7 @@ import {
     parseTimeEstimateInput,
     timeEstimateToMinutes,
     translateWithFallback,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { TaskEditFieldRendererProps } from './TaskEditFieldRenderer.types';
 import { CompactText } from '@/components/compact-text';

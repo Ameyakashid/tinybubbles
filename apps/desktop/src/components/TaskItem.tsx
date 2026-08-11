@@ -26,7 +26,7 @@ import {
     areDraftAttachmentsDirty,
     isTaskDraftDirty,
     type TaskDraftSetter,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { cn } from '../lib/utils';
 import { useObsidianStore } from '../store/obsidian-store';
 import { useLanguage } from '../contexts/language-context';
@@ -717,7 +717,7 @@ export const TaskItem = memo(function TaskItem({
             dispatchNavigateEvent('projects');
             if (typeof window !== 'undefined') {
                 window.setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+                    window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                         detail: {
                             initialProps: {
                                 projectId: result.id,
@@ -1145,8 +1145,8 @@ export const TaskItem = memo(function TaskItem({
             if (detail?.taskId && detail.taskId !== task.id) return;
             handleEditorCancel();
         };
-        window.addEventListener('mindwtr:cancel-task-edit', handleGlobalCancel);
-        return () => window.removeEventListener('mindwtr:cancel-task-edit', handleGlobalCancel);
+        window.addEventListener('tinybubbles:cancel-task-edit', handleGlobalCancel);
+        return () => window.removeEventListener('tinybubbles:cancel-task-edit', handleGlobalCancel);
     }, [handleEditorCancel, isEditing, task.id]);
     const renderEditor = () => (
         <TaskItemEditor

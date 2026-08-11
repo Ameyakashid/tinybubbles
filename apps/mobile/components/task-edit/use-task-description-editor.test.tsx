@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useTaskStore, type Task } from '@mindwtr/core';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 
 import { useTaskDescriptionEditor, type TaskDescriptionEditor } from './use-task-description-editor';
 

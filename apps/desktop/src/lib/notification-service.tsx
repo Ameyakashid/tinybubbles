@@ -14,8 +14,8 @@ import {
     loadTranslations,
     loadStoredLanguageSync,
     getSystemDefaultLanguage,
-} from '@mindwtr/core';
-import { useTaskStore } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import { useTaskStore } from '@tinybubbles/core';
 import { isFlatpakRuntime, isTauriRuntime } from './runtime';
 import { invokeNative } from './tauri-invoke';
 

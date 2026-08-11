@@ -1,6 +1,6 @@
-Votre tête vous rappelle toujours les choses au pire moment. Mindwtr leur donne un endroit sûr.
+Votre tête vous rappelle toujours les choses au pire moment. Tiny Bubbles leur donne un endroit sûr.
 
-Mindwtr est une application de tâches gratuite et open source fondée sur la méthode Getting Things Done (GTD). Notez chaque tâche et chaque idée dès qu'elle surgit, triez-les en quelques secondes, puis ne voyez que ce que vous pouvez faire maintenant. Pas de compte, pas d'abonnement, et vos données restent sur votre appareil.
+Tiny Bubbles est une application de tâches gratuite et open source fondée sur la méthode Getting Things Done (GTD). Notez chaque tâche et chaque idée dès qu'elle surgit, triez-les en quelques secondes, puis ne voyez que ce que vous pouvez faire maintenant. Pas de compte, pas d'abonnement, et vos données restent sur votre appareil.
 
 COMMENT ÇA MARCHE
 
@@ -9,9 +9,9 @@ COMMENT ÇA MARCHE
 3. Agissez. La vue Focus ne montre que ce que vous pouvez faire maintenant, rien d'autre.
 4. Faites le point chaque semaine. Une revue guidée rattrape ce qui traîne : la liste reste fiable, votre tête reste claire.
 
-Nouveau avec GTD ? L'idée est simple : votre tête sert à avoir des idées, pas à les retenir. Mindwtr vous guide à chaque étape.
+Nouveau avec GTD ? L'idée est simple : votre tête sert à avoir des idées, pas à les retenir. Tiny Bubbles vous guide à chaque étape.
 
-POURQUOI MINDWTR
+POURQUOI TINYBUBBLES
 
 - Fonctionne entièrement hors ligne. Aucun compte requis.
 - Vos tâches restent sur votre appareil. La synchronisation est optionnelle et vous choisissez où : Dropbox, un dossier à vous, WebDAV, votre propre serveur, ou iCloud sur les appareils Apple.
@@ -26,4 +26,4 @@ SIMPLE PAR DÉFAUT, PUISSANT QUAND IL FAUT
 
 Moins de champs, moins de réglages, pas de fouillis. Les outils avancés, comme le kanban, l'automatisation et un assistant IA optionnel (avec votre propre compte IA), restent cachés jusqu'à ce que vous en ayez besoin.
 
-Mindwtr signifie « mind like water » : le calme qu'on ressent quand plus rien ne tourne en boucle dans la tête.
+Tiny Bubbles signifie « mind like water » : le calme qu'on ressent quand plus rien ne tourne en boucle dans la tête.

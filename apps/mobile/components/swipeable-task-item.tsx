@@ -15,8 +15,8 @@ import {
     tFallback,
     undoTaskCompletion,
     useTaskStore,
-} from '@mindwtr/core';
-import type { Area, Project, ProjectSequenceTaskCue, Task, TaskStatus } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { Area, Project, ProjectSequenceTaskCue, Task, TaskStatus } from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import React, { useCallback, useRef, useState } from 'react';
 import { ArrowRight, Check, RotateCcw, Trash2 } from 'lucide-react-native';

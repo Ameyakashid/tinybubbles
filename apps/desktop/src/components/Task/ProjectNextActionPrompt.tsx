@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { translateWithFallback, type Task } from '@mindwtr/core';
+import { translateWithFallback, type Task } from '@tinybubbles/core';
 import { Button } from '../ui/Button';
 import { Dialog, DialogBody, DialogHeader } from '../ui/Dialog';
 

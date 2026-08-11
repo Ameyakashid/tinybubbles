@@ -1,4 +1,4 @@
-import type { AppData, Attachment } from '@mindwtr/core';
+import type { AppData, Attachment } from '@tinybubbles/core';
 import {
   getErrorStatus,
   isWebdavRateLimitedError,
@@ -8,7 +8,7 @@ import {
   webdavMakeDirectory,
   webdavPutFile,
   withRetry,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { sanitizeLogMessage } from '../app-log';
 import {
   ATTACHMENTS_DIR_NAME,

@@ -1,11 +1,11 @@
 import { Platform } from 'react-native';
 
-const STARTUP_TAG = 'MindwtrStartup';
+const STARTUP_TAG = 'TinyBubblesStartup';
 const moduleLoadedAtMs = Date.now();
 const profilingEnv = String(process.env.EXPO_PUBLIC_STARTUP_PROFILING || '').trim().toLowerCase();
 const startupProfilingEnabled = Platform.OS === 'android' && (profilingEnv === '1' || profilingEnv === 'true');
 if (startupProfilingEnabled) {
-  (globalThis as Record<string, unknown>).__MINDWTR_STARTUP_PROFILING__ = true;
+  (globalThis as Record<string, unknown>).__TINYBUBBLES_STARTUP_PROFILING__ = true;
 }
 
 const serializeExtra = (extra?: Record<string, unknown>): string => {

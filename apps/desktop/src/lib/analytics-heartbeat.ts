@@ -4,14 +4,14 @@ import {
     resetHeartbeatOptOutMarker,
     sendDailyHeartbeat,
     sendHeartbeatOptOut,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { getInstallSourceOrFallback, isTauriRuntime } from './runtime';
 import { invokeNative } from './tauri-invoke';
 import { normalizeAnalyticsInstallChannel } from './install-source';
 import { webStorage } from './storage-adapter-web';
 
-const ANALYTICS_DISTINCT_ID_KEY = 'mindwtr-analytics-distinct-id';
+const ANALYTICS_DISTINCT_ID_KEY = 'tinybubbles-analytics-distinct-id';
 const ANALYTICS_HEARTBEAT_URL = String(import.meta.env.VITE_ANALYTICS_HEARTBEAT_URL || '').trim();
 const ANALYTICS_RELEASE_VERSION = String(
     import.meta.env.VITE_ANALYTICS_RELEASE_VERSION || import.meta.env.VITE_RELEASE_VERSION || ''

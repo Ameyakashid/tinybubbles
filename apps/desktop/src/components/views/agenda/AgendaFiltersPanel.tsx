@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import type { MultiValueFilterMatchMode, SortField, TaskEnergyLevel, TaskPriority, TimeEstimate } from '@mindwtr/core';
+import type { MultiValueFilterMatchMode, SortField, TaskEnergyLevel, TaskPriority, TimeEstimate } from '@tinybubbles/core';
 import { Filter, Save, X } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';

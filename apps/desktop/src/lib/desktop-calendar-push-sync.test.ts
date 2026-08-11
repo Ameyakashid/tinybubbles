@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useTaskStore, type CalendarSyncEntry, type Project, type Section, type Task } from '@mindwtr/core';
+import { useTaskStore, type CalendarSyncEntry, type Project, type Section, type Task } from '@tinybubbles/core';
 
 import {
     __desktopCalendarPushSyncTestUtils,
@@ -55,12 +55,12 @@ describe('desktop calendar push sync', () => {
     let getAllSyncEntries: ReturnType<typeof vi.fn<(platform: string) => Promise<CalendarSyncEntry[]>>>;
     let getTargetCalendarId: ReturnType<typeof vi.fn<() => Promise<string | null>>>;
     let getTargets: ReturnType<typeof vi.fn<() => Promise<SystemCalendarPushTarget[]>>>;
-    let ensureMindwtrCalendar: ReturnType<typeof vi.fn<() => Promise<SystemCalendarPushTarget | null>>>;
+    let ensureTinyBubblesCalendar: ReturnType<typeof vi.fn<() => Promise<SystemCalendarPushTarget | null>>>;
 
     const managedTarget: SystemCalendarPushTarget = {
-        id: 'cal-mindwtr',
-        name: 'Mindwtr',
-        isMindwtrDedicated: true,
+        id: 'cal-tinybubbles',
+        name: 'Tiny Bubbles',
+        isTinyBubblesDedicated: true,
     };
 
     beforeEach(() => {
@@ -78,7 +78,7 @@ describe('desktop calendar push sync', () => {
         getAllSyncEntries = vi.fn(async () => []);
         getTargetCalendarId = vi.fn(async () => null);
         getTargets = vi.fn(async () => [managedTarget]);
-        ensureMindwtrCalendar = vi.fn(async () => managedTarget);
+        ensureTinyBubblesCalendar = vi.fn(async () => managedTarget);
 
         __desktopCalendarPushSyncTestUtils.setDependenciesForTests({
             createEvent,
@@ -90,7 +90,7 @@ describe('desktop calendar push sync', () => {
             getAllSyncEntries,
             getTargetCalendarId,
             getTargets,
-            ensureMindwtrCalendar,
+            ensureTinyBubblesCalendar,
             getManagedCalendarId: async () => null,
             getPermissionStatus: async () => 'granted',
             getPlatform: () => 'macos',
@@ -102,14 +102,14 @@ describe('desktop calendar push sync', () => {
         });
     });
 
-    it('creates all-day events for due-date tasks in the managed Mindwtr calendar', async () => {
+    it('creates all-day events for due-date tasks in the managed Tiny Bubbles calendar', async () => {
         setStoreTasks([makeTask({ dueDate: '2026-01-10' })]);
 
         await runFullDesktopCalendarPushSync();
 
-        expect(ensureMindwtrCalendar).toHaveBeenCalledTimes(1);
+        expect(ensureTinyBubblesCalendar).toHaveBeenCalledTimes(1);
         expect(createEvent).toHaveBeenCalledWith(expect.objectContaining({
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             title: 'Plan review',
             startDate: '2026-01-10',
             endDate: '2026-01-11',
@@ -118,7 +118,7 @@ describe('desktop calendar push sync', () => {
         expect(upsertSyncEntry).toHaveBeenCalledWith(expect.objectContaining({
             taskId: 'task-1',
             calendarEventId: 'event-new',
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             platform: 'macos',
         }));
     });
@@ -173,7 +173,7 @@ describe('desktop calendar push sync', () => {
         getTargets.mockResolvedValue([{
             id: 'cal-shared',
             name: 'Work',
-            isMindwtrDedicated: false,
+            isTinyBubblesDedicated: false,
         }]);
         setStoreTasks([makeTask({ startTime: '2026-01-10T09:00:00' })]);
 
@@ -181,7 +181,7 @@ describe('desktop calendar push sync', () => {
 
         expect(createEvent).toHaveBeenCalledWith(expect.objectContaining({
             calendarId: 'cal-shared',
-            title: 'Mindwtr: Plan review',
+            title: 'Tiny Bubbles: Plan review',
             allDay: false,
         }));
     });
@@ -198,7 +198,7 @@ describe('desktop calendar push sync', () => {
         await runFullDesktopCalendarPushSync();
 
         expect(createEvent).toHaveBeenCalledWith(expect.objectContaining({
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             title: 'Monthly bill (Feb 10, 2026)',
             notes: expect.stringContaining('Projected recurring occurrence for Feb 10, 2026'),
         }));
@@ -208,7 +208,7 @@ describe('desktop calendar push sync', () => {
         const entry: CalendarSyncEntry = {
             taskId: 'task-1',
             calendarEventId: 'event-old',
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             platform: 'macos',
             lastSyncedAt: '2026-01-01T00:00:00.000Z',
         };
@@ -226,7 +226,7 @@ describe('desktop calendar push sync', () => {
         const entry: CalendarSyncEntry = {
             taskId: 'task-1',
             calendarEventId: 'event-old',
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             platform: 'macos',
             lastSyncedAt: '2026-01-01T00:00:00.000Z',
         };
@@ -245,7 +245,7 @@ describe('desktop calendar push sync', () => {
         const entry: CalendarSyncEntry = {
             taskId: 'task-1',
             calendarEventId: 'event-old',
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             platform: 'macos',
             lastSyncedAt: '2026-01-01T00:00:00.000Z',
         };
@@ -256,7 +256,7 @@ describe('desktop calendar push sync', () => {
         await runFullDesktopCalendarPushSync();
 
         expect(updateEvent).toHaveBeenCalledWith('event-old', expect.objectContaining({
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
         }));
         expect(createEvent).not.toHaveBeenCalled();
         expect(upsertSyncEntry).not.toHaveBeenCalled();
@@ -267,7 +267,7 @@ describe('desktop calendar push sync', () => {
         const entry: CalendarSyncEntry = {
             taskId: 'task-1',
             calendarEventId: 'event-old',
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             platform: 'macos',
             lastSyncedAt: '2026-01-01T00:00:00.000Z',
         };
@@ -279,7 +279,7 @@ describe('desktop calendar push sync', () => {
 
         expect(deleteSyncEntry).toHaveBeenCalledWith('task-1', 'macos');
         expect(createEvent).toHaveBeenCalledWith(expect.objectContaining({
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
         }));
         expect(upsertSyncEntry).toHaveBeenCalledWith(expect.objectContaining({
             calendarEventId: 'event-new',
@@ -290,7 +290,7 @@ describe('desktop calendar push sync', () => {
         getAllSyncEntries.mockResolvedValue([{
             taskId: 'ghost-task',
             calendarEventId: 'event-ghost',
-            calendarId: 'cal-mindwtr',
+            calendarId: 'cal-tinybubbles',
             platform: 'macos',
             lastSyncedAt: '2026-01-01T00:00:00.000Z',
         }]);

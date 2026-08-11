@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isBareFileReference } from './attachment-reference';
 
-const managedDirPrefix = 'C:/Users/me/AppData/Roaming/mindwtr/attachments/';
+const managedDirPrefix = 'C:/Users/me/AppData/Roaming/tinybubbles/attachments/';
 
 describe('isBareFileReference', () => {
     it('flags file attachments pointing outside the managed attachments dir with no cloud copy', () => {
@@ -20,14 +20,14 @@ describe('isBareFileReference', () => {
         )).toBe(true);
         // Prefix match must not bleed into sibling directories.
         expect(isBareFileReference(
-            { kind: 'file', uri: 'C:\\Users\\me\\AppData\\Roaming\\mindwtr\\attachments-old\\id.pdf' },
+            { kind: 'file', uri: 'C:\\Users\\me\\AppData\\Roaming\\tinybubbles\\attachments-old\\id.pdf' },
             managedDirPrefix,
         )).toBe(true);
     });
 
     it('treats managed copies, synced files, links, and remote uris as owned', () => {
         expect(isBareFileReference(
-            { kind: 'file', uri: 'C:\\Users\\me\\AppData\\Roaming\\mindwtr\\attachments\\id.pdf' },
+            { kind: 'file', uri: 'C:\\Users\\me\\AppData\\Roaming\\tinybubbles\\attachments\\id.pdf' },
             managedDirPrefix,
         )).toBe(false);
         expect(isBareFileReference(

@@ -5,16 +5,16 @@ import {
     type AppSettings,
     type CloudProvider,
     type FastSyncState,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { CloudConfig, WebDavConfig } from './sync-attachment-backends';
 import type { SyncBackend } from './sync-service-utils';
 
-export { hasPendingSyncSideEffects } from '@mindwtr/core';
-export type { FastSyncState } from '@mindwtr/core';
+export { hasPendingSyncSideEffects } from '@tinybubbles/core';
+export type { FastSyncState } from '@tinybubbles/core';
 
-const FAST_SYNC_STATE_KEY = 'mindwtr-fast-sync-state-v1';
-const LOCAL_SYNC_STATUS_KEY = 'mindwtr-local-sync-status-v1';
+const FAST_SYNC_STATE_KEY = 'tinybubbles-fast-sync-state-v1';
+const LOCAL_SYNC_STATUS_KEY = 'tinybubbles-local-sync-status-v1';
 type LocalSyncStatus = Pick<AppSettings, 'lastSyncAt' | 'lastSyncStatus' | 'lastSyncError' | 'lastSyncStats' | 'lastSyncHistory'>;
 
 type FastSyncScopeContext = {

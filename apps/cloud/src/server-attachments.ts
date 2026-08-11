@@ -10,7 +10,7 @@ import {
     type AppData,
     type PendingRemoteAttachmentDelete,
     type Project,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { corsOrigin, errorResponse, jsonResponse, logFailureWarn } from './server-config';
 import { loadAppData } from './server-data-cache';
 import {
@@ -290,7 +290,7 @@ export async function handleAttachmentPathRequest(
         }
         const body = await readRequestBytes(req, options.maxAttachmentBytes, options.abortSignal);
         if (isBodyReadError(body)) {
-            return errorResponse(body.__mindwtrError.message, body.__mindwtrError.status);
+            return errorResponse(body.__tinybubblesError.message, body.__tinybubblesError.status);
         }
         const blockedSignature = getBlockedAttachmentSignature(body);
         if (blockedSignature) {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { resolveDateLocaleTag, useTaskStore, type AppData } from '@mindwtr/core';
+import { resolveDateLocaleTag, useTaskStore, type AppData } from '@tinybubbles/core';
 
 import type { Language } from '../../../contexts/language-context';
 import type { SettingsNotificationsPageProps } from './SettingsNotificationsPage';

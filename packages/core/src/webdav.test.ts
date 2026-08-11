@@ -281,17 +281,17 @@ describe('webdav http helpers', () => {
             .mockResolvedValueOnce(makeResponse({ ok: true, status: 201, statusText: 'Created' }));
 
         await expect(
-            webdavPutJson('https://example.com/remote.php/dav/files/user/mindwtr/nested/data.json', { ok: true }, { fetcher }),
+            webdavPutJson('https://example.com/remote.php/dav/files/user/tinybubbles/nested/data.json', { ok: true }, { fetcher }),
         ).resolves.toMatchObject({ exists: true, fingerprint: null });
 
         expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({ 'X-NC-WebDAV-AutoMkcol': '1' });
         expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
-            ['https://example.com/remote.php/dav/files/user/mindwtr/nested/data.json', 'PUT'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/nested/', 'MKCOL'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/nested/', 'PROPFIND'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/', 'MKCOL'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/nested/', 'MKCOL'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/nested/data.json', 'PUT'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/nested/data.json', 'PUT'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/nested/', 'MKCOL'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/nested/', 'PROPFIND'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/', 'MKCOL'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/nested/', 'MKCOL'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/nested/data.json', 'PUT'],
         ]);
     });
 
@@ -308,7 +308,7 @@ describe('webdav http helpers', () => {
         }));
 
         await expect(
-            webdavPutJson('https://example.com/mindwtr/data.json', { ok: true }, { fetcher }),
+            webdavPutJson('https://example.com/tinybubbles/data.json', { ok: true }, { fetcher }),
         ).resolves.toMatchObject({
             exists: true,
             fingerprint: 'webdav:v1:etag="put-rev"',
@@ -325,7 +325,7 @@ describe('webdav http helpers', () => {
 
         await expect(
             webdavPutFile(
-                'https://example.com/remote.php/dav/files/user/mindwtr/attachments/doc.txt',
+                'https://example.com/remote.php/dav/files/user/tinybubbles/attachments/doc.txt',
                 new Uint8Array([1, 2, 3]),
                 'text/plain',
                 { fetcher },
@@ -334,9 +334,9 @@ describe('webdav http helpers', () => {
 
         expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({ 'X-NC-WebDAV-AutoMkcol': '1' });
         expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
-            ['https://example.com/remote.php/dav/files/user/mindwtr/attachments/doc.txt', 'PUT'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/attachments/', 'MKCOL'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/attachments/doc.txt', 'PUT'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/attachments/doc.txt', 'PUT'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/attachments/', 'MKCOL'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/attachments/doc.txt', 'PUT'],
         ]);
     });
 
@@ -352,17 +352,17 @@ describe('webdav http helpers', () => {
             .mockResolvedValueOnce(makeResponse({ ok: true, status: 201, statusText: 'Created' }));
 
         await expect(
-            webdavPutJson('https://example.com/remote.php/dav/files/user/mindwtr/data.json', { ok: true }, { fetcher }),
+            webdavPutJson('https://example.com/remote.php/dav/files/user/tinybubbles/data.json', { ok: true }, { fetcher }),
         ).resolves.toMatchObject({ exists: true, fingerprint: null });
 
         expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
-            ['https://example.com/remote.php/dav/files/user/mindwtr/data.json', 'PUT'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/', 'MKCOL'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/', 'PROPFIND'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/data.json', 'PUT'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/', 'MKCOL'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/', 'PROPFIND'],
             ['https://example.com/remote.php/dav/files/user/', 'MKCOL'],
             ['https://example.com/remote.php/dav/files/user/', 'PROPFIND'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/', 'MKCOL'],
-            ['https://example.com/remote.php/dav/files/user/mindwtr/data.json', 'PUT'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/', 'MKCOL'],
+            ['https://example.com/remote.php/dav/files/user/tinybubbles/data.json', 'PUT'],
         ]);
         expect(fetcher.mock.calls[2]?.[1]?.headers).toMatchObject({ Depth: '0' });
         expect(fetcher.mock.calls[4]?.[1]?.headers).toMatchObject({ Depth: '0' });
@@ -377,14 +377,14 @@ describe('webdav http helpers', () => {
             .mockResolvedValueOnce(makeResponse({ ok: true, status: 201, statusText: 'Created' }));
 
         await expect(
-            webdavPutJson('https://example.com/mindwtr/data.json', { ok: true }, { fetcher }),
+            webdavPutJson('https://example.com/tinybubbles/data.json', { ok: true }, { fetcher }),
         ).resolves.toMatchObject({ exists: true, fingerprint: null });
 
         expect(fetcher.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
-            ['https://example.com/mindwtr/data.json', 'PUT'],
-            ['https://example.com/mindwtr/', 'MKCOL'],
-            ['https://example.com/mindwtr/', 'PROPFIND'],
-            ['https://example.com/mindwtr/data.json', 'PUT'],
+            ['https://example.com/tinybubbles/data.json', 'PUT'],
+            ['https://example.com/tinybubbles/', 'MKCOL'],
+            ['https://example.com/tinybubbles/', 'PROPFIND'],
+            ['https://example.com/tinybubbles/data.json', 'PUT'],
         ]);
     });
 
@@ -397,13 +397,13 @@ describe('webdav http helpers', () => {
             .mockResolvedValueOnce(makeResponse({ ok: false, status: 409, statusText: 'Conflict', text: async () => 'Conflict' }));
 
         await expect(
-            webdavPutJson('https://example.com/mindwtr/data.json', { ok: true }, { fetcher }),
+            webdavPutJson('https://example.com/tinybubbles/data.json', { ok: true }, { fetcher }),
         ).rejects.toThrow('WebDAV PUT failed (409): Conflict');
     });
 
     it('caps parent MKCOL creation depth for pathological nested paths', async () => {
         const nestedSegments = Array.from({ length: 40 }, (_, index) => `level-${index + 1}`).join('/');
-        const url = `https://example.com/remote.php/dav/files/user/mindwtr/${nestedSegments}/data.json`;
+        const url = `https://example.com/remote.php/dav/files/user/tinybubbles/${nestedSegments}/data.json`;
         const fetcher = vi
             .fn()
             .mockResolvedValueOnce(makeResponse({ ok: false, status: 409, statusText: 'Conflict' }))

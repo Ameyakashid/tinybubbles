@@ -17,7 +17,7 @@ import {
     startOfCalendarMonth,
     tFallback,
     type QuickDatePreset,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { cn } from '../../lib/utils';
 import { usePointerPress } from '../../hooks/usePointerPress';

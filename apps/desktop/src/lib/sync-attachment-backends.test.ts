@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 
 import {
     clearAttachmentSyncState,
@@ -37,8 +37,8 @@ const cloudKitMocks = vi.hoisted(() => ({
     saveCloudKitAttachmentAsset: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@tinybubbles/core')>();
     return {
         ...actual,
         webdavFileExists: coreMocks.webdavFileExists,
@@ -186,8 +186,8 @@ describe('desktop sync attachment backends', () => {
                         {
                             id: 'attachment-1',
                             kind: 'file',
-                            title: 'mindwtr-upload-test.txt',
-                            uri: 'C:\\Temp\\mindwtr-upload-test.txt',
+                            title: 'tinybubbles-upload-test.txt',
+                            uri: 'C:\\Temp\\tinybubbles-upload-test.txt',
                             localStatus: 'available',
                             createdAt: '2026-06-27T00:00:00.000Z',
                             updatedAt: '2026-06-27T00:00:00.000Z',
@@ -210,9 +210,9 @@ describe('desktop sync attachment backends', () => {
             resolveWebdavPassword: vi.fn(),
         };
 
-        fsMocks.exists.mockImplementation(async (path: string) => path === 'C:/Temp/mindwtr-upload-test.txt');
+        fsMocks.exists.mockImplementation(async (path: string) => path === 'C:/Temp/tinybubbles-upload-test.txt');
         fsMocks.readFile.mockImplementation(async (path: string) => {
-            if (path !== 'C:/Temp/mindwtr-upload-test.txt') {
+            if (path !== 'C:/Temp/tinybubbles-upload-test.txt') {
                 throw new Error('unexpected path ' + path);
             }
             return bytes;
@@ -228,8 +228,8 @@ describe('desktop sync attachment backends', () => {
         ).resolves.toBe(true);
 
         const attachment = appData.tasks[0].attachments?.[0];
-        expect(fsMocks.exists).toHaveBeenCalledWith('C:/Temp/mindwtr-upload-test.txt');
-        expect(fsMocks.readFile).toHaveBeenCalledWith('C:/Temp/mindwtr-upload-test.txt');
+        expect(fsMocks.exists).toHaveBeenCalledWith('C:/Temp/tinybubbles-upload-test.txt');
+        expect(fsMocks.readFile).toHaveBeenCalledWith('C:/Temp/tinybubbles-upload-test.txt');
         expect(fetcher).toHaveBeenCalledWith(
             'http://cloud.local/v1/attachments/attachment-1.txt',
             expect.objectContaining({ method: 'PUT' }),
@@ -355,16 +355,16 @@ describe('desktop sync attachment backends', () => {
         await expect(
             syncWebdavAttachments(
                 appData,
-                { url: 'https://dav.example/mindwtr', username: 'alice' },
-                'https://dav.example/mindwtr',
+                { url: 'https://dav.example/tinybubbles', username: 'alice' },
+                'https://dav.example/tinybubbles',
                 deps,
             ),
         ).resolves.toBeNull();
         await expect(
             syncWebdavAttachments(
                 appData,
-                { url: 'https://dav.example/mindwtr', username: 'alice' },
-                'https://dav.example/mindwtr',
+                { url: 'https://dav.example/tinybubbles', username: 'alice' },
+                'https://dav.example/tinybubbles',
                 deps,
             ),
         ).resolves.toBeNull();
@@ -382,8 +382,8 @@ describe('desktop sync attachment backends', () => {
         await expect(
             syncWebdavAttachments(
                 appData,
-                { url: 'https://dav.example/mindwtr', username: 'alice' },
-                'https://dav.example/mindwtr',
+                { url: 'https://dav.example/tinybubbles', username: 'alice' },
+                'https://dav.example/tinybubbles',
                 deps,
             ),
         ).resolves.toBeNull();
@@ -436,8 +436,8 @@ describe('desktop sync attachment backends', () => {
 
         const result = await syncWebdavAttachments(
             appData,
-            { url: 'https://dav.example/mindwtr', username: 'alice' },
-            'https://dav.example/mindwtr',
+            { url: 'https://dav.example/tinybubbles', username: 'alice' },
+            'https://dav.example/tinybubbles',
             deps,
         );
 
@@ -470,14 +470,14 @@ describe('desktop sync attachment backends', () => {
 
         const result = await syncWebdavAttachments(
             appData,
-            { url: 'https://candidate.example/mindwtr', username: 'alice' },
-            'https://candidate.example/mindwtr',
+            { url: 'https://candidate.example/tinybubbles', username: 'alice' },
+            'https://candidate.example/tinybubbles',
             deps,
             activationHelpers(),
         );
 
         expect(fetcher).toHaveBeenCalledWith(
-            'https://candidate.example/mindwtr/attachments/attachment-1.txt',
+            'https://candidate.example/tinybubbles/attachments/attachment-1.txt',
             expect.objectContaining({ method: 'PUT' }),
         );
         expect(result?.tasks[0].attachments?.[0]?.cloudKey).toBe('attachments/attachment-1.txt');
@@ -499,7 +499,7 @@ describe('desktop sync attachment backends', () => {
                             id: 'attachment-1',
                             kind: 'file',
                             title: 'photo.jpg',
-                            uri: '/app-data/mindwtr/attachments/photo.jpg',
+                            uri: '/app-data/tinybubbles/attachments/photo.jpg',
                             localStatus: 'available',
                             createdAt: '2026-06-07T00:00:00.000Z',
                             updatedAt: '2026-06-07T00:00:00.000Z',
@@ -551,7 +551,7 @@ describe('desktop sync attachment backends', () => {
         expect(cloudKitMocks.deleteCloudKitAttachmentAssets).toHaveBeenCalledWith(['old-attachment']);
         expect(cloudKitMocks.saveCloudKitAttachmentAsset).toHaveBeenCalledWith(
             'attachment-1',
-            '/app-data/mindwtr/attachments/photo.jpg',
+            '/app-data/tinybubbles/attachments/photo.jpg',
             expect.objectContaining({
                 attachmentId: 'attachment-1',
                 ownerType: 'task',

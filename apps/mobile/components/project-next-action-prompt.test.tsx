@@ -47,7 +47,7 @@ const translate = vi.hoisted(() => {
     return (key: string) => labels[key] ?? key;
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
     const { mockCore } = await import('../test-support/mock-core');
     storeState.addTask = addTask;
     storeState.updateTask = updateTask;

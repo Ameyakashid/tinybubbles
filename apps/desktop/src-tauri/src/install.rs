@@ -15,8 +15,8 @@ fn has_windows_package_identity() -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn is_windowsapps_mindwtr_path(path: &str) -> bool {
-    (path.contains("\\windowsapps\\") || path.contains("/windowsapps/")) && path.contains("mindwtr")
+fn is_windowsapps_tinybubbles_path(path: &str) -> bool {
+    (path.contains("\\windowsapps\\") || path.contains("/windowsapps/")) && path.contains("tinybubbles")
 }
 
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
@@ -37,12 +37,12 @@ pub(crate) fn is_windows_store_install() -> bool {
         }
 
         if let Some(path) = current_exe_path_lowercase() {
-            if is_windowsapps_mindwtr_path(&path) {
+            if is_windowsapps_tinybubbles_path(&path) {
                 return true;
             }
         }
         if let Some(path) = current_exe_canonical_path_lowercase() {
-            if is_windowsapps_mindwtr_path(&path) {
+            if is_windowsapps_tinybubbles_path(&path) {
                 return true;
             }
         }
@@ -80,27 +80,27 @@ fn command_succeeds(cmd: &str, args: &[&str]) -> bool {
 
 #[cfg(target_os = "macos")]
 fn is_homebrew_cask_installed() -> bool {
-    if command_succeeds("brew", &["list", "--cask", "mindwtr"]) {
+    if command_succeeds("brew", &["list", "--cask", "tinybubbles"]) {
         return true;
     }
     let brew_paths = ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"];
     if brew_paths
         .iter()
-        .any(|path| command_succeeds(path, &["list", "--cask", "mindwtr"]))
+        .any(|path| command_succeeds(path, &["list", "--cask", "tinybubbles"]))
     {
         return true;
     }
     let caskroom_paths = [
-        "/opt/homebrew/Caskroom/mindwtr",
-        "/usr/local/Caskroom/mindwtr",
+        "/opt/homebrew/Caskroom/tinybubbles",
+        "/usr/local/Caskroom/tinybubbles",
     ];
     caskroom_paths.iter().any(|path| Path::new(path).exists())
 }
 
 #[cfg(target_os = "linux")]
 fn is_homebrew_install_linux() -> bool {
-    if command_succeeds("brew", &["list", "--cask", "mindwtr"])
-        || command_succeeds("brew", &["list", "mindwtr"])
+    if command_succeeds("brew", &["list", "--cask", "tinybubbles"])
+        || command_succeeds("brew", &["list", "tinybubbles"])
     {
         return true;
     }
@@ -110,16 +110,16 @@ fn is_homebrew_install_linux() -> bool {
         "/usr/local/bin/brew",
     ];
     if brew_paths.iter().any(|path| {
-        command_succeeds(path, &["list", "--cask", "mindwtr"])
-            || command_succeeds(path, &["list", "mindwtr"])
+        command_succeeds(path, &["list", "--cask", "tinybubbles"])
+            || command_succeeds(path, &["list", "tinybubbles"])
     }) {
         return true;
     }
     let install_paths = [
-        "/home/linuxbrew/.linuxbrew/Caskroom/mindwtr",
-        "/home/linuxbrew/.linuxbrew/Cellar/mindwtr",
-        "/linuxbrew/.linuxbrew/Caskroom/mindwtr",
-        "/linuxbrew/.linuxbrew/Cellar/mindwtr",
+        "/home/linuxbrew/.linuxbrew/Caskroom/tinybubbles",
+        "/home/linuxbrew/.linuxbrew/Cellar/tinybubbles",
+        "/linuxbrew/.linuxbrew/Caskroom/tinybubbles",
+        "/linuxbrew/.linuxbrew/Cellar/tinybubbles",
     ];
     install_paths.iter().any(|path| Path::new(path).exists())
 }
@@ -167,10 +167,10 @@ fn chocolatey_lib_dir_candidates(choco_install_env: Option<&str>) -> Vec<PathBuf
     if let Some(root) = choco_install_env {
         let root = root.trim().trim_end_matches(['\\', '/']);
         if !root.is_empty() {
-            candidates.push(PathBuf::from(root).join("lib").join("mindwtr"));
+            candidates.push(PathBuf::from(root).join("lib").join("tinybubbles"));
         }
     }
-    candidates.push(PathBuf::from("C:\\ProgramData\\chocolatey\\lib\\mindwtr"));
+    candidates.push(PathBuf::from("C:\\ProgramData\\chocolatey\\lib\\tinybubbles"));
     candidates
 }
 
@@ -263,12 +263,12 @@ fn detect_install_source() -> String {
             &[
                 "list",
                 "--id",
-                "dongdongbh.Mindwtr",
+                "tinybubbles-app.TinyBubbles",
                 "--exact",
                 "--disable-interactivity",
             ],
         ) {
-            if list_output.contains("dongdongbh.mindwtr") && list_output.contains("winget") {
+            if list_output.contains("tinybubbles-app.tinybubbles") && list_output.contains("winget") {
                 return "winget".to_string();
             }
         }
@@ -333,17 +333,17 @@ fn detect_install_source() -> String {
             return "homebrew".to_string();
         }
         if let Some(source) = resolve_arch_package_install_source(
-            command_succeeds("pacman", &["-Qq", "mindwtr-bin"]),
-            command_succeeds("pacman", &["-Qq", "mindwtr"]),
+            command_succeeds("pacman", &["-Qq", "tinybubbles-bin"]),
+            command_succeeds("pacman", &["-Qq", "tinybubbles"]),
         ) {
-            // Check the binary package first so packages that provide `mindwtr`
+            // Check the binary package first so packages that provide `tinybubbles`
             // still report as `aur-bin` instead of collapsing into `aur-source`.
             return source.to_string();
         }
-        if command_succeeds("dpkg-query", &["-W", "mindwtr"]) {
+        if command_succeeds("dpkg-query", &["-W", "tinybubbles"]) {
             return "apt".to_string();
         }
-        if command_succeeds("rpm", &["-q", "mindwtr"]) {
+        if command_succeeds("rpm", &["-q", "tinybubbles"]) {
             return "rpm".to_string();
         }
         return "direct".to_string();
@@ -501,7 +501,7 @@ pub(crate) fn is_flatpak() -> bool {
 }
 
 pub(crate) fn diagnostics_enabled() -> bool {
-    match env::var("MINDWTR_DIAGNOSTICS") {
+    match env::var("TINYBUBBLES_DIAGNOSTICS") {
         Ok(value) => matches!(value.to_lowercase().as_str(), "1" | "true" | "yes" | "on"),
         Err(_) => false,
     }
@@ -516,11 +516,11 @@ mod tests {
     #[test]
     fn scoop_install_path_matches_default_root() {
         assert!(is_scoop_install_path(
-            "c:\\users\\alice\\scoop\\apps\\mindwtr\\current\\mindwtr.exe",
+            "c:\\users\\alice\\scoop\\apps\\tinybubbles\\current\\tinybubbles.exe",
             None
         ));
         assert!(is_scoop_install_path(
-            "c:/users/alice/scoop/apps/mindwtr/1.1.0/mindwtr.exe",
+            "c:/users/alice/scoop/apps/tinybubbles/1.1.0/tinybubbles.exe",
             None
         ));
     }
@@ -528,11 +528,11 @@ mod tests {
     #[test]
     fn scoop_install_path_matches_custom_root_from_env() {
         assert!(is_scoop_install_path(
-            "d:\\tools\\apps\\mindwtr\\current\\mindwtr.exe",
+            "d:\\tools\\apps\\tinybubbles\\current\\tinybubbles.exe",
             Some("d:\\tools")
         ));
         assert!(!is_scoop_install_path(
-            "d:\\tools\\apps\\mindwtr\\current\\mindwtr.exe",
+            "d:\\tools\\apps\\tinybubbles\\current\\tinybubbles.exe",
             Some("d:\\other")
         ));
     }
@@ -540,11 +540,11 @@ mod tests {
     #[test]
     fn scoop_install_path_rejects_regular_installs() {
         assert!(!is_scoop_install_path(
-            "c:\\program files\\mindwtr\\mindwtr.exe",
+            "c:\\program files\\tinybubbles\\tinybubbles.exe",
             None
         ));
         assert!(!is_scoop_install_path(
-            "c:\\program files\\mindwtr\\mindwtr.exe",
+            "c:\\program files\\tinybubbles\\tinybubbles.exe",
             Some("")
         ));
     }
@@ -553,7 +553,7 @@ mod tests {
     fn chocolatey_lib_dir_candidates_prefer_env_root() {
         let candidates = chocolatey_lib_dir_candidates(Some("D:\\choco\\"));
         assert_eq!(candidates.len(), 2);
-        assert!(candidates[0].ends_with("lib/mindwtr") || candidates[0].ends_with("lib\\mindwtr"));
+        assert!(candidates[0].ends_with("lib/tinybubbles") || candidates[0].ends_with("lib\\tinybubbles"));
         assert!(candidates[0].starts_with("D:\\choco"));
 
         let default_only = chocolatey_lib_dir_candidates(None);

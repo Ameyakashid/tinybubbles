@@ -1,5 +1,5 @@
-import type { Area, Project, Section, Task, TaskStatus } from '@mindwtr/core';
-import { shallow, useTaskStore } from '@mindwtr/core';
+import type { Area, Project, Section, Task, TaskStatus } from '@tinybubbles/core';
+import { shallow, useTaskStore } from '@tinybubbles/core';
 import { useUiStore } from '../../store/ui-store';
 
 const EMPTY_PROJECTS: Project[] = [];

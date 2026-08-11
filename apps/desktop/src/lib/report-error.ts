@@ -1,4 +1,4 @@
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 import { useUiStore } from '../store/ui-store';
 import { logError } from './app-log';
 

@@ -77,7 +77,7 @@ vi.mock('@/lib/secure-config', () => ({
     setSecureConfigValue: mocked.setSecureConfigValue,
 }));
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@tinybubbles/core', () => ({
     addBreadcrumb: mocked.addBreadcrumb,
     CLOCK_SKEW_THRESHOLD_MS: 60_000,
     cloudGetJson: mocked.cloudGetJson,
@@ -109,7 +109,7 @@ vi.mock('@/lib/cloudkit-sync', () => ({
 
 vi.mock('@/lib/dropbox-oauth', () => ({
     authorizeDropbox: mocked.authorizeDropbox,
-    getDropboxRedirectUri: vi.fn(() => 'mindwtr://dropbox'),
+    getDropboxRedirectUri: vi.fn(() => 'tinybubbles://dropbox'),
 }));
 
 vi.mock('@/lib/dropbox-auth', () => ({
@@ -406,15 +406,15 @@ describe('useSyncSettingsTransportActions', () => {
                 webdav: {
                     allowInsecureHttp: false,
                     password: 'secret',
-                    url: 'http://nas.local/remote.php/dav/files/alice/mindwtr/',
+                    url: 'http://nas.local/remote.php/dav/files/alice/tinybubbles/',
                     username: 'alice',
                 },
             });
         });
 
-        expect(mocked.normalizeWebdavUrl).toHaveBeenCalledWith('http://nas.local/remote.php/dav/files/alice/mindwtr/');
+        expect(mocked.normalizeWebdavUrl).toHaveBeenCalledWith('http://nas.local/remote.php/dav/files/alice/tinybubbles/');
         expect(mocked.webdavGetJson).toHaveBeenCalledWith(
-            'http://nas.local/remote.php/dav/files/alice/mindwtr/data.json',
+            'http://nas.local/remote.php/dav/files/alice/tinybubbles/data.json',
             expect.objectContaining({
                 password: 'secret',
                 timeoutMs: 10_000,
@@ -447,7 +447,7 @@ describe('useSyncSettingsTransportActions', () => {
                 webdav: {
                     allowInsecureHttp: false,
                     password: 'new-secret',
-                    url: 'https://dav.example.com/mindwtr/',
+                    url: 'https://dav.example.com/tinybubbles/',
                     username: 'alice',
                 },
             });
@@ -474,14 +474,14 @@ describe('useSyncSettingsTransportActions', () => {
                 webdav: {
                     allowInsecureHttp: false,
                     password: 'new-secret',
-                    url: 'https://dav.example.com/mindwtr/',
+                    url: 'https://dav.example.com/tinybubbles/',
                     username: 'alice',
                 },
             });
         });
 
         expect(mocked.asyncStorage.multiSet).toHaveBeenCalledWith([
-            [WEBDAV_URL_KEY, 'https://dav.example.com/mindwtr/'],
+            [WEBDAV_URL_KEY, 'https://dav.example.com/tinybubbles/'],
             [WEBDAV_USERNAME_KEY, 'alice'],
             [WEBDAV_ALLOW_INSECURE_HTTP_KEY, 'false'],
         ]);
@@ -496,7 +496,7 @@ describe('useSyncSettingsTransportActions', () => {
                 webdav: {
                     allowInsecureHttp: false,
                     password: 'new-secret',
-                    url: 'https://dav.example.com/mindwtr/',
+                    url: 'https://dav.example.com/tinybubbles/',
                     username: 'alice',
                 },
             },
@@ -525,7 +525,7 @@ describe('useSyncSettingsTransportActions', () => {
     it('runs one normal sync for an already proven unchanged backend', async () => {
         seedStorage([
             [SYNC_BACKEND_KEY, 'webdav'],
-            [WEBDAV_URL_KEY, 'https://dav.example.com/mindwtr/'],
+            [WEBDAV_URL_KEY, 'https://dav.example.com/tinybubbles/'],
             [WEBDAV_USERNAME_KEY, 'alice'],
             [WEBDAV_ALLOW_INSECURE_HTTP_KEY, 'false'],
         ]);

@@ -18,9 +18,9 @@ def write_listing(
     root: Path,
     locale: str,
     *,
-    title: str = "Mindwtr",
-    short_description: str = "Mindwtr (mind water): local-first GTD capture.",
-    full_description: str = 'Mindwtr (pronounced "mind water") keeps GTD tasks local.',
+    title: str = "Tiny Bubbles",
+    short_description: str = "Tiny Bubbles (mind water): local-first GTD capture.",
+    full_description: str = 'Tiny Bubbles (pronounced "mind water") keeps GTD tasks local.',
 ) -> None:
     locale_dir = root / locale
     locale_dir.mkdir(parents=True)
@@ -38,32 +38,32 @@ class PrepareGooglePlayListingMetadataTest(unittest.TestCase):
                 root,
                 "es-ES",
                 short_description="Un sistema GTD completo.",
-                full_description="Mindwtr es un sistema GTD privado.",
+                full_description="Tiny Bubbles es un sistema GTD privado.",
             )
             write_listing(
                 root,
                 "fr-FR",
                 short_description="Gestionnaire GTD privé.",
-                full_description="Mindwtr est un gestionnaire GTD privé.",
+                full_description="Tiny Bubbles est un gestionnaire GTD privé.",
             )
             write_listing(
                 root,
                 "de-DE",
                 short_description="Privater GTD-Manager.",
-                full_description="Mindwtr ist ein privater GTD-Manager.",
+                full_description="Tiny Bubbles ist ein privater GTD-Manager.",
             )
             write_listing(
                 root,
                 "zh-CN",
                 short_description="本地优先 GTD 任务管理器。",
-                full_description="Mindwtr 是本地优先的 GTD 任务管理器。",
+                full_description="Tiny Bubbles 是本地优先的 GTD 任务管理器。",
             )
             (root / "chocolatey").mkdir()
 
             listings = MODULE.collect_listings(root)
 
         self.assertEqual([listing["language"] for listing in listings], ["de-DE", "en-US", "es-ES", "fr-FR", "zh-CN"])
-        self.assertEqual(listings[0]["title"], "Mindwtr")
+        self.assertEqual(listings[0]["title"], "Tiny Bubbles")
         self.assertIn("shortDescription", listings[0])
         self.assertIn("fullDescription", listings[0])
 
@@ -98,7 +98,7 @@ class PrepareGooglePlayListingMetadataTest(unittest.TestCase):
     def test_rejects_short_descriptions_over_google_play_limit(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
-            write_listing(root, "en-US", short_description="Mindwtr mind water " + ("x" * 80))
+            write_listing(root, "en-US", short_description="Tiny Bubbles mind water " + ("x" * 80))
             write_listing(root, "de-DE")
             write_listing(root, "es-ES")
             write_listing(root, "fr-FR")

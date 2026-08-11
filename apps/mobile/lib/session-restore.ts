@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { shouldRestoreLastView } from '@mindwtr/core';
+import { shouldRestoreLastView } from '@tinybubbles/core';
 
 // Device-local UI-session state (P14): which screen was open and when it was
 // last seen, so reopening shortly after Android kills the app resumes the
 // interrupted session (#842). Never part of the synced settings document.
-const LAST_ROUTE_STORAGE_KEY = 'mindwtr:session:lastRoute';
+const LAST_ROUTE_STORAGE_KEY = 'tinybubbles:session:lastRoute';
 
 // Capture surfaces, review flows, and settings are transient destinations;
 // they fall back to the home route instead of restoring.

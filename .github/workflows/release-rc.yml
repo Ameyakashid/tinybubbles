@@ -36,7 +36,7 @@ on:
         default: true
         type: boolean
       run_aur_beta:
-        description: 'Update the mindwtr-bin-beta AUR package for the RC'
+        description: 'Update the tinybubbles-bin-beta AUR package for the RC'
         required: false
         default: true
         type: boolean
@@ -60,6 +60,9 @@ env:
 
 jobs:
   validate:
+    # Tiny Bubbles fork: releases are disabled until the project publishes builds.
+    # Set repository variable ENABLE_RELEASE_WORKFLOWS=true to re-enable.
+    if: vars.ENABLE_RELEASE_WORKFLOWS == 'true'
     runs-on: ubuntu-latest
     name: Validate RC Tag
     permissions:
@@ -236,7 +239,7 @@ jobs:
           USE_PLAY_TRACKS: ${{ github.event_name != 'workflow_dispatch' || inputs.run_play_testing }}
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           MAX_CODE=0
           if [ "$USE_PLAY_TRACKS" = "true" ]; then
             if [ -z "${ACCESS_TOKEN:-}" ]; then
@@ -289,7 +292,7 @@ jobs:
       play_track: ${{ github.event_name != 'workflow_dispatch' && 'internal,beta' || (inputs.run_play_testing && format('internal,{0}', inputs.play_track) || 'none') }}
       version_code: ${{ needs['android-version-code'].outputs.version_code }}
       internal_test_release: false
-      release_notes: 'Mindwtr release candidate. Please test launch, capture, task editing, task completion, sync settings, and upgrade from the previous stable release.'
+      release_notes: 'Tiny Bubbles release candidate. Please test launch, capture, task editing, task completion, sync settings, and upgrade from the previous stable release.'
       retention_days: '28'
     secrets: inherit
 
@@ -356,7 +359,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Import Mindwtr release signing key
+      - name: Import Tiny Bubbles release signing key
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -500,7 +503,7 @@ jobs:
   aur-beta:
     if: ${{ always() && needs.validate.result == 'success' && (needs.prerelease.result == 'success' || (needs.validate.outputs.existing_release == 'true' && github.event_name == 'workflow_dispatch')) && (github.event_name != 'workflow_dispatch' || inputs.run_aur_beta) }}
     needs: [validate, prerelease]
-    name: Prepare AUR Beta Proposal (mindwtr-bin-beta)
+    name: Prepare AUR Beta Proposal (tinybubbles-bin-beta)
     uses: ./.github/workflows/update-aur-beta.yml
     with:
       tag: ${{ needs.validate.outputs.tag }}

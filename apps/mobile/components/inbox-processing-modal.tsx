@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { ChevronDown, ChevronUp, X } from 'lucide-react-native';
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 
 import { AIResponseModal } from './ai-response-modal';
 import { ToastViewport } from '@/contexts/toast-context';

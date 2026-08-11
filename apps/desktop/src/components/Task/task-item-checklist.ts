@@ -1,4 +1,4 @@
-import { generateUUID, type Task } from '@mindwtr/core';
+import { generateUUID, type Task } from '@tinybubbles/core';
 
 const normalizeChecklistKey = (value: string): string => value.trim().toLowerCase();
 

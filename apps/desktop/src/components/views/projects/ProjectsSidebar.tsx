@@ -5,7 +5,7 @@ import { cn } from '../../../lib/utils';
 import { FocusStarIcon } from '../../FocusStarIcon';
 import { SortableProjectRow } from './SortableRows';
 import { LIST_END_GAP } from '../list/list-toolbar';
-import { tFallback, type Area, type Project, type Task } from '@mindwtr/core';
+import { tFallback, type Area, type Project, type Task } from '@tinybubbles/core';
 import { ProjectAreaDropZone } from './project-area-dnd';
 import {
     isProjectAreaCollapsed,

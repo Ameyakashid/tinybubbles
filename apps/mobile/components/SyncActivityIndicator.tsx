@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { tFallback, useTaskStore } from '@mindwtr/core';
+import { tFallback, useTaskStore } from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 import { useThemeColors } from '../hooks/use-theme-colors';

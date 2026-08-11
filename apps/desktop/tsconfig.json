@@ -26,10 +26,10 @@
             "@/*": [
                 "src/*"
             ],
-            "@mindwtr/core": [
+            "@tinybubbles/core": [
                 "../../packages/core/src/index.ts"
             ],
-            "@mindwtr/core/*": [
+            "@tinybubbles/core/*": [
                 "../../packages/core/src/*"
             ]
         }

@@ -171,7 +171,7 @@ fn atomic_write_text(path: &Path, content: &str) -> Result<(), String> {
 
     let metadata = fs::metadata(path).ok();
     let mut temp_file = Builder::new()
-        .prefix(".mindwtr-obsidian-")
+        .prefix(".tinybubbles-obsidian-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|error| format!("Failed to create a temporary Obsidian file: {error}"))?;
@@ -638,20 +638,20 @@ mod tests {
 
         obsidian_create_task(
             vault_root.clone(),
-            "Mindwtr/Inbox.md".to_string(),
-            "Capture from Mindwtr".to_string(),
+            "Tiny Bubbles/Inbox.md".to_string(),
+            "Capture from Tiny Bubbles".to_string(),
         )
         .expect("should create inbox note");
         obsidian_create_task(
             vault_root,
-            "Mindwtr/Inbox.md".to_string(),
+            "Tiny Bubbles/Inbox.md".to_string(),
             "Second task".to_string(),
         )
         .expect("should append task");
 
-        let content = fs::read_to_string(temp.path().join("Mindwtr/Inbox.md"))
+        let content = fs::read_to_string(temp.path().join("Tiny Bubbles/Inbox.md"))
             .expect("should read inbox note");
-        assert_eq!(content, "- [ ] Capture from Mindwtr\n- [ ] Second task\n");
+        assert_eq!(content, "- [ ] Capture from Tiny Bubbles\n- [ ] Second task\n");
     }
 
     #[test]

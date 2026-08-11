@@ -1,13 +1,13 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
-import { flushPendingSave } from '@mindwtr/core';
+import { flushPendingSave } from '@tinybubbles/core';
 
 import type { SyncBackend } from './sync-service-utils';
 import { logInfo, logWarn } from './app-log';
 import { quiesceMobileStorage } from './storage-adapter';
 import { getMobileSyncConfigurationStatus, performMobileSync } from './sync-service';
 
-export const MOBILE_BACKGROUND_SYNC_TASK_NAME = 'mindwtr-background-sync';
+export const MOBILE_BACKGROUND_SYNC_TASK_NAME = 'tinybubbles-background-sync';
 export const MOBILE_BACKGROUND_SYNC_MINIMUM_INTERVAL_MINUTES = 15;
 
 type MobileBackgroundSyncRegistrationAction = 'registered' | 'unregistered' | 'unchanged';

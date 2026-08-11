@@ -15,11 +15,11 @@ RUN bun install --production
 
 FROM base AS cloud
 RUN apk add --no-cache curl
-ENV MINDWTR_CLOUD_DATA_DIR=/app/cloud_data
+ENV TINYBUBBLES_CLOUD_DATA_DIR=/app/cloud_data
 COPY --from=deps --chown=bun:bun /app /app
 RUN mkdir -p /app/cloud_data && chown bun:bun /app/cloud_data
 USER bun
 
 EXPOSE 8787/tcp
 HEALTHCHECK --interval=1m30s --timeout=10s --start-period=30s --retries=3 CMD curl -fsS http://localhost:8787/health >/dev/null || exit 1
-ENTRYPOINT ["bun", "run", "--filter", "mindwtr-cloud", "start", "--", "--host", "0.0.0.0", "--port", "8787"]
+ENTRYPOINT ["bun", "run", "--filter", "tinybubbles-cloud", "start", "--", "--host", "0.0.0.0", "--port", "8787"]

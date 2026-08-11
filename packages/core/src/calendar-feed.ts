@@ -42,7 +42,7 @@ export type CalendarFeedOptions = {
 };
 
 const feedUid = (taskId: string, kind: CalendarFeedEvent['kind']): string => (
-    `${taskId}-${kind === 'scheduled' ? 'start' : 'due'}@mindwtr.app`
+    `${taskId}-${kind === 'scheduled' ? 'start' : 'due'}@tinybubbles.app`
 );
 
 const addMinutes = (date: Date, minutes: number): Date => new Date(date.getTime() + minutes * 60_000);
@@ -171,11 +171,11 @@ export function serializeCalendarFeed(
     options: CalendarFeedOptions = {},
 ): string {
     const stamp = formatIcsDateTime(options.now ?? new Date());
-    const name = options.name ?? 'Mindwtr';
+    const name = options.name ?? 'Tiny Bubbles';
     const lines: string[] = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
-        'PRODID:-//Mindwtr//Calendar Feed//EN',
+        'PRODID:-//Tiny Bubbles//Calendar Feed//EN',
         'CALSCALE:GREGORIAN',
         'METHOD:PUBLISH',
         `NAME:${escapeIcsText(name)}`,

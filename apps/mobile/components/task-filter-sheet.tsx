@@ -7,7 +7,7 @@ import {
   type TaskMetadataFilterVisibility,
   type TaskPriority,
   type TimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { X } from 'lucide-react-native';
 
 import { CompactText } from '@/components/compact-text';

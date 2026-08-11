@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Dimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AREA_PRESET_COLORS, Attachment, DEFAULT_PROJECT_COLOR, Project, shallow, Task, type Section, type TaskSortBy, useTaskStore } from '@mindwtr/core';
+import { AREA_PRESET_COLORS, Attachment, DEFAULT_PROJECT_COLOR, Project, shallow, Task, type Section, type TaskSortBy, useTaskStore } from '@tinybubbles/core';
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react-native';
 
@@ -44,7 +44,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { ListSectionHeader, defaultListContentStyle } from '@/components/list-layout';
 import { logError, logWarn } from '../../lib/app-log';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue } from '@tinybubbles/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { CompactText, CompactTextInput } from '@/components/compact-text';
 

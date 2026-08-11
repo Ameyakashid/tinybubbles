@@ -1,4 +1,4 @@
-import { markAttachmentUnrecoverable, type Attachment } from '@mindwtr/core';
+import { markAttachmentUnrecoverable, type Attachment } from '@tinybubbles/core';
 
 const ATTACHMENT_VALIDATION_MAX_ATTEMPTS = 3;
 const attachmentValidationFailures = new Map<string, number>();

@@ -31,7 +31,7 @@ import {
     type Project,
     type QuickAddResult,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 import { getManagedPath } from '../lib/managed-paths';
@@ -352,8 +352,8 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
             const detail = (event as CustomEvent<QuickAddOpenDetail>).detail;
             openQuickAdd(detail).catch((error) => reportError('Failed to open quick add', error));
         };
-        window.addEventListener('mindwtr:quick-add', handler);
-        return () => window.removeEventListener('mindwtr:quick-add', handler);
+        window.addEventListener('tinybubbles:quick-add', handler);
+        return () => window.removeEventListener('tinybubbles:quick-add', handler);
     }, [openQuickAdd]);
 
     useEffect(() => {
@@ -452,7 +452,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         const now = new Date();
         const nowIso = now.toISOString();
         const displayTitle = `${tFallback(t, 'quickAdd.pastedImageTitle', 'Screenshot')} ${safeFormatDate(now, 'Pp')}`;
-        const fileName = `mindwtr-paste-${safeFormatDate(now, 'yyyyMMdd-HHmmss')}-${generateUUID().slice(0, 8)}.${getImageExtension(file)}`;
+        const fileName = `tinybubbles-paste-${safeFormatDate(now, 'yyyyMMdd-HHmmss')}-${generateUUID().slice(0, 8)}.${getImageExtension(file)}`;
         const captureDir = await getManagedPath(QUICK_ADD_IMAGE_CAPTURE_DIR);
         await mkdir(captureDir, { recursive: true });
         const bytes = await readClipboardFileBytes(file);
@@ -558,7 +558,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         }
         try {
             captureSessionRef.current = await startAudioCapture({
-                defaultName: () => `mindwtr-audio-${safeFormatDate(new Date(), 'yyyyMMdd-HHmmss')}.wav`,
+                defaultName: () => `tinybubbles-audio-${safeFormatDate(new Date(), 'yyyyMMdd-HHmmss')}.wav`,
             });
             setIsRecording(true);
         } catch (error) {

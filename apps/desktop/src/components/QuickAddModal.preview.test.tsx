@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../contexts/language-context';
 import { QuickAddModal } from './QuickAddModal';
@@ -12,8 +12,8 @@ const coreSpies = vi.hoisted(() => ({
 // The preview and the submit path have to run ONE parse configuration. Spying
 // on the shared entry point is the only way to prove they do: a preview built
 // from a second, hand-rolled options bag would still render plausible chips.
-vi.mock('@mindwtr/core', async () => {
-    const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+    const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
     coreSpies.parseQuickAdd.mockImplementation(actual.parseQuickAdd);
     return { ...actual, parseQuickAdd: coreSpies.parseQuickAdd };
 });
@@ -45,7 +45,7 @@ const openModalWithDraft = async () => {
         </LanguageProvider>
     );
     await act(async () => {
-        window.dispatchEvent(new CustomEvent('mindwtr:quick-add', { detail: {} }));
+        window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', { detail: {} }));
         await Promise.resolve();
     });
     const input = screen.getByPlaceholderText('Add Task');
@@ -111,7 +111,7 @@ describe('QuickAddModal live preview', () => {
             </LanguageProvider>
         );
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', { detail: {} }));
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', { detail: {} }));
             await Promise.resolve();
         });
         await act(async () => {

@@ -1,5 +1,5 @@
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { FilterCriteria, TaskSortBy } from '@mindwtr/core';
+import type { FilterCriteria, TaskSortBy } from '@tinybubbles/core';
 import { DONE_AXES, FOCUS_AXES, REFERENCE_AXES, sanitizeAxis, type DoneGroupBy, type NextGroupBy, type ReferenceGroupBy } from '../components/views/list/next-grouping';
 import { DONE_SORT_OPTIONS } from '../lib/task-list-sort';
 
@@ -27,13 +27,13 @@ type ListOptions = {
     focusTop3Only: boolean;
 };
 
-export const LIST_OPTIONS_STORAGE_KEY = 'mindwtr:list-options:v1';
+export const LIST_OPTIONS_STORAGE_KEY = 'tinybubbles:list-options:v1';
 
 // Sections-as-columns is a per-project *presentation* choice, so it stays
 // device-local next to the other view options rather than becoming a synced
 // Project field (#1019).
 export type ProjectLayout = 'list' | 'columns';
-export const PROJECT_LAYOUTS_STORAGE_KEY = 'mindwtr:project-layouts:v1';
+export const PROJECT_LAYOUTS_STORAGE_KEY = 'tinybubbles:project-layouts:v1';
 
 const DEFAULT_LIST_OPTIONS: ListOptions = {
     showDetails: false,

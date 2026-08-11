@@ -1,6 +1,6 @@
 ---
 name: "\U0001F41B Bug Report"
-about: Create a report to help us improve Mindwtr
+about: Create a report to help us improve Tiny Bubbles
 title: "[BUG]"
 labels: bug,status:needs-triage
 assignees: ''

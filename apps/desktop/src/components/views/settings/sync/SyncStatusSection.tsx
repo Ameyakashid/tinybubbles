@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { listMergeConflictSamples, safeFormatDate, summarizeMergeStats, useTaskStore } from '@mindwtr/core';
+import { listMergeConflictSamples, safeFormatDate, summarizeMergeStats, useTaskStore } from '@tinybubbles/core';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { useConfirmDialog } from '../../../../hooks/useConfirmDialog';
 import { cn } from '../../../../lib/utils';

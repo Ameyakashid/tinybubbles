@@ -8,12 +8,12 @@ import {
 describe('text-size', () => {
     beforeEach(() => {
         document.documentElement.removeAttribute('data-text-size');
-        document.documentElement.style.removeProperty('--mindwtr-text-scale');
+        document.documentElement.style.removeProperty('--tinybubbles-text-scale');
     });
 
     afterEach(() => {
         document.documentElement.removeAttribute('data-text-size');
-        document.documentElement.style.removeProperty('--mindwtr-text-scale');
+        document.documentElement.style.removeProperty('--tinybubbles-text-scale');
     });
 
     it('coerces unknown values to the default preset', () => {
@@ -26,13 +26,13 @@ describe('text-size', () => {
         applyDesktopTextSize('extra-large');
 
         expect(document.documentElement.dataset.textSize).toBe('extra-large');
-        expect(document.documentElement.style.getPropertyValue('--mindwtr-text-scale')).toBe('1.25');
+        expect(document.documentElement.style.getPropertyValue('--tinybubbles-text-scale')).toBe('1.25');
     });
 
     it('applies the small preset below the default scale', () => {
         applyDesktopTextSize('small');
 
         expect(document.documentElement.dataset.textSize).toBe('small');
-        expect(document.documentElement.style.getPropertyValue('--mindwtr-text-scale')).toBe('0.875');
+        expect(document.documentElement.style.getPropertyValue('--tinybubbles-text-scale')).toBe('0.875');
     });
 });

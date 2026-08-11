@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 
 import { createCloudService } from './cloud-service.js';
 
@@ -122,7 +122,7 @@ describe('cloud-backed MCP service', () => {
       return new Response(JSON.stringify(cloudData), { status: 200 });
     };
     const service = createCloudService({
-      url: 'https://mindwtr.example.com',
+      url: 'https://tinybubbles.example.com',
       token: 'cloud-token',
       fetcher,
     });
@@ -144,7 +144,7 @@ describe('cloud-backed MCP service', () => {
     const deletedPeople = await service.listPeople({ includeDeleted: true });
 
     expect(requests[0]).toEqual({
-      url: 'https://mindwtr.example.com/v1/data',
+      url: 'https://tinybubbles.example.com/v1/data',
       authorization: 'Bearer cloud-token',
     });
     expect(tasks.map((item) => item.id)).toEqual(['task-next']);
@@ -185,7 +185,7 @@ describe('cloud-backed MCP service', () => {
       return new Response(JSON.stringify({ error: 'Unexpected route' }), { status: 500 });
     };
     const service = createCloudService({
-      url: 'https://mindwtr.example.com',
+      url: 'https://tinybubbles.example.com',
       token: 'cloud-token',
       fetcher,
     });
@@ -197,7 +197,7 @@ describe('cloud-backed MCP service', () => {
     expect(created.id).toBe('task-new');
     expect(requests[0]).toMatchObject({
       method: 'POST',
-      url: 'https://mindwtr.example.com/v1/tasks',
+      url: 'https://tinybubbles.example.com/v1/tasks',
       body: {
         input: 'Buy milk @errands',
         props: {
@@ -219,7 +219,7 @@ describe('cloud-backed MCP service', () => {
     expect(patched.title).toBe('Patched');
     expect(requests[1]).toMatchObject({
       method: 'PATCH',
-      url: 'https://mindwtr.example.com/v1/tasks/task-next',
+      url: 'https://tinybubbles.example.com/v1/tasks/task-next',
       body: { title: 'Patched', dueDate: null, recurrence: null },
     });
 
@@ -227,42 +227,42 @@ describe('cloud-backed MCP service', () => {
     expect(completed.status).toBe('done');
     expect(requests[2]).toMatchObject({
       method: 'POST',
-      url: 'https://mindwtr.example.com/v1/tasks/task-next/complete',
+      url: 'https://tinybubbles.example.com/v1/tasks/task-next/complete',
     });
 
     const deleted = await service.deleteTask('task-deleted');
     expect(deleted.id).toBe('task-deleted');
     expect(requests[3]).toMatchObject({
       method: 'DELETE',
-      url: 'https://mindwtr.example.com/v1/tasks/task-deleted',
+      url: 'https://tinybubbles.example.com/v1/tasks/task-deleted',
     });
     expect(requests[4]?.method).toBe('GET');
 
     await service.addProject({ title: 'New project', areaId: 'area-1' });
     expect(requests[5]).toMatchObject({
       method: 'POST',
-      url: 'https://mindwtr.example.com/v1/projects',
+      url: 'https://tinybubbles.example.com/v1/projects',
       body: { title: 'New project', props: { areaId: 'area-1' } },
     });
 
     await service.updateArea({ id: 'area-1', color: null });
     expect(requests[6]).toMatchObject({
       method: 'PATCH',
-      url: 'https://mindwtr.example.com/v1/areas/area-1',
+      url: 'https://tinybubbles.example.com/v1/areas/area-1',
       body: { color: null },
     });
 
     await service.addSection({ projectId: 'project-1', title: 'New section' });
     expect(requests[7]).toMatchObject({
       method: 'POST',
-      url: 'https://mindwtr.example.com/v1/sections',
+      url: 'https://tinybubbles.example.com/v1/sections',
       body: { title: 'New section', projectId: 'project-1' },
     });
   });
 
   test('maps cloud API errors onto MCP error types', async () => {
     const service = createCloudService({
-      url: 'https://mindwtr.example.com',
+      url: 'https://tinybubbles.example.com',
       token: 'cloud-token',
       fetcher: async (_input, init) => {
         if ((init?.method ?? 'GET') === 'PATCH') {
@@ -284,7 +284,7 @@ describe('cloud-backed MCP service', () => {
 
   test('rejects unsupported cloud writes with clear errors', async () => {
     const service = createCloudService({
-      url: 'https://mindwtr.example.com',
+      url: 'https://tinybubbles.example.com',
       token: 'cloud-token',
       fetcher: async () => new Response(JSON.stringify(cloudData), { status: 200 }),
     });
@@ -295,7 +295,7 @@ describe('cloud-backed MCP service', () => {
 
   test('requires either title or quickAdd when adding a task', async () => {
     const service = createCloudService({
-      url: 'https://mindwtr.example.com',
+      url: 'https://tinybubbles.example.com',
       token: 'cloud-token',
       fetcher: async () => new Response(JSON.stringify(cloudData), { status: 200 }),
     });

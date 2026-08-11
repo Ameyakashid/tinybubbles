@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
-import type { Attachment, Task } from '@mindwtr/core';
+import type { Attachment, Task } from '@tinybubbles/core';
 import { LanguageProvider } from '../../contexts/language-context';
 import { TaskAttachmentOverlays } from './TaskAttachmentOverlays';
 import { useTaskItemAttachments } from './useTaskItemAttachments';
@@ -77,7 +77,7 @@ describe('useTaskItemAttachments addFileAttachment', () => {
 
     it('copies the picked file into app storage and attaches the managed copy', async () => {
         openMock.mockResolvedValue('C:\\docs\\notes.txt');
-        invokeMock.mockResolvedValue({ uri: '/data/mindwtr/attachments/id-1.txt', size: 1024 });
+        invokeMock.mockResolvedValue({ uri: '/data/tinybubbles/attachments/id-1.txt', size: 1024 });
 
         const { result } = renderHook(() => useTaskItemAttachments({ task, t }));
         await act(async () => {
@@ -94,7 +94,7 @@ describe('useTaskItemAttachments addFileAttachment', () => {
         expect(result.current.editAttachments[0]).toMatchObject({
             kind: 'file',
             title: 'notes.txt',
-            uri: '/data/mindwtr/attachments/id-1.txt',
+            uri: '/data/tinybubbles/attachments/id-1.txt',
             size: 1024,
             localStatus: 'available',
         });
@@ -134,7 +134,7 @@ describe('useTaskItemAttachments addDroppedFileAttachments', () => {
         mkdirMock.mockClear();
         writeFileMock.mockClear();
         // No Rust "get_managed_data_dir" command in this test environment;
-        // getManagedDataDir() falls back to dataDir() + "mindwtr".
+        // getManagedDataDir() falls back to dataDir() + "tinybubbles".
         invokeMock.mockRejectedValue(new Error('get_managed_data_dir not supported'));
     });
 
@@ -146,9 +146,9 @@ describe('useTaskItemAttachments addDroppedFileAttachments', () => {
             await result.current.addDroppedFileAttachments([file]);
         });
 
-        expect(mkdirMock).toHaveBeenCalledWith('/data/mindwtr/attachments', { recursive: true });
+        expect(mkdirMock).toHaveBeenCalledWith('/data/tinybubbles/attachments', { recursive: true });
         expect(writeFileMock).toHaveBeenCalledWith(
-            expect.stringMatching(/^\/data\/mindwtr\/attachments\/.+\.txt$/),
+            expect.stringMatching(/^\/data\/tinybubbles\/attachments\/.+\.txt$/),
             expect.any(Uint8Array),
         );
         expect(result.current.attachmentError).toBeNull();
@@ -210,7 +210,7 @@ describe('useTaskItemAttachments resetAttachmentState orphan cleanup', () => {
             id: 'existing-1',
             kind: 'file' as const,
             title: 'existing.txt',
-            uri: '/data/mindwtr/attachments/existing-1.txt',
+            uri: '/data/tinybubbles/attachments/existing-1.txt',
             size: 10,
             localStatus: 'available' as const,
             createdAt: new Date().toISOString(),
@@ -229,13 +229,13 @@ describe('useTaskItemAttachments resetAttachmentState orphan cleanup', () => {
     });
 
     it('never removes an orphaned file in a sibling directory that merely shares the managed dir prefix', async () => {
-        // e.g. `/data/mindwtr/attachments-old/x.pdf` — `startsWith('/data/mindwtr/attachments')`
+        // e.g. `/data/tinybubbles/attachments-old/x.pdf` — `startsWith('/data/tinybubbles/attachments')`
         // would wrongly match this without a path-separator boundary.
         const siblingAttachment = {
             id: 'sibling-1',
             kind: 'file' as const,
             title: 'x.pdf',
-            uri: '/data/mindwtr/attachments-old/x.pdf',
+            uri: '/data/tinybubbles/attachments-old/x.pdf',
             size: 10,
             localStatus: 'available' as const,
             createdAt: new Date().toISOString(),
@@ -326,7 +326,7 @@ describe('TaskAttachmentOverlays', () => {
             id: 'image-1',
             kind: 'file',
             title: 'photo.png',
-            uri: '/data/mindwtr/attachments/photo.png',
+            uri: '/data/tinybubbles/attachments/photo.png',
             mimeType: 'image/png',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),

@@ -6,7 +6,7 @@ const {
   withAndroidStyles,
 } = require('@expo/config-plugins');
 
-const SYSTEM_BAR_BACKGROUND = 'mindwtr_system_bar_background';
+const SYSTEM_BAR_BACKGROUND = 'tinybubbles_system_bar_background';
 const LIGHT_BACKGROUND = '#F6F7FB';
 const DARK_BACKGROUND = '#151718';
 const APP_THEME = AndroidConfig.Styles.getAppThemeGroup();
@@ -55,7 +55,7 @@ const withAndroidSystemBars = (config) => {
   return config;
 };
 
-module.exports = createRunOncePlugin(withAndroidSystemBars, 'mindwtr-android-system-bars', '1.0.0');
+module.exports = createRunOncePlugin(withAndroidSystemBars, 'tinybubbles-android-system-bars', '1.0.0');
 
 module.exports.__testables = {
   DARK_BACKGROUND,

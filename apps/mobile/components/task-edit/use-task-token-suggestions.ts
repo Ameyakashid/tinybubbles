@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import type { TaskTokenUsage } from '@mindwtr/core';
-import { getFrequentTaskTokensFromUsage } from '@mindwtr/core';
+import type { TaskTokenUsage } from '@tinybubbles/core';
+import { getFrequentTaskTokensFromUsage } from '@tinybubbles/core';
 import { QUICK_TOKEN_LIMIT } from './task-edit-modal.utils';
 import { MAX_VISIBLE_SUGGESTIONS } from './recurrence-utils';
 import { getActiveTokenQuery, parseTokenList } from './task-edit-token-utils';

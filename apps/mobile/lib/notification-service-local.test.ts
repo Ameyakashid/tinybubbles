@@ -36,7 +36,7 @@ const {
       reviewAt?: string;
       startTime?: string;
       repeatReminderMinutes?: number;
-      suppressMindwtrReminders?: boolean;
+      suppressTinyBubblesReminders?: boolean;
     }>,
     projects: [] as Array<Record<string, unknown>>,
   },
@@ -102,8 +102,8 @@ vi.mock('react-native-alarm-notification', () => ({
 // `getTaskReminderPlan`, `hasTimeComponent`, `safeParseDate`, etc. are the REAL core
 // implementations, so a change to core's reminder-kind selection or gating shows up here instead
 // of being invisible behind a hand-rolled stub.
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   return {
     ...actual,
     getSystemDefaultLanguage: vi.fn(() => 'en'),
@@ -218,7 +218,7 @@ describe('notification-service-local', () => {
     expect(mockAlarmRemoveFiredNotification).toHaveBeenCalledWith(42);
     expect(mockAlarmRemoveAllFiredNotifications).toHaveBeenCalledTimes(1);
     expect(__localNotificationTestUtils.getAlarmMapSnapshot().size).toBe(0);
-    expect(mockAsyncStorageSetItem).toHaveBeenCalledWith('mindwtr:local:alarms:v1', '{}');
+    expect(mockAsyncStorageSetItem).toHaveBeenCalledWith('tinybubbles:local:alarms:v1', '{}');
   });
 
   it('re-asserts the persistent capture notification after wiping fired notifications', async () => {
@@ -237,8 +237,8 @@ describe('notification-service-local', () => {
     await startLocalMobileNotifications();
 
     expect(mockEnsureReminderNotificationChannel).toHaveBeenCalledWith(
-      'mindwtr_reminders_v2',
-      'Mindwtr reminders'
+      'tinybubbles_reminders_v2',
+      'Tiny Bubbles reminders'
     );
   });
 
@@ -249,8 +249,8 @@ describe('notification-service-local', () => {
     await startLocalMobileNotifications();
 
     expect(mockEnsureReminderNotificationChannel).toHaveBeenCalledWith(
-      'mindwtr_reminders_v2',
-      'Mindwtr reminders'
+      'tinybubbles_reminders_v2',
+      'Tiny Bubbles reminders'
     );
   });
 
@@ -269,7 +269,7 @@ describe('notification-service-local', () => {
     expect(mockAlarmScheduleAlarm).toHaveBeenCalledWith(
       expect.objectContaining({
         auto_cancel: true,
-        channel: 'mindwtr_reminders_v2',
+        channel: 'tinybubbles_reminders_v2',
         has_button: true,
         has_complete_action: true,
         loop_sound: false,
@@ -558,7 +558,7 @@ describe('notification-service-local', () => {
     expect(mockAlarmScheduleAlarm).toHaveBeenCalledWith(
       expect.objectContaining({
         auto_cancel: true,
-        channel: 'mindwtr_reminders_v2',
+        channel: 'tinybubbles_reminders_v2',
         message: 'Weekly review body',
         title: 'Weekly review',
       })
@@ -653,14 +653,14 @@ describe('notification-service-local', () => {
       })
     );
     expect(mockAsyncStorageSetItem).toHaveBeenCalledWith(
-      'mindwtr:local:pomodoro-alarm:v1',
+      'tinybubbles:local:pomodoro-alarm:v1',
       JSON.stringify({ id: 99, fireAtMs: fireAt.getTime() })
     );
   });
 
   it('cancels the superseded pomodoro alarm only after its replacement is scheduled', async () => {
     mockAsyncStorageGetItem.mockImplementation(async (key: string) => (
-      key === 'mindwtr:local:pomodoro-alarm:v1'
+      key === 'tinybubbles:local:pomodoro-alarm:v1'
         ? JSON.stringify({ id: 41, fireAtMs: Date.now() + 60_000 })
         : null
     ));
@@ -674,14 +674,14 @@ describe('notification-service-local', () => {
     const deleteOrder = mockAlarmDeleteAlarm.mock.invocationCallOrder[0];
     expect(scheduleOrder).toBeLessThan(deleteOrder);
     expect(mockAsyncStorageSetItem).toHaveBeenCalledWith(
-      'mindwtr:local:pomodoro-alarm:v1',
+      'tinybubbles:local:pomodoro-alarm:v1',
       JSON.stringify({ id: 99, fireAtMs: fireAt.getTime() })
     );
   });
 
   it('keeps the fresh pomodoro alarm when the module reuses the previous identifier', async () => {
     mockAsyncStorageGetItem.mockImplementation(async (key: string) => (
-      key === 'mindwtr:local:pomodoro-alarm:v1'
+      key === 'tinybubbles:local:pomodoro-alarm:v1'
         ? JSON.stringify({ id: 99, fireAtMs: Date.now() + 60_000 })
         : null
     ));
@@ -696,7 +696,7 @@ describe('notification-service-local', () => {
 
   it('cancels a pending pomodoro completion alarm', async () => {
     mockAsyncStorageGetItem.mockImplementation(async (key: string) => (
-      key === 'mindwtr:local:pomodoro-alarm:v1'
+      key === 'tinybubbles:local:pomodoro-alarm:v1'
         ? JSON.stringify({ id: 41, fireAtMs: Date.now() + 60_000 })
         : null
     ));
@@ -706,12 +706,12 @@ describe('notification-service-local', () => {
     expect(mockAlarmDeleteAlarm).toHaveBeenCalledWith(41);
     expect(mockAlarmDeleteRepeatingAlarm).toHaveBeenCalledWith(41);
     expect(mockAlarmRemoveFiredNotification).toHaveBeenCalledWith(41);
-    expect(mockAsyncStorageRemoveItem).toHaveBeenCalledWith('mindwtr:local:pomodoro-alarm:v1');
+    expect(mockAsyncStorageRemoveItem).toHaveBeenCalledWith('tinybubbles:local:pomodoro-alarm:v1');
   });
 
   it('keeps an already fired pomodoro notification visible while clearing its stored alarm', async () => {
     mockAsyncStorageGetItem.mockImplementation(async (key: string) => (
-      key === 'mindwtr:local:pomodoro-alarm:v1'
+      key === 'tinybubbles:local:pomodoro-alarm:v1'
         ? JSON.stringify({ id: 41, fireAtMs: Date.now() - 1000 })
         : null
     ));
@@ -721,6 +721,6 @@ describe('notification-service-local', () => {
     expect(mockAlarmDeleteAlarm).toHaveBeenCalledWith(41);
     expect(mockAlarmDeleteRepeatingAlarm).toHaveBeenCalledWith(41);
     expect(mockAlarmRemoveFiredNotification).not.toHaveBeenCalled();
-    expect(mockAsyncStorageRemoveItem).toHaveBeenCalledWith('mindwtr:local:pomodoro-alarm:v1');
+    expect(mockAsyncStorageRemoveItem).toHaveBeenCalledWith('tinybubbles:local:pomodoro-alarm:v1');
   });
 });

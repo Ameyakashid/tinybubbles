@@ -32,7 +32,9 @@ env:
 
 jobs:
   publish:
-    if: ${{ !startsWith(github.ref, 'refs/tags/') || !contains(github.ref_name, '-') }}
+    # Tiny Bubbles fork: publishing is disabled until the project ships its own package.
+    # Set repository variable ENABLE_RELEASE_WORKFLOWS=true to re-enable.
+    if: ${{ vars.ENABLE_RELEASE_WORKFLOWS == 'true' && (!startsWith(github.ref, 'refs/tags/') || !contains(github.ref_name, '-')) }}
     name: Publish MCP package and registry metadata
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -78,19 +80,19 @@ jobs:
           bun install --frozen-lockfile || (echo "bun install failed, clearing cache and retrying..." && (bun pm cache rm || bun pm cache clean || true) && bun install --frozen-lockfile)
 
       - name: MCP typecheck
-        run: bun run --filter mindwtr-mcp typecheck
+        run: bun run --filter tinybubbles-mcp typecheck
 
       - name: MCP tests
-        run: bun run --filter mindwtr-mcp test
+        run: bun run --filter tinybubbles-mcp test
 
       - name: Build MCP package
-        run: bun run --filter mindwtr-mcp build
+        run: bun run --filter tinybubbles-mcp build
 
       - name: Verify bundle is self-contained
         run: |
           set -euo pipefail
-          if grep -R "@mindwtr/core" apps/mcp-server/dist; then
-            echo "Built MCP package still references @mindwtr/core. Refusing to publish."
+          if grep -R "@tinybubbles/core" apps/mcp-server/dist; then
+            echo "Built MCP package still references @tinybubbles/core. Refusing to publish."
             exit 1
           fi
 
@@ -98,19 +100,19 @@ jobs:
         id: package
         run: |
           set -euo pipefail
-          rm -rf /tmp/mindwtr-mcp-pack /tmp/mindwtr-mcp-clean
-          mkdir -p /tmp/mindwtr-mcp-pack /tmp/mindwtr-mcp-clean
+          rm -rf /tmp/tinybubbles-mcp-pack /tmp/tinybubbles-mcp-clean
+          mkdir -p /tmp/tinybubbles-mcp-pack /tmp/tinybubbles-mcp-clean
           cd apps/mcp-server
-          npm pack --json --pack-destination /tmp/mindwtr-mcp-pack > /tmp/mindwtr-mcp-pack/pack.json
+          npm pack --json --pack-destination /tmp/tinybubbles-mcp-pack > /tmp/tinybubbles-mcp-pack/pack.json
 
-          PACKAGE_NAME=$(node -e "const data = require('/tmp/mindwtr-mcp-pack/pack.json'); process.stdout.write(data[0].name)")
-          PACKAGE_VERSION=$(node -e "const data = require('/tmp/mindwtr-mcp-pack/pack.json'); process.stdout.write(data[0].version)")
-          TARBALL=$(node -e "const data = require('/tmp/mindwtr-mcp-pack/pack.json'); process.stdout.write(data[0].filename)")
+          PACKAGE_NAME=$(node -e "const data = require('/tmp/tinybubbles-mcp-pack/pack.json'); process.stdout.write(data[0].name)")
+          PACKAGE_VERSION=$(node -e "const data = require('/tmp/tinybubbles-mcp-pack/pack.json'); process.stdout.write(data[0].version)")
+          TARBALL=$(node -e "const data = require('/tmp/tinybubbles-mcp-pack/pack.json'); process.stdout.write(data[0].filename)")
 
-          cd /tmp/mindwtr-mcp-clean
+          cd /tmp/tinybubbles-mcp-clean
           npm init -y
-          npm install "/tmp/mindwtr-mcp-pack/$TARBALL"
-          node "$GITHUB_WORKSPACE/scripts/ci/smoke-mcp-stdio.mjs" "$PWD/node_modules/.bin/mindwtr-mcp" "$PWD/data/mindwtr.db"
+          npm install "/tmp/tinybubbles-mcp-pack/$TARBALL"
+          node "$GITHUB_WORKSPACE/scripts/ci/smoke-mcp-stdio.mjs" "$PWD/node_modules/.bin/tinybubbles-mcp" "$PWD/data/tinybubbles.db"
 
           echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
           echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
@@ -156,9 +158,9 @@ jobs:
         run: |
           set -euo pipefail
           PACKAGE="${{ steps.package.outputs.package_name }}@${{ steps.package.outputs.package_version }}"
-          rm -rf /tmp/mindwtr-mcp-public-clean
-          mkdir -p /tmp/mindwtr-mcp-public-clean
-          cd /tmp/mindwtr-mcp-public-clean
+          rm -rf /tmp/tinybubbles-mcp-public-clean
+          mkdir -p /tmp/tinybubbles-mcp-public-clean
+          cd /tmp/tinybubbles-mcp-public-clean
           npm init -y
           for attempt in $(seq 1 12); do
             if npm install "$PACKAGE"; then
@@ -172,7 +174,7 @@ jobs:
             rm -rf node_modules package-lock.json
             sleep 10
           done
-          node "$GITHUB_WORKSPACE/scripts/ci/smoke-mcp-stdio.mjs" "$PWD/node_modules/.bin/mindwtr-mcp" "$PWD/data/mindwtr.db"
+          node "$GITHUB_WORKSPACE/scripts/ci/smoke-mcp-stdio.mjs" "$PWD/node_modules/.bin/tinybubbles-mcp" "$PWD/data/tinybubbles.db"
 
       - name: Install mcp-publisher
         run: |

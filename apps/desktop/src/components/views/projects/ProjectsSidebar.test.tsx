@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Area, Project, Task, TaskStatus } from '@mindwtr/core';
+import type { Area, Project, Task, TaskStatus } from '@tinybubbles/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectsSidebar } from './ProjectsSidebar';

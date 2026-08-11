@@ -13,7 +13,7 @@ import {
   type SpeechToTextSettings,
   type Task,
   useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { loadAIKey } from '../lib/ai-config';
 import { persistAttachmentLocally } from '../lib/attachment-sync';
 import { getAttachmentsDir } from '../lib/attachment-sync-utils';
@@ -327,7 +327,7 @@ export function useQuickCaptureAudio({
           const now = new Date();
           const timestamp = safeFormatDate(now, 'yyyyMMdd-HHmmss');
           const directory = await ensureAudioDirectory();
-          const fileName = `mindwtr-audio-${timestamp}.wav`;
+          const fileName = `tinybubbles-audio-${timestamp}.wav`;
           const buildOutputFile = (base?: Directory | null) => {
             if (!base?.uri) return null;
             return new File(buildCaptureFileUri(base.uri, fileName));
@@ -614,7 +614,7 @@ export function useQuickCaptureAudio({
       const extension = getCaptureFileExtension(uri);
       const shouldRelocateRecording = Platform.OS !== 'ios';
       const directory = shouldRelocateRecording ? await ensureAudioDirectory() : null;
-      const fileName = `mindwtr-audio-${timestamp}${extension}`;
+      const fileName = `tinybubbles-audio-${timestamp}${extension}`;
       const sourceFile = new File(uri);
       const destinationFile = directory ? new File(buildCaptureFileUri(directory.uri, fileName)) : null;
       let captureCandidates: (File | null)[] = [sourceFile];

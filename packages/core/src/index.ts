@@ -1,8 +1,8 @@
 // packages/core barrel: every module in this package is re-exported here with `export *`,
 // uniformly, so that anything published from a `.ts` file under src/ is reachable both as a
-// named import from '@mindwtr/core' and as '@mindwtr/core/<module>'.
+// named import from '@tinybubbles/core' and as '@tinybubbles/core/<module>'.
 //
-// Mobile's Metro resolver collapses EVERY '@mindwtr/core/<module>' subpath onto this file and
+// Mobile's Metro resolver collapses EVERY '@tinybubbles/core/<module>' subpath onto this file and
 // ignores package.json "exports" entirely (see apps/mobile/metro.config.js). A module that
 // isn't re-exported here is `undefined` at runtime on a real device even though vitest (Node
 // resolution, which does honour package.json exports) resolves it fine and every test passes.
@@ -130,7 +130,7 @@ export * from './todoist-import';
 export * from './ticktick-import';
 export * from './dgt-import';
 export * from './omnifocus-import';
-export * from './mindwtr-csv-import';
+export * from './tinybubbles-csv-import';
 export * from './mind-sweep';
 export * from './focus-star';
 export * from './focus-grouping';

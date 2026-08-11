@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, type RefObject } from 'react';
-import { translateWithFallback, useTaskStore } from '@mindwtr/core';
-import type { StoreActionResult, Task, TaskStatus } from '@mindwtr/core';
+import { translateWithFallback, useTaskStore } from '@tinybubbles/core';
+import type { StoreActionResult, Task, TaskStatus } from '@tinybubbles/core';
 
 import { useOptionalKeybindings, type TaskListScope } from '../../../contexts/keybinding-context';
 import { reportError } from '../../../lib/report-error';

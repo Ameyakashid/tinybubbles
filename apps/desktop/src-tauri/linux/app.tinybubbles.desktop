@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Tiny Bubbles
+Comment=Local-first GTD task manager
+Exec=tinybubbles
+Icon=app.tinybubbles
+Terminal=false
+Categories=Office;
+Keywords=Tasks;Todo;GTD;Productivity;
+StartupNotify=true
+StartupWMClass=tinybubbles
+Actions=QuickAdd;
+
+[Desktop Action QuickAdd]
+Name=Quick Add
+Exec=tinybubbles --quick-add

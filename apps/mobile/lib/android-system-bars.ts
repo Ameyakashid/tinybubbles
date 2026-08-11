@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { logWarn } from './app-log';
 
-interface MindwtrSystemBarsModule extends NativeModule {
+interface TinyBubblesSystemBarsModule extends NativeModule {
   setNavigationBarColorAsync(color: string, darkButtons: boolean): Promise<boolean>;
 }
 
@@ -13,7 +13,7 @@ type AndroidSystemBarStyle = {
 };
 
 const systemBarsModule = Platform.OS === 'android'
-  ? requireOptionalNativeModule<MindwtrSystemBarsModule>('MindwtrSystemBars')
+  ? requireOptionalNativeModule<TinyBubblesSystemBarsModule>('TinyBubblesSystemBars')
   : null;
 
 const parseHexColor = (color: string): { red: number; green: number; blue: number } | null => {

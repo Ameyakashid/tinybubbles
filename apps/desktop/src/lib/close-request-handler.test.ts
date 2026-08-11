@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { WindowSettings } from '@mindwtr/core';
+import type { WindowSettings } from '@tinybubbles/core';
 
 import { handleDesktopCloseRequest } from './close-request-handler';
 

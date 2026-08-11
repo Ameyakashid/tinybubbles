@@ -36,9 +36,9 @@ import type { SettingsLabels } from './labels';
 import type { SettingsAboutPageProps } from './SettingsAboutPage';
 import type { RecommendedDownload, SettingsUpdateModalProps } from './SettingsUpdateModal';
 
-const UPDATE_BADGE_AVAILABLE_KEY = 'mindwtr-update-available';
-const UPDATE_BADGE_LAST_CHECK_KEY = 'mindwtr-update-last-check';
-const UPDATE_BADGE_LATEST_KEY = 'mindwtr-update-latest';
+const UPDATE_BADGE_AVAILABLE_KEY = 'tinybubbles-update-available';
+const UPDATE_BADGE_LAST_CHECK_KEY = 'tinybubbles-update-last-check';
+const UPDATE_BADGE_LATEST_KEY = 'tinybubbles-update-latest';
 const UPDATE_BADGE_INTERVAL_MS = 1000 * 60 * 60 * 24;
 
 type UseSettingsAboutPageOptions = {
@@ -319,7 +319,7 @@ export function useSettingsAboutPage({
                     || installSource === 'unknown')
             ) {
                 setDownloadNotice(
-                    'Recommended on macOS: brew update && brew upgrade --cask mindwtr',
+                    'Recommended on macOS: brew update && brew upgrade --cask tinybubbles',
                 );
             } else {
                 setDownloadNotice(null);
@@ -349,31 +349,31 @@ export function useSettingsAboutPage({
         if (installSource === 'homebrew') {
             await openLink(HOMEBREW_CASK_URL);
             setDownloadNotice(
-                'Update via Homebrew: brew update && brew upgrade --cask mindwtr',
+                'Update via Homebrew: brew update && brew upgrade --cask tinybubbles',
             );
             return;
         }
         if (installSource === 'winget') {
             await openLink(WINGET_PACKAGE_URL);
             setDownloadNotice(
-                'Update via winget: winget upgrade --id dongdongbh.Mindwtr --exact',
+                'Update via winget: winget upgrade --id dongdongbh.TinyBubbles --exact',
             );
             return;
         }
         if (installSource === 'scoop') {
-            setDownloadNotice('Update via Scoop: scoop update mindwtr');
+            setDownloadNotice('Update via Scoop: scoop update tinybubbles');
             return;
         }
         if (installSource === 'chocolatey') {
             await openLink(CHOCOLATEY_PACKAGE_URL);
-            setDownloadNotice('Update via Chocolatey: choco upgrade mindwtr');
+            setDownloadNotice('Update via Chocolatey: choco upgrade tinybubbles');
             return;
         }
         if (updateInfo?.platform === 'macos') {
             const opened = await openLink(HOMEBREW_CASK_URL);
             setDownloadNotice(
                 opened
-                    ? 'Recommended on macOS: brew update && brew upgrade --cask mindwtr'
+                    ? 'Recommended on macOS: brew update && brew upgrade --cask tinybubbles'
                     : t.downloadFailed,
             );
             return;

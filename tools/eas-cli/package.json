@@ -1,5 +1,5 @@
 {
-  "name": "mindwtr-eas-cli",
+  "name": "tinybubbles-eas-cli",
   "private": true,
   "dependencies": {
     "eas-cli": "21.5.0"

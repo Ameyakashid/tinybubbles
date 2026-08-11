@@ -28,7 +28,7 @@ import {
     startOfCalendarMonth,
     type CalendarSystemSetting,
     type WeekStartsOnIndex,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import {
     CALENDAR_DATE_PARAM,
@@ -49,7 +49,7 @@ import {
  * it lives beside the other device-local calendar preferences instead of in
  * synced settings — a wide desktop and a laptop should not fight over it.
  */
-const CALENDAR_TIMELINE_DAY_COUNT_STORAGE_KEY = 'mindwtr.calendar.timelineDayCount';
+const CALENDAR_TIMELINE_DAY_COUNT_STORAGE_KEY = 'tinybubbles.calendar.timelineDayCount';
 
 export type CalendarMonthNavigationOptions = {
     calendarLocale: string;

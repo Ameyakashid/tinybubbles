@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { tFallback } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 import type { ThemeColors } from '../../hooks/use-theme-colors';
 import { styles } from './swipeable-task-item.styles';
 

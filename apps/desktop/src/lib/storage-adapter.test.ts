@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 import { setNativeInvokeTransport } from './tauri-invoke';
 
 const invokeMock = vi.fn();
@@ -390,7 +390,7 @@ describe('tauriStorage.saveData stuck-save warning (#913)', () => {
             ...createdTask,
             showFutureRecurrence: false,
             isFocusedToday: false,
-            suppressMindwtrReminders: false,
+            suppressTinyBubblesReminders: false,
         };
         const observed = {
             tasks: [], projects: [], sections: [], areas: [], people: [], settings: {},

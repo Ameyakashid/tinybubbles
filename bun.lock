@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "mindwtr-monorepo",
+      "name": "tinybubbles-monorepo",
       "dependencies": {
         "@babel/runtime": "^7.28.4",
         "@radix-ui/react-compose-refs": "^1.1.2",
@@ -75,20 +75,20 @@
       },
     },
     "apps/cloud": {
-      "name": "mindwtr-cloud",
+      "name": "tinybubbles-cloud",
       "version": "1.2.0",
       "dependencies": {
-        "@mindwtr/core": "workspace:*",
+        "@tinybubbles/core": "workspace:*",
       },
     },
     "apps/desktop": {
-      "name": "mindwtr",
+      "name": "tinybubbles",
       "version": "1.2.0",
       "dependencies": {
         "@dnd-kit/core": "^6.1.0",
         "@dnd-kit/sortable": "^8.0.0",
         "@dnd-kit/utilities": "^3.2.2",
-        "@mindwtr/core": "file:../../packages/core",
+        "@tinybubbles/core": "file:../../packages/core",
         "@tanstack/react-virtual": "^3.13.2",
         "@tauri-apps/api": "2.9.1",
         "@tauri-apps/plugin-dialog": "2.4.2",
@@ -133,10 +133,10 @@
       },
     },
     "apps/mcp-server": {
-      "name": "mindwtr-mcp",
+      "name": "tinybubbles-mcp",
       "version": "1.1.4",
       "bin": {
-        "mindwtr-mcp": "dist/index.js",
+        "tinybubbles-mcp": "dist/index.js",
       },
       "dependencies": {
         "better-sqlite3": "^12.0.0",
@@ -154,7 +154,7 @@
         "@expo/metro-runtime": "^6.1.2",
         "@expo/vector-icons": "^15.0.3",
         "@fugood/react-native-audio-pcm-stream": "^1.1.4",
-        "@mindwtr/core": "workspace:*",
+        "@tinybubbles/core": "workspace:*",
         "@op-engineering/op-sqlite": "^17.1.2",
         "@react-native-async-storage/async-storage": "2.2.0",
         "@react-native-community/datetimepicker": "8.4.4",
@@ -232,7 +232,7 @@
       },
     },
     "packages/core": {
-      "name": "@mindwtr/core",
+      "name": "@tinybubbles/core",
       "version": "1.2.0",
       "dependencies": {
         "@babel/runtime": "^7.28.4",
@@ -691,7 +691,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@mindwtr/core": ["@mindwtr/core@workspace:packages/core"],
+    "@tinybubbles/core": ["@tinybubbles/core@workspace:packages/core"],
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.29.0", "", { "dependencies": { "@hono/node-server": "^1.19.9", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.2.1", "express-rate-limit": "^8.2.1", "hono": "^4.11.4", "jose": "^6.1.3", "json-schema-typed": "^8.0.2", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.25 || ^4.0", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ=="],
 
@@ -2115,11 +2115,11 @@
 
     "min-indent": ["min-indent@1.0.1", "", {}, "sha512-I9jwMn07Sy/IwOj3zVkVik2JTvgpaykDZEigL6Rx6N9LbMywwUSMtxET+7lVoDLLd3O3IXwJwvuuns8UB/HeAg=="],
 
-    "mindwtr": ["mindwtr@workspace:apps/desktop"],
+    "tinybubbles": ["tinybubbles@workspace:apps/desktop"],
 
-    "mindwtr-cloud": ["mindwtr-cloud@workspace:apps/cloud"],
+    "tinybubbles-cloud": ["tinybubbles-cloud@workspace:apps/cloud"],
 
-    "mindwtr-mcp": ["mindwtr-mcp@workspace:apps/mcp-server"],
+    "tinybubbles-mcp": ["tinybubbles-mcp@workspace:apps/mcp-server"],
 
     "minimatch": ["minimatch@10.2.3", "", { "dependencies": { "brace-expansion": "^5.0.2" } }, "sha512-Rwi3pnapEqirPSbWbrZaa6N3nmqq4Xer/2XooiOKyV3q12ML06f7MOuc5DVH8ONZIFhwIYQ3yzPH4nt7iWHaTg=="],
 
@@ -3267,7 +3267,7 @@
 
     "metro-transform-worker/@babel/types": ["@babel/types@7.28.5", "", { "dependencies": { "@babel/helper-string-parser": "^7.27.1", "@babel/helper-validator-identifier": "^7.28.5" } }, "sha512-qQ5m48eI/MFLQ5PxQj4PFaprjyCTLI37ElWMmNs0K8Lk3dVeOdNpB3ks8jc7yM5CDmVC73eMVk/trk3fgmrUpA=="],
 
-    "mindwtr/@mindwtr/core": ["@mindwtr/core@file:packages/core", { "dependencies": { "@babel/runtime": "^7.28.4", "chrono-node": "^2.9.0", "date-fns": "^4.1.0", "date-fns-jalali": "4.4.0-0", "fflate": "^0.8.2", "zustand": "^4.5.0" }, "devDependencies": { "@types/react": "~19.1.0", "typescript": "~5.9.2", "vitest": "^3.2.4" }, "peerDependencies": { "react": ">=18.0.0" } }],
+    "tinybubbles/@tinybubbles/core": ["@tinybubbles/core@file:packages/core", { "dependencies": { "@babel/runtime": "^7.28.4", "chrono-node": "^2.9.0", "date-fns": "^4.1.0", "date-fns-jalali": "4.4.0-0", "fflate": "^0.8.2", "zustand": "^4.5.0" }, "devDependencies": { "@types/react": "~19.1.0", "typescript": "~5.9.2", "vitest": "^3.2.4" }, "peerDependencies": { "react": ">=18.0.0" } }],
 
     "mobile/semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 

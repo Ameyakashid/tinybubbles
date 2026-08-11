@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { logError } from '@/lib/app-log';
 import { ingestPendingCaptures } from '@/lib/pending-captures';

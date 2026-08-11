@@ -7,7 +7,7 @@ import {
   taskMatchesQuery,
   type AppData,
   type RelativeStartOffset,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { NotFoundError, ValidationError } from './errors.js';
 import { filterUndefined } from './filter-undefined.js';
@@ -31,7 +31,7 @@ import type {
   AddPersonInput,
   AddProjectInput,
   AddSectionInput,
-  MindwtrService,
+  TinyBubblesService,
   RenamePersonInput,
   UpdateAreaInput,
   UpdatePersonInput,
@@ -155,10 +155,10 @@ const mapCloudError = (error: unknown): unknown => {
 };
 
 const personWritesUnsupported = (): never => {
-  throw new ValidationError('The Mindwtr cloud API does not support person edits yet. Use the local database backend for person changes.');
+  throw new ValidationError('The Tiny Bubbles cloud API does not support person edits yet. Use the local database backend for person changes.');
 };
 
-export const createCloudService = (options: CloudServiceOptions): MindwtrService => {
+export const createCloudService = (options: CloudServiceOptions): TinyBubblesService => {
   const url = options.url.trim();
   const token = options.token.trim();
   if (!url) throw new ValidationError('Cloud URL is required');
@@ -229,7 +229,7 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
       const data = await readData();
       const dueDateFrom = dateKey(input.dueDateFrom);
       const dueDateTo = dateKey(input.dueDateTo);
-      // mindwtr_list_tasks has no default done/archived hiding (unlike the cloud REST
+      // tinybubbles_list_tasks has no default done/archived hiding (unlike the cloud REST
       // API's GET /v1/tasks) - opt out of taskMatchesQuery's archived default explicitly
       // via includeArchived rather than special-casing this surface's own default.
       const filtered = data.tasks.filter((task) => {
@@ -363,7 +363,7 @@ export const createCloudService = (options: CloudServiceOptions): MindwtrService
     },
     deleteTask: async (id: string) => deleteEntity('/tasks', id, (data) => data.tasks, 'Task'),
     restoreTask: async (_id: string) => {
-      throw new ValidationError('The Mindwtr cloud API does not support restoring deleted tasks. Restore it from a Mindwtr app or use the local database backend.');
+      throw new ValidationError('The Tiny Bubbles cloud API does not support restoring deleted tasks. Restore it from a Tiny Bubbles app or use the local database backend.');
     },
     addProject: async (input: AddProjectInput) => {
       const result = await request<{ project: AppData['projects'][number] }>('POST', '/projects', {

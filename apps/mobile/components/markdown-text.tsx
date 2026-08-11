@@ -5,7 +5,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
-import { parseInlineMarkdown, parseMarkdownReferenceHref, shallow, tFallback, useTaskStore, type Project, type Task } from '@mindwtr/core';
+import { parseInlineMarkdown, parseMarkdownReferenceHref, shallow, tFallback, useTaskStore, type Project, type Task } from '@tinybubbles/core';
 import { useLanguage } from '@/contexts/language-context';
 import { openProjectScreen, openTaskScreen } from '@/lib/task-meta-navigation';
 

@@ -288,7 +288,7 @@ describe('backup transfer', () => {
         }
     });
 
-    it('rejects non-Mindwtr JSON payloads', () => {
+    it('rejects non-Tiny Bubbles JSON payloads', () => {
         const result = validateBackupJson(JSON.stringify({
             tasks: {},
             projects: [],

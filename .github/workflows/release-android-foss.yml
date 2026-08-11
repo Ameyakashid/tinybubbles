@@ -37,7 +37,7 @@ jobs:
       # Keep Metro/JS bundling stable on CI during release builds.
       NODE_OPTIONS: --max-old-space-size=6144
       DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY || secrets.DROPBOX_APP_KEY }}
-      FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       DONATION_PROMPT_ENABLED: "true"
 
     steps:
@@ -128,7 +128,7 @@ jobs:
             fi
           done
 
-          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'mindwtr-*-arm64-v8a-foss.apk' | sort)
+          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'tinybubbles-*-arm64-v8a-foss.apk' | sort)
           if [[ "${#apk_matches[@]}" -ne 1 ]]; then
             echo "Expected exactly one arm64 FOSS APK for signing, found ${#apk_matches[@]}" >&2
             printf '%s\n' "${apk_matches[@]}" >&2
@@ -159,9 +159,9 @@ jobs:
           printf '%s' "${ANDROID_RELEASE_KEY_PASSWORD}" > "${KEY_PASS_FILE}"
           chmod 600 "${STORE_PASS_FILE}" "${KEY_PASS_FILE}"
 
-          UNSIGNED_APK="${RUNNER_TEMP}/mindwtr-foss-unsigned.apk"
-          ALIGNED_APK="${RUNNER_TEMP}/mindwtr-foss-aligned.apk"
-          SIGNED_APK="${RUNNER_TEMP}/mindwtr-foss-signed.apk"
+          UNSIGNED_APK="${RUNNER_TEMP}/tinybubbles-foss-unsigned.apk"
+          ALIGNED_APK="${RUNNER_TEMP}/tinybubbles-foss-aligned.apk"
+          SIGNED_APK="${RUNNER_TEMP}/tinybubbles-foss-signed.apk"
 
           cp "${APK_PATH}" "${UNSIGNED_APK}"
           "${ZIPALIGN_BIN}" -f -p 4 "${UNSIGNED_APK}" "${ALIGNED_APK}"
@@ -177,7 +177,7 @@ jobs:
           mv "${SIGNED_APK}" "${APK_PATH}"
           rm -f "${STORE_PASS_FILE}" "${KEY_PASS_FILE}" "${KEYSTORE_PATH}"
 
-          SIG_REPORT="${RUNNER_TEMP}/mindwtr-foss-signature.txt"
+          SIG_REPORT="${RUNNER_TEMP}/tinybubbles-foss-signature.txt"
           "${APKSIGNER_BIN}" verify --verbose --print-certs "${APK_PATH}" | tee "${SIG_REPORT}"
           if grep -q "CN=Android Debug" "${SIG_REPORT}"; then
             echo "Debug certificate detected in final APK signer chain" >&2
@@ -187,7 +187,7 @@ jobs:
 
       - name: Verify FOSS permission cleanup
         run: |
-          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'mindwtr-*-arm64-v8a-foss.apk' | sort)
+          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'tinybubbles-*-arm64-v8a-foss.apk' | sort)
           if [[ "${#apk_matches[@]}" -ne 1 ]]; then
             echo "Expected exactly one arm64 FOSS APK for permission verification, found ${#apk_matches[@]}" >&2
             printf '%s\n' "${apk_matches[@]}" >&2
@@ -222,7 +222,7 @@ jobs:
 
       - name: Verify FOSS Google service cleanup
         run: |
-          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'mindwtr-*-arm64-v8a-foss.apk' | sort)
+          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'tinybubbles-*-arm64-v8a-foss.apk' | sort)
           if [[ "${#apk_matches[@]}" -ne 1 ]]; then
             echo "Expected exactly one arm64 FOSS APK for Google service verification, found ${#apk_matches[@]}" >&2
             printf '%s\n' "${apk_matches[@]}" >&2
@@ -233,7 +233,7 @@ jobs:
       - name: Collect Android FOSS artifacts
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'mindwtr-*-arm64-v8a-foss.apk' | sort)
+          mapfile -t apk_matches < <(find apps/mobile/build -maxdepth 1 -type f -name 'tinybubbles-*-arm64-v8a-foss.apk' | sort)
           if [[ "${#apk_matches[@]}" -ne 1 ]]; then
             echo "Expected exactly one arm64 FOSS APK for collection, found ${#apk_matches[@]}" >&2
             printf '%s\n' "${apk_matches[@]}" >&2
@@ -241,7 +241,7 @@ jobs:
           fi
           APK_PATH="${apk_matches[0]}"
           mkdir -p release-artifacts
-          cp "${APK_PATH}" "release-artifacts/mindwtr-${VERSION}-foss.apk"
+          cp "${APK_PATH}" "release-artifacts/tinybubbles-${VERSION}-foss.apk"
           ls -la release-artifacts
 
       - name: Upload Android FOSS artifacts

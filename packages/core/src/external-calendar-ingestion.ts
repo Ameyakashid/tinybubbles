@@ -3,11 +3,11 @@ import type {
     ExternalCalendarSubscription,
 } from './ics';
 
-const MINDWTR_PUSHED_EVENT_PREFIX = 'mindwtr: ';
-const MINDWTR_MIRROR_CALENDAR_NAMES = new Set([
-    'mindwtr',
-    'mindwtr calendar',
-    'mindwtrcal',
+const TINYBUBBLES_PUSHED_EVENT_PREFIX = 'tinybubbles: ';
+const TINYBUBBLES_MIRROR_CALENDAR_NAMES = new Set([
+    'tinybubbles',
+    'tinybubbles calendar',
+    'tinybubblescal',
 ]);
 
 export type ExternalCalendarSourceResult = {
@@ -15,22 +15,22 @@ export type ExternalCalendarSourceResult = {
     events: ExternalCalendarEvent[];
 };
 
-export function isMindwtrMirrorCalendar(
+export function isTinyBubblesMirrorCalendar(
     calendar: Pick<ExternalCalendarSubscription, 'name'>,
 ): boolean {
-    return MINDWTR_MIRROR_CALENDAR_NAMES.has(
+    return TINYBUBBLES_MIRROR_CALENDAR_NAMES.has(
         calendar.name.trim().toLowerCase().replace(/\s+/g, ' '),
     );
 }
 
-export function isMindwtrMirrorEvent(
+export function isTinyBubblesMirrorEvent(
     event: Pick<ExternalCalendarEvent, 'sourceId' | 'title'>,
     calendarById: ReadonlyMap<string, ExternalCalendarSubscription>,
 ): boolean {
     const calendar = calendarById.get(event.sourceId);
-    if (calendar && isMindwtrMirrorCalendar(calendar)) return true;
+    if (calendar && isTinyBubblesMirrorCalendar(calendar)) return true;
     return event.title.trim().toLowerCase().startsWith(
-        MINDWTR_PUSHED_EVENT_PREFIX,
+        TINYBUBBLES_PUSHED_EVENT_PREFIX,
     );
 }
 
@@ -47,7 +47,7 @@ export function mergeExternalCalendarSources(
     const eventByKey = new Map<string, ExternalCalendarEvent>();
     for (const source of sources) {
         for (const event of source.events) {
-            if (isMindwtrMirrorEvent(event, calendarById)) continue;
+            if (isTinyBubblesMirrorEvent(event, calendarById)) continue;
             eventByKey.set(
                 `${event.sourceId}:${event.id}:${event.start}:${event.end}`,
                 event,
@@ -65,7 +65,7 @@ export function mergeExternalCalendarSources(
 
     return {
         calendars: Array.from(calendarById.values()).filter(
-            (calendar) => !isMindwtrMirrorCalendar(calendar),
+            (calendar) => !isTinyBubblesMirrorCalendar(calendar),
         ),
         events,
     };

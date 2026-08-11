@@ -63,7 +63,7 @@ const withAndroidMonochromeIcon = (config) => withDangerousMod(config, [
 
 module.exports = createRunOncePlugin(
   withAndroidMonochromeIcon,
-  'mindwtr-android-monochrome-icon',
+  'tinybubbles-android-monochrome-icon',
   '1.0.0',
 );
 

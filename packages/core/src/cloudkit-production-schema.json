@@ -1,7 +1,7 @@
 {
     "comment": "CloudKit Production container schema state by record type. 'deployed' is the repository assertion for keys already exercised by stable releases or explicitly confirmed in the Production dashboard. New keys stay in 'pendingProduction' until that dashboard check is complete; stable releases fail while any pending key remains.",
     "records": {
-        "MindwtrTask": {
+        "TinyBubblesTask": {
             "deployed": [
                 "title",
                 "status",
@@ -28,7 +28,7 @@
                 "isFocusedToday",
                 "timeEstimate",
                 "timeSpentMinutes",
-                "suppressMindwtrReminders",
+                "suppressTinyBubblesReminders",
                 "repeatReminderMinutes",
                 "reviewAt",
                 "completedAt",
@@ -48,7 +48,7 @@
             ],
             "pendingProduction": []
         },
-        "MindwtrProject": {
+        "TinyBubblesProject": {
             "deployed": [
                 "title",
                 "status",
@@ -74,7 +74,7 @@
             ],
             "pendingProduction": []
         },
-        "MindwtrSection": {
+        "TinyBubblesSection": {
             "deployed": [
                 "projectId",
                 "title",
@@ -91,7 +91,7 @@
             ],
             "pendingProduction": []
         },
-        "MindwtrArea": {
+        "TinyBubblesArea": {
             "deployed": [
                 "name",
                 "color",
@@ -105,7 +105,7 @@
             ],
             "pendingProduction": []
         },
-        "MindwtrPerson": {
+        "TinyBubblesPerson": {
             "deployed": [
                 "name",
                 "note",

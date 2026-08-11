@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import { isTaskActionable, useTaskStore } from '@mindwtr/core';
+import { isTaskActionable, useTaskStore } from '@tinybubbles/core';
 
 import { setNotificationOpenHandler } from '@/lib/notification-service';
 import { consumePendingNotificationOpenPayload } from '@/modules/notification-open-intents';

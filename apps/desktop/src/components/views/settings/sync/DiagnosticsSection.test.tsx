@@ -8,7 +8,7 @@ const baseProps: Parameters<typeof DiagnosticsSection>[0] = {
         diagnostics: 'Diagnostics',
         diagnosticsDesc: 'Help troubleshoot issues.',
         analyticsHeartbeat: 'Opt out of diagnostics',
-        analyticsHeartbeatDesc: 'Diagnostics are anonymous and help improve Mindwtr.',
+        analyticsHeartbeatDesc: 'Diagnostics are anonymous and help improve Tiny Bubbles.',
         debugLogging: 'Debug logging',
         debugLoggingDesc: 'Record errors locally.',
         logFile: 'Log file',

@@ -10,7 +10,7 @@ import {
   type MarkdownToolbarActionId,
   type MarkdownToolbarResult,
   type Project,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 const selectionsEqual = (left: MarkdownSelection, right: MarkdownSelection) => (
   left.start === right.start && left.end === right.end

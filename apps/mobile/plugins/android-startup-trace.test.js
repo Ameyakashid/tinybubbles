@@ -22,9 +22,8 @@ const contextAutomationModuleDir = path.join(
   'src',
   'main',
   'java',
-  'tech',
-  'dongdongbh',
-  'mindwtr',
+  'app',
+  'tinybubbles',
   'contextautomation'
 );
 
@@ -37,10 +36,10 @@ describe('android-startup-trace', () => {
     const receiver = readModuleFile('ContextAutomationReceiver.kt');
     const service = readModuleFile('ContextAutomationHeadlessService.kt');
 
-    expect(receiver).toContain('package tech.dongdongbh.mindwtr.contextautomation');
+    expect(receiver).toContain('package app.tinybubbles.contextautomation');
     expect(receiver).toContain('class ContextAutomationReceiver : BroadcastReceiver()');
-    expect(receiver).toContain('tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT');
-    expect(receiver).toContain('tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT');
+    expect(receiver).toContain('app.tinybubbles.action.ACTIVATE_CONTEXT');
+    expect(receiver).toContain('app.tinybubbles.action.DEACTIVATE_CONTEXT');
     expect(receiver).toContain('ContextAutomationHeadlessService::class.java');
     expect(receiver).toContain('HeadlessJsTaskService.acquireWakeLockNow(context)');
 
@@ -65,9 +64,9 @@ describe('android-startup-trace', () => {
       lastIndex = index;
     });
 
-    expect(service).toContain('package tech.dongdongbh.mindwtr.contextautomation');
+    expect(service).toContain('package app.tinybubbles.contextautomation');
     expect(service).toContain('class ContextAutomationHeadlessService : HeadlessJsTaskService()');
-    expect(service).toContain('MindwtrContextAutomation');
+    expect(service).toContain('TinyBubblesContextAutomation');
     expect(service).toContain('CONTEXT_AUTOMATION_HEADLESS_TIMEOUT_MS = 15_000L');
     expect(service).toContain('HeadlessJsTaskConfig(');
   });
@@ -79,7 +78,7 @@ describe('android-startup-trace', () => {
   });
 
   it('adds notification intent replay support to MainActivity', () => {
-    const input = `package tech.dongdongbh.mindwtr
+    const input = `package app.tinybubbles
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
@@ -108,16 +107,16 @@ class MainActivity : ReactActivity() {
     expect(output).toContain('import com.facebook.react.ReactApplication');
     expect(output).toContain('import com.facebook.react.modules.core.DeviceEventManagerModule');
     expect(output).toContain('import org.json.JSONObject');
-    expect(output).toContain('import tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenPayloadStore');
+    expect(output).toContain('import app.tinybubbles.notificationopenintents.NotificationOpenPayloadStore');
     expect(output).toContain('normalizeCreateNoteIntent(intent)');
     expect(output).toContain('com.google.android.gms.actions.CREATE_NOTE');
     expect(output).toContain('com.google.android.gms.actions.extra.NAME');
     expect(output).toContain('com.google.android.gms.actions.extra.TEXT');
-    expect(output).toContain('.scheme("mindwtr")');
+    expect(output).toContain('.scheme("tinybubbles")');
     expect(output).toContain('.path("capture")');
     expect(output).toContain('normalizeContextAutomationIntent(intent)');
-    expect(output).toContain('tech.dongdongbh.mindwtr.action.ACTIVATE_CONTEXT');
-    expect(output).toContain('tech.dongdongbh.mindwtr.action.DEACTIVATE_CONTEXT');
+    expect(output).toContain('app.tinybubbles.action.ACTIVATE_CONTEXT');
+    expect(output).toContain('app.tinybubbles.action.DEACTIVATE_CONTEXT');
     expect(output).toContain('.path("contexts")');
     expect(output).toContain('.appendQueryParameter("contextAction", contextAction)');
     expect(output).toContain('cacheNotificationOpenPayload(intent)');
@@ -131,7 +130,7 @@ class MainActivity : ReactActivity() {
   });
 
   it('keeps the MainActivity notification patch idempotent', () => {
-    const input = `package tech.dongdongbh.mindwtr
+    const input = `package app.tinybubbles
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
@@ -158,7 +157,7 @@ class MainActivity : ReactActivity() {
   });
 
   it('migrates the legacy MainActivity notification cache to the shared store', () => {
-    const input = `package tech.dongdongbh.mindwtr
+    const input = `package app.tinybubbles
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.content.Intent
@@ -230,7 +229,7 @@ class MainActivity : ReactActivity() {
 
     const output = patchMainActivity(input);
 
-    expect(output).toContain('import tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenPayloadStore');
+    expect(output).toContain('import app.tinybubbles.notificationopenintents.NotificationOpenPayloadStore');
     expect(output).toContain('import android.net.Uri');
     expect(output).toContain('private fun normalizeCreateNoteIntent(intent: Intent?)');
     expect(output).toContain('private fun normalizeContextAutomationIntent(intent: Intent?)');

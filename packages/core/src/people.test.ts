@@ -141,7 +141,7 @@ describe('people helpers', () => {
         expect(firstLoad.people).toEqual([
             expect.objectContaining({
                 id: 'person-blank',
-                name: '__mindwtr_deleted_person__:person-blank',
+                name: '__tinybubbles_deleted_person__:person-blank',
                 note: 'Preserve this note',
                 referenceLink: 'https://example.com/blank',
                 deletedAt: '2026-04-05T00:00:00.000Z',

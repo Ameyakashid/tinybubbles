@@ -16,7 +16,7 @@ describe('android-manifest-fixes', () => {
       $: { 'android:name': '.MainActivity' },
       'intent-filter': [
         buildContextIntentFilter(),
-        buildContextIntentFilter({ dataScheme: 'mindwtr' }),
+        buildContextIntentFilter({ dataScheme: 'tinybubbles' }),
         {
           action: [{ $: { 'android:name': 'android.intent.action.VIEW' } }],
           category: [{ $: { 'android:name': 'android.intent.category.DEFAULT' } }],
@@ -36,14 +36,14 @@ describe('android-manifest-fixes', () => {
 
     expect(application.receiver).toHaveLength(1);
     expect(application.receiver[0].$).toEqual({
-      'android:name': 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationReceiver',
+      'android:name': 'app.tinybubbles.contextautomation.ContextAutomationReceiver',
       'android:exported': 'true',
     });
     expect(application.receiver[0]['intent-filter']).toHaveLength(2);
 
     expect(application.service).toHaveLength(1);
     expect(application.service[0].$).toEqual({
-      'android:name': 'tech.dongdongbh.mindwtr.contextautomation.ContextAutomationHeadlessService',
+      'android:name': 'app.tinybubbles.contextautomation.ContextAutomationHeadlessService',
       'android:exported': 'false',
     });
   });

@@ -1,7 +1,7 @@
 # Code of Conduct
 
 ## Our Pledge
-We are committed to providing a welcoming and inclusive environment for everyone contributing to Mindwtr, regardless of experience level, background, or identity.
+We are committed to providing a welcoming and inclusive environment for everyone contributing to Tiny Bubbles, regardless of experience level, background, or identity.
 
 ## Our Standards
 Expected behavior:
@@ -19,7 +19,7 @@ Unacceptable behavior:
 
 ## Enforcement
 Instances of unacceptable behavior may be reported by:
-- Contacting the project maintainer directly (GitHub: @dongdongbh)
+- Opening a private report through the repository's security advisory form
 - Opening an issue if the report is not sensitive
 
 Project maintainers have the right to remove, edit, or reject comments, commits, code, issues, and other contributions that violate this Code of Conduct.

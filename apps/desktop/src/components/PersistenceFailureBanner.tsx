@@ -1,5 +1,5 @@
 import { AlertTriangle, Loader2 } from 'lucide-react';
-import { useTaskStore, type PersistenceFailure } from '@mindwtr/core';
+import { useTaskStore, type PersistenceFailure } from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 

@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { type Area, type Project, type Task } from '@mindwtr/core';
+import { type Area, type Project, type Task } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useCalendarComposer, type CalendarComposerOptions } from './use-calendar-composer';

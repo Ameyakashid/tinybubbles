@@ -35,7 +35,7 @@ test("stable release validates tags and committed versions before any build or p
   expect(releaseNotesStep.run).toContain("docs/release-notes/${TAG}.md");
   expect(releaseNotesStep.run).toContain("docs/release-notes/${VERSION}.md");
   expect(releaseNotesStep.run).toContain(
-    '[[ "$heading" != "# Mindwtr ${VERSION}" && "$heading" != "# Mindwtr ${TAG}" ]]',
+    '[[ "$heading" != "# Tiny Bubbles ${VERSION}" && "$heading" != "# Tiny Bubbles ${TAG}" ]]',
   );
   expect(releaseNotesStep.run).not.toContain('!= *"$VERSION"*');
   const fossStep = steps.find(
@@ -256,7 +256,7 @@ test("Windows release signs and publishes exactly the current NSIS installer", (
     (step) => step.name === "Validate release assets",
   );
   expect(validateAssets.run).toContain(
-    'expected_windows_installer="./release-assets/mindwtr_${VERSION}_x64-setup.exe"',
+    'expected_windows_installer="./release-assets/tinybubbles_${VERSION}_x64-setup.exe"',
   );
   expect(validateAssets.run).toContain(
     "${windows_installers[@]}",
@@ -276,7 +276,7 @@ test("stable and RC releases sign and verify the checksum manifest", () => {
   ]) {
     expect(
       job.steps.some(
-        (step) => step.name === "Import Mindwtr release signing key",
+        (step) => step.name === "Import Tiny Bubbles release signing key",
       ),
     ).toBe(true);
     const validateStep = job.steps.find(

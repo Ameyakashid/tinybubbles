@@ -28,8 +28,8 @@ type SendHeartbeatRequestOptions = {
 export type SendDailyHeartbeatOptions = SendHeartbeatRequestOptions;
 export type SendHeartbeatOptOutOptions = SendHeartbeatRequestOptions;
 
-export const HEARTBEAT_LAST_SENT_DAY_KEY = 'mindwtr-analytics-last-heartbeat-day';
-export const HEARTBEAT_OPT_OUT_SENT_KEY = 'mindwtr-analytics-opt-out-sent';
+export const HEARTBEAT_LAST_SENT_DAY_KEY = 'tinybubbles-analytics-last-heartbeat-day';
+export const HEARTBEAT_OPT_OUT_SENT_KEY = 'tinybubbles-analytics-opt-out-sent';
 
 const trimValue = (value: string | null | undefined): string => String(value ?? '').trim();
 

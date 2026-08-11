@@ -37,13 +37,13 @@ describe('sync-service-utils', () => {
 
     it('detects sync file paths using default names', () => {
         expect(isSyncFilePath('/storage/data.json')).toBe(true);
-        expect(isSyncFilePath('/storage/mindwtr-sync.json')).toBe(true);
+        expect(isSyncFilePath('/storage/tinybubbles-sync.json')).toBe(true);
         expect(isSyncFilePath('/storage/other.json')).toBe(false);
     });
 
     it('resolves file sync base directory from file or folder paths', () => {
         expect(getFileSyncDir('/storage/folder/data.json')).toBe('/storage/folder');
-        expect(getFileSyncDir('/storage/folder/mindwtr-sync.json')).toBe('/storage/folder');
+        expect(getFileSyncDir('/storage/folder/tinybubbles-sync.json')).toBe('/storage/folder');
         expect(getFileSyncDir('/storage/folder/')).toBe('/storage/folder');
     });
 

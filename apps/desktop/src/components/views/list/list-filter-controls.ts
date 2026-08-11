@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
-import { selectionsFromCriteria } from '@mindwtr/core';
-import type { FilterCriteria, TaskPriority, TimeEstimate } from '@mindwtr/core';
+import { selectionsFromCriteria } from '@tinybubbles/core';
+import type { FilterCriteria, TaskPriority, TimeEstimate } from '@tinybubbles/core';
 import { useUiStore } from '../../../store/ui-store';
 
 const EMPTY_ESTIMATES: TimeEstimate[] = [];

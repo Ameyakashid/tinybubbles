@@ -13,7 +13,7 @@ import {
     SYNC_LOCAL_INSECURE_URL_OPTIONS,
     webdavGetJson,
     type AppSettings,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { pickAndParseSyncFolder } from '@/lib/storage-file';
 import { getCloudKitAccountStatus } from '@/lib/cloudkit-sync';
@@ -416,10 +416,10 @@ export function useSyncSettingsTransportActions({
             setSyncBackend('file');
         } catch (error) {
             const message = String(error);
-            if (/Selected JSON file is not a Mindwtr backup/i.test(message)) {
+            if (/Selected JSON file is not a Tiny Bubbles backup/i.test(message)) {
                 showSettingsWarning(
                     tr('settings.syncMobile.invalidSyncFile'),
-                    tr('settings.syncMobile.pleaseChooseAMindwtrBackupJsonFileInTheTarget'),
+                    tr('settings.syncMobile.pleaseChooseATinyBubblesBackupJsonFileInTheTarget'),
                     5200
                 );
                 return;

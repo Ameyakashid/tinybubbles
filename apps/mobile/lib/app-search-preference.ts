@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 // index is mirrored into Android's AppSearch PlatformStorage for system
 // search. This is a device capability, not user data — it must never enter
 // the synced settings document (a laptop or an iPhone has no such switch).
-const STORAGE_KEY = 'mindwtr:appSearchIndexingEnabled';
+const STORAGE_KEY = 'tinybubbles:appSearchIndexingEnabled';
 
 // PlatformStorage's system-search integration is only available from
 // Android 12 (API 31); below that the setting is hidden entirely, per #1017.

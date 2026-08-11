@@ -7,8 +7,8 @@ import { TaskEditModal } from './task-edit-modal';
 import { MarkdownFormatToolbar } from './markdown-format-toolbar';
 import { syncTaskEditPagerPosition } from './task-edit/task-edit-modal.utils';
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   const storeState = {
     tasks: [],
     projects: [{

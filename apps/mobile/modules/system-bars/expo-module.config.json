@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["tech.dongdongbh.mindwtr.systembars.MindwtrSystemBarsModule"]
+    "modules": ["app.tinybubbles.systembars.TinyBubblesSystemBarsModule"]
   }
 }

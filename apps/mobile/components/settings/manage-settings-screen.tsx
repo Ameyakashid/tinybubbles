@@ -12,7 +12,7 @@ import {
     type Area,
     type Person,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText } from '@/components/compact-text';
@@ -22,7 +22,7 @@ import { SettingsTopBar } from './settings.shell';
 import { styles } from './settings.styles';
 
 type ManageSectionKey = 'areas' | 'people' | 'contexts' | 'tags';
-const MANAGE_OPEN_SECTIONS_STORAGE_KEY = 'mindwtr:settings:manage:openSections';
+const MANAGE_OPEN_SECTIONS_STORAGE_KEY = 'tinybubbles:settings:manage:openSections';
 const DEFAULT_OPEN_SECTIONS: Record<ManageSectionKey, boolean> = {
     areas: false,
     people: false,

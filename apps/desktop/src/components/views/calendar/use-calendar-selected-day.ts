@@ -13,7 +13,7 @@ import {
     safeParseDueDate,
     type ExternalCalendarEvent,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export type CalendarSelectedDayTaskRow = {
     id: string;

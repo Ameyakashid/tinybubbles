@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 import { useTaskItemEditState } from './useTaskItemEditState';
 

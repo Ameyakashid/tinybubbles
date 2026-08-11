@@ -2,7 +2,7 @@ import React from 'react';
 import renderer from 'react-test-renderer';
 import { Modal, Switch, Text, TextInput, TouchableOpacity } from 'react-native';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 
 import { GtdSettingsScreen } from './gtd-settings-screen';
 
@@ -43,7 +43,7 @@ const storeState: MockStoreState = {
   updateSettings,
 };
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@tinybubbles/core', () => ({
   FOCUS_TASK_LIMIT_OPTIONS: [3, 5, 10],
   getDefaultTaskAreaMode: (settings: AppData['settings']) => {
     const mode = settings?.gtd?.defaultAreaMode;

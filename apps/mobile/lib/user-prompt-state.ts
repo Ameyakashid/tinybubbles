@@ -3,9 +3,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   recordPromptActivity,
   type UserPromptState,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
-export const LOCAL_USER_PROMPT_STATE_KEY = 'mindwtr:local-user-prompts:v1';
+export const LOCAL_USER_PROMPT_STATE_KEY = 'tinybubbles:local-user-prompts:v1';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

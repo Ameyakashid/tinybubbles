@@ -1,5 +1,5 @@
-import type { AppData } from '@mindwtr/core';
-import { validateAttachmentForUpload } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
+import { validateAttachmentForUpload } from '@tinybubbles/core';
 import * as FileSystem from '../file-system';
 import {
   buildCloudKey,

@@ -9,7 +9,7 @@ import { areDueDateRemindersEnabled,
     isWeeklyReviewReminderEnabled,
     normalizeDateFormatSetting,
     resolveDateLocaleTag,
-    useTaskStore, tFallback, } from '@mindwtr/core';
+    useTaskStore, tFallback, } from '@tinybubbles/core';
 
 import { requestNotificationPermission, startMobileNotifications } from '@/lib/notification-service';
 import {

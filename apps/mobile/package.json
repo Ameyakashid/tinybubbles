@@ -20,7 +20,7 @@
     "@expo/metro-runtime": "^6.1.2",
     "@expo/vector-icons": "^15.0.3",
     "@fugood/react-native-audio-pcm-stream": "^1.1.4",
-    "@mindwtr/core": "workspace:*",
+    "@tinybubbles/core": "workspace:*",
     "@op-engineering/op-sqlite": "^17.1.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",

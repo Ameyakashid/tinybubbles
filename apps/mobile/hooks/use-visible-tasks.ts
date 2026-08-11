@@ -6,7 +6,7 @@ import {
   type AreaVisibilityContext,
   type Project,
   type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 

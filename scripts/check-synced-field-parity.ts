@@ -26,7 +26,7 @@ import {
 } from '../packages/core/src/sync-signatures';
 import { CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS } from '../apps/cloud/src/server-config';
 // task-write-field-exclusions.ts's only import is `import type` (erased before execution), so
-// unlike its sibling task-write-fields.ts (which needs `@mindwtr/core/task-sync-schema`, a
+// unlike its sibling task-write-fields.ts (which needs `@tinybubbles/core/task-sync-schema`, a
 // package-style specifier requiring `bun install`) this one resolves fine in this job.
 import { TASK_WRITE_FIELD_EXCLUSIONS } from '../apps/mcp-server/src/task-write-field-exclusions';
 import cloudKitProductionSchema from '../packages/core/src/cloudkit-production-schema.json';
@@ -561,7 +561,7 @@ const runNativeTaskMapperFixtureChecks = (): string[] => {
     const fixtureFields = TASK_SYNC_FIELD_SCHEMA
         .filter((field) => field.cloudKit !== null)
         .map((field) => field.name);
-    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'mindwtr-task-mapper-'));
+    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'tinybubbles-task-mapper-'));
     const failures: string[] = [];
 
     try {
@@ -586,7 +586,7 @@ const runNativeTaskMapperFixtureChecks = (): string[] => {
             '--sdk', 'macosx', 'clang',
             '-fobjc-arc',
             '-fblocks',
-            '-DMINDWTR_NATIVE_MAPPER_FIXTURE_CHECK',
+            '-DTINYBUBBLES_NATIVE_MAPPER_FIXTURE_CHECK',
             resolve(PATHS.objcMapper),
             resolve('scripts/objc-task-mapper-fixture-check.m'),
             '-framework', 'Foundation',
@@ -789,7 +789,7 @@ failures.push(...requireSourcePattern(
 // must not go stale — every excluded key has to still name a field the schema currently marks
 // client-writable. An exclusion for a renamed or since-removed field would otherwise silently
 // stop meaning anything, and nobody would notice. (The derivation's actual field-name output
-// can't be checked here too — task-write-fields.ts needs `@mindwtr/core/task-sync-schema`,
+// can't be checked here too — task-write-fields.ts needs `@tinybubbles/core/task-sync-schema`,
 // which requires `bun install`, unlike this script's own zero-install TASK_SYNC_FIELD_SCHEMA
 // import; task-field-schemas.test.ts is where that gets independently cross-checked, including
 // against the real Zod tool schemas.)

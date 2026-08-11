@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { MarkdownSelection } from '@mindwtr/core';
+import type { MarkdownSelection } from '@tinybubbles/core';
 
 export function getControlledTextInputSelection(
   selection: MarkdownSelection,

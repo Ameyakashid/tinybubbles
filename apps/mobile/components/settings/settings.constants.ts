@@ -1,4 +1,4 @@
-import { WHISPER_MODELS as CORE_WHISPER_MODELS, WHISPER_MODEL_BASE_URL, type WhisperModelDescriptor } from '@mindwtr/core/whisper-models';
+import { WHISPER_MODELS as CORE_WHISPER_MODELS, WHISPER_MODEL_BASE_URL, type WhisperModelDescriptor } from '@tinybubbles/core/whisper-models';
 import {
     getSettingsSearchEntries,
     getSettingsSearchEntryKeys,
@@ -6,7 +6,7 @@ import {
     resolveSettingsSearchI18nKey,
     SETTINGS_SEARCH_MOBILE_EXCLUSIONS,
     type SettingsSearchPageId,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { Language } from '@/contexts/language-context';
 
@@ -220,7 +220,7 @@ export function settingsMenuMatchesQuery(searchText: string, query: string): boo
     return searchText.includes(trimmed);
 }
 
-// 'en' plus every locale in the LOCALES table (@mindwtr/core, from i18n/i18n-locales.ts) —
+// 'en' plus every locale in the LOCALES table (@tinybubbles/core, from i18n/i18n-locales.ts) —
 // see that module's header comment for why English isn't a table entry.
 export const LANGUAGES: { id: Language; native: string }[] = [
     { id: 'en', native: 'English' },
@@ -233,17 +233,17 @@ export { WHISPER_MODEL_BASE_URL };
 // a phone connection — the full catalogue (including whisper-large-v3-turbo,
 // desktop-only) lives in core as the single source of truth for hashes and
 // sizes. This subset is a product decision, not a data copy: the numbers
-// themselves always come from @mindwtr/core/whisper-models.
+// themselves always come from @tinybubbles/core/whisper-models.
 const MOBILE_WHISPER_MODEL_IDS = new Set(['whisper-tiny', 'whisper-tiny.en', 'whisper-base', 'whisper-base.en']);
 export const WHISPER_MODELS: WhisperModelDescriptor[] = CORE_WHISPER_MODELS
     .filter((model) => MOBILE_WHISPER_MODEL_IDS.has(model.id));
 export const DEFAULT_WHISPER_MODEL = WHISPER_MODELS[0]?.id ?? 'whisper-tiny';
 
-export const UPDATE_BADGE_AVAILABLE_KEY = 'mindwtr-update-available';
-export const UPDATE_BADGE_LAST_CHECK_KEY = 'mindwtr-update-last-check';
-export const UPDATE_BADGE_LATEST_KEY = 'mindwtr-update-latest';
+export const UPDATE_BADGE_AVAILABLE_KEY = 'tinybubbles-update-available';
+export const UPDATE_BADGE_LAST_CHECK_KEY = 'tinybubbles-update-last-check';
+export const UPDATE_BADGE_LATEST_KEY = 'tinybubbles-update-latest';
 export const UPDATE_BADGE_INTERVAL_MS = 1000 * 60 * 60 * 24;
-export const AI_PROVIDER_CONSENT_KEY = 'mindwtr-ai-provider-consent-v1';
+export const AI_PROVIDER_CONSENT_KEY = 'tinybubbles-ai-provider-consent-v1';
 
 export const FOSS_LOCAL_LLM_MODEL_OPTIONS = ['llama3.2', 'qwen2.5', 'mistral', 'phi-4-mini'];
 export const FOSS_LOCAL_LLM_COPILOT_OPTIONS = ['llama3.2', 'qwen2.5', 'mistral', 'phi-4-mini'];

@@ -1,8 +1,8 @@
-import type { AppearanceSettings } from '@mindwtr/core';
+import type { AppearanceSettings } from '@tinybubbles/core';
 
 export type DesktopTextSizeMode = NonNullable<AppearanceSettings['textSize']>;
 
-export const TEXT_SIZE_STORAGE_KEY = 'mindwtr-text-size';
+export const TEXT_SIZE_STORAGE_KEY = 'tinybubbles-text-size';
 export const DEFAULT_DESKTOP_TEXT_SIZE_MODE: DesktopTextSizeMode = 'default';
 
 const TEXT_SCALE_BY_MODE: Record<DesktopTextSizeMode, string> = {
@@ -23,5 +23,5 @@ export function applyDesktopTextSize(mode: DesktopTextSizeMode): void {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
     root.dataset.textSize = mode;
-    root.style.setProperty('--mindwtr-text-scale', TEXT_SCALE_BY_MODE[mode]);
+    root.style.setProperty('--tinybubbles-text-scale', TEXT_SCALE_BY_MODE[mode]);
 }

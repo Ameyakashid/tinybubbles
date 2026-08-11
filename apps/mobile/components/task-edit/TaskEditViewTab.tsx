@@ -7,7 +7,7 @@ import {
   getRecurringTaskPreviewDate,
   hasTimeComponent,
   tFallback,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import type {
   Attachment,
   Area,
@@ -18,7 +18,7 @@ import type {
   TaskStatus,
   Task,
   TimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { MarkdownInlineText, MarkdownText } from '../markdown-text';
 import { AttachmentProgressIndicator } from '../AttachmentProgressIndicator';
@@ -217,10 +217,10 @@ function TaskEditViewTabComponent({
       {!project?.id ? renderViewRow(t('taskEdit.areaLabel'), area?.name) : null}
       {!isReference ? renderViewRow(t('taskEdit.startDateLabel'), mergedTask.startTime ? formatDate(mergedTask.startTime) : undefined) : null}
       {!isReference ? renderViewRow(t('taskEdit.dueDateLabel'), mergedTask.dueDate ? formatDueDate(mergedTask.dueDate) : undefined) : null}
-      {!isReference && hasReminderHandoffSchedule && mergedTask.suppressMindwtrReminders === true
+      {!isReference && hasReminderHandoffSchedule && mergedTask.suppressTinyBubblesReminders === true
         ? renderViewRow(
-            tFallback(t, 'taskEdit.suppressMindwtrReminders', 'Skip reminders'),
-            tFallback(t, 'taskEdit.suppressMindwtrRemindersViewValue', 'Mindwtr reminders off')
+            tFallback(t, 'taskEdit.suppressTinyBubblesReminders', 'Skip reminders'),
+            tFallback(t, 'taskEdit.suppressTinyBubblesRemindersViewValue', 'Tiny Bubbles reminders off')
           )
         : null}
       {!isReference ? renderViewRow(t('taskEdit.reviewDateLabel'), mergedTask.reviewAt ? formatDate(mergedTask.reviewAt) : undefined) : null}

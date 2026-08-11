@@ -92,8 +92,8 @@ const flattenStyle = (style: unknown): Record<string, any> => {
   return style && typeof style === 'object' ? (style as Record<string, any>) : {};
 };
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   const formatDateOnly = (value: Date | string) => {
     const date = value instanceof Date ? value : new Date(value);
     return [

@@ -23,7 +23,7 @@ import {
   cycleAreaFilterSelection,
   isAreaFilterSelectionActive,
   tFallback,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export function MobileAreaSwitcher() {
   const { t } = useLanguage();

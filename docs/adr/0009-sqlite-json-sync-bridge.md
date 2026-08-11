@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr persists structured data in SQLite on desktop and mobile, while sync backends exchange a JSON snapshot (`data.json`) plus attachments.
+Tiny Bubbles persists structured data in SQLite on desktop and mobile, while sync backends exchange a JSON snapshot (`data.json`) plus attachments.
 
 That dual representation is intentional, but the contract was only implied by code and wiki text:
 
@@ -18,7 +18,7 @@ Without an explicit ADR, the risk is accidental drift in future work: treating S
 
 ## Decision
 
-Mindwtr keeps SQLite and JSON, but with an asymmetric contract:
+Tiny Bubbles keeps SQLite and JSON, but with an asymmetric contract:
 
 1. SQLite is the primary local store.
    - Cold start, queries, and normal app reads come from SQLite-backed storage.

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { getProjectNextActionPromptData, isNaturalLanguageDatesEnabled, normalizeClockTimeInput, parseProjectNextActionInput, shallow, tFallback, useTaskStore } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { getProjectNextActionPromptData, isNaturalLanguageDatesEnabled, normalizeClockTimeInput, parseProjectNextActionInput, shallow, tFallback, useTaskStore } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 import { useToast } from '../contexts/toast-context';

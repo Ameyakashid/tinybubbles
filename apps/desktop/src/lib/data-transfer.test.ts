@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_IMPORT_SOURCE_LIMITS, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@mindwtr/core';
-import type { ParsedTodoistProject } from '@mindwtr/core/todoist-import';
+import { DEFAULT_IMPORT_SOURCE_LIMITS, MAX_BACKUP_SOURCE_BYTES, type AppData } from '@tinybubbles/core';
+import type { ParsedTodoistProject } from '@tinybubbles/core/todoist-import';
 
 const emptyData: AppData = {
     tasks: [],
@@ -45,8 +45,8 @@ const nativePickerMocks = vi.hoisted(() => ({
     stat: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', async () => {
-    const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+    const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
     return {
         ...actual,
         flushPendingSave: coreMocks.flushPendingSave,
@@ -98,7 +98,7 @@ vi.mock('./app-log', () => ({
 import {
     createDesktopRecoverySnapshot,
     importDesktopTodoistData,
-    inspectDesktopMindwtrCsvImport,
+    inspectDesktopTinyBubblesCsvImport,
     inspectDesktopBackup,
     mergeDesktopBackup,
 } from './data-transfer';
@@ -226,7 +226,7 @@ describe('desktop data transfer', () => {
             size: DEFAULT_IMPORT_SOURCE_LIMITS.maxInputBytes + 1,
         });
 
-        await expect(inspectDesktopMindwtrCsvImport()).rejects.toThrow(
+        await expect(inspectDesktopTinyBubblesCsvImport()).rejects.toThrow(
             'Choose a file no larger than 16 MB',
         );
 

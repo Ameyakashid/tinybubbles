@@ -1,7 +1,7 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react';
 import { TaskItem } from './TaskItem';
-import { Task, useTaskStore } from '@mindwtr/core';
+import { Task, useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 

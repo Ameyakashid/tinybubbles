@@ -140,7 +140,7 @@ jobs:
           ACCESS_TOKEN: ${{ steps.play_auth.outputs.access_token }}
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           EDIT_ID=$(curl -sS -X POST \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "Content-Type: application/json" \
@@ -309,8 +309,8 @@ jobs:
           set -euo pipefail
           VERSION=${{ needs.preflight.outputs.version }}
           cd apps/mobile
-          OUTPUT="./build/mindwtr-${VERSION}.aab"
-          MINDWTR_ANDROID_ARCHS=arm64-v8a,armeabi-v7a "$GITHUB_WORKSPACE/tools/eas-cli/node_modules/.bin/eas" build --platform android --profile production --local --non-interactive --output "$OUTPUT"
+          OUTPUT="./build/tinybubbles-${VERSION}.aab"
+          TINYBUBBLES_ANDROID_ARCHS=arm64-v8a,armeabi-v7a "$GITHUB_WORKSPACE/tools/eas-cli/node_modules/.bin/eas" build --platform android --profile production --local --non-interactive --output "$OUTPUT"
           ls -la ./build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -320,7 +320,7 @@ jobs:
           # android-unknown because testing-track installs carry no referrer.
           ANALYTICS_HEARTBEAT_CHANNEL: ${{ contains(inputs.tag || github.event.inputs.tag || github.ref_name, '-') && 'android-internal-test' || 'play-store' }}
           ANALYTICS_RELEASE_VERSION: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
-          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
 
       - name: Upload Android AAB build artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -389,15 +389,15 @@ jobs:
           set -euo pipefail
           VERSION=${{ needs.preflight.outputs.version }}
           cd apps/mobile
-          OUTPUT="./build/mindwtr-${VERSION}-internal-${GITHUB_RUN_NUMBER}.aab"
-          MINDWTR_ANDROID_ARCHS=arm64-v8a,armeabi-v7a "$GITHUB_WORKSPACE/tools/eas-cli/node_modules/.bin/eas" build --platform android --profile production --local --non-interactive --output "$OUTPUT"
+          OUTPUT="./build/tinybubbles-${VERSION}-internal-${GITHUB_RUN_NUMBER}.aab"
+          TINYBUBBLES_ANDROID_ARCHS=arm64-v8a,armeabi-v7a "$GITHUB_WORKSPACE/tools/eas-cli/node_modules/.bin/eas" build --platform android --profile production --local --non-interactive --output "$OUTPUT"
           ls -la ./build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           ANALYTICS_HEARTBEAT_URL: ${{ secrets.ANALYTICS_HEARTBEAT_URL }}
           ANALYTICS_HEARTBEAT_CHANNEL: android-internal-test
           ANALYTICS_RELEASE_VERSION: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
-          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
 
       - name: Upload Android internal profileable AAB artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -465,7 +465,7 @@ jobs:
           set -euo pipefail
           VERSION=${{ needs.preflight.outputs.version }}
           cd apps/mobile
-          MINDWTR_ANDROID_ARCHS=arm64-v8a,armeabi-v7a "$GITHUB_WORKSPACE/tools/eas-cli/node_modules/.bin/eas" build --platform android --profile production-apk --local --non-interactive --output ./build/mindwtr-${VERSION}.apk
+          TINYBUBBLES_ANDROID_ARCHS=arm64-v8a,armeabi-v7a "$GITHUB_WORKSPACE/tools/eas-cli/node_modules/.bin/eas" build --platform android --profile production-apk --local --non-interactive --output ./build/tinybubbles-${VERSION}.apk
           ls -la ./build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -473,19 +473,19 @@ jobs:
           # This APK is attached to the GitHub release and installed directly.
           ANALYTICS_HEARTBEAT_CHANNEL: android-direct
           ANALYTICS_RELEASE_VERSION: ${{ inputs.tag || github.event.inputs.tag || github.ref_name }}
-          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+          FEEDBACK_ENDPOINT_URL: ${{ vars.FEEDBACK_ENDPOINT_URL || vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
 
       - name: Collect Android release artifacts
         run: |
           set -euo pipefail
           VERSION=${{ needs.preflight.outputs.version }}
-          APK_PATH="apps/mobile/build/mindwtr-${VERSION}.apk"
+          APK_PATH="apps/mobile/build/tinybubbles-${VERSION}.apk"
           if [ ! -f "${APK_PATH}" ]; then
             echo "Missing APK artifact: ${APK_PATH}" >&2
             exit 1
           fi
           mkdir -p release-artifacts
-          cp "${APK_PATH}" "release-artifacts/mindwtr-${VERSION}.apk"
+          cp "${APK_PATH}" "release-artifacts/tinybubbles-${VERSION}.apk"
           ls -la release-artifacts
 
       - name: Upload Android release artifacts
@@ -634,9 +634,9 @@ jobs:
           ACCESS_TOKEN: ${{ steps.play_auth.outputs.access_token }}
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           VERSION="${{ needs.preflight.outputs.version }}"
-          AAB_PATH="apps/mobile/build/mindwtr-${VERSION}.aab"
+          AAB_PATH="apps/mobile/build/tinybubbles-${VERSION}.aab"
           NOTES_DIR="apps/mobile/build/play-release-notes"
           LISTING_ASSETS_FILE="apps/mobile/build/play-listing-assets.json"
           LISTING_METADATA_FILE="apps/mobile/build/play-listing-metadata.json"
@@ -817,9 +817,9 @@ jobs:
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           VERSION="${{ needs.preflight.outputs.version }}"
-          AAB_PATH="apps/mobile/build/mindwtr-${VERSION}.aab"
+          AAB_PATH="apps/mobile/build/tinybubbles-${VERSION}.aab"
 
           IFS=',' read -r -a RAW_TRACKS <<< "$PLAY_TRACKS"
           TRACKS=()
@@ -941,9 +941,9 @@ jobs:
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           VERSION="${{ needs.preflight.outputs.version }}"
-          AAB_PATH=$(find apps/mobile/build -maxdepth 1 -name "mindwtr-${VERSION}-internal-*.aab" -print -quit)
+          AAB_PATH=$(find apps/mobile/build -maxdepth 1 -name "tinybubbles-${VERSION}-internal-*.aab" -print -quit)
           if [ -z "$AAB_PATH" ] || [ ! -f "$AAB_PATH" ]; then
             echo "Missing internal profileable AAB artifact in apps/mobile/build" >&2
             exit 1
@@ -1030,7 +1030,7 @@ jobs:
           TESTING_TRACKS: beta
         run: |
           set -euo pipefail
-          PACKAGE="tech.dongdongbh.mindwtr"
+          PACKAGE="app.tinybubbles"
           VERSION=${{ needs.preflight.outputs.version }}
           VERSION_CODE=${{ needs.preflight.outputs.version_code }}
           if [ -z "$VERSION_CODE" ] || [ "$VERSION_CODE" = "null" ]; then
@@ -1127,9 +1127,9 @@ jobs:
           set -euo pipefail
           mkdir -p android-internal-test-artifacts
           VERSION="${{ needs.preflight.outputs.version }}"
-          cp apps/mobile/build/mindwtr-${VERSION}-internal-*.aab android-internal-test-artifacts/
+          cp apps/mobile/build/tinybubbles-${VERSION}-internal-*.aab android-internal-test-artifacts/
           {
-            echo "Mindwtr Android internal test release"
+            echo "Tiny Bubbles Android internal test release"
             echo "Commit: ${GITHUB_SHA}"
             echo "VersionCode: ${{ steps.internal_publish.outputs.version_code }}"
             echo "Track: internal"

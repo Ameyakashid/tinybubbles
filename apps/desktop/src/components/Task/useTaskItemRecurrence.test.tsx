@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { createTaskDraft, type Task } from '@mindwtr/core';
+import { createTaskDraft, type Task } from '@tinybubbles/core';
 
 import { useTaskItemRecurrence } from './useTaskItemRecurrence';
 

@@ -1,4 +1,4 @@
-import type { RecurrenceWeekday } from '@mindwtr/core';
+import type { RecurrenceWeekday } from '@tinybubbles/core';
 import { TaskItemRecurrenceModal } from './TaskItemRecurrenceModal';
 import { WEEKDAY_ORDER } from './recurrence-constants';
 import type { useTaskItemRecurrence } from './useTaskItemRecurrence';

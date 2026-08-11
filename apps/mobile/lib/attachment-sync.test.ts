@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData, Attachment } from '@mindwtr/core';
+import type { AppData, Attachment } from '@tinybubbles/core';
 
 const fileSystemMock = vi.hoisted(() => ({
   __esModule: true,
@@ -75,7 +75,7 @@ const attachmentPathMocks = vi.hoisted(() => {
 // This batch adopted the shared core reconciliation loop (packages/core/src/
 // attachment-transfer.ts) for the webdav/cloudkit/file backends. Mirror its pure logic here too
 // — same rationale as attachmentPathMocks above: real, faithful copies rather than pulling in
-// the whole @mindwtr/core module graph. `globalProgressTracker`/`computeSha256Hex` are hoisted
+// the whole @tinybubbles/core module graph. `globalProgressTracker`/`computeSha256Hex` are hoisted
 // alongside so reportProgress/validateAttachmentHash's mirrors can call the SAME mock instances
 // the rest of this file already asserts against.
 const coreRuntimeMocks = vi.hoisted(() => {
@@ -199,7 +199,7 @@ const coreRuntimeMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@tinybubbles/core', () => ({
   ...attachmentPathMocks,
   ...coreRuntimeMocks,
   validateAttachmentForUpload: vi.fn().mockResolvedValue({ valid: true }),
@@ -314,7 +314,7 @@ describe('attachment sync', () => {
   });
 
   it('persists local file attachments by reading bytes when direct copy fails', async () => {
-    const sourceUri = 'file://document/mindwtr-audio-20260628-225702.m4a';
+    const sourceUri = 'file://document/tinybubbles-audio-20260628-225702.m4a';
     fileSystemMock.getInfoAsync.mockResolvedValueOnce({ exists: false });
     fileSystemMock.copyAsync.mockRejectedValue(new Error('copy failed'));
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
@@ -383,11 +383,11 @@ describe('attachment sync', () => {
   });
 
   it('reuses an existing SAF attachments directory even when Android returns it with a trailing slash', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
 
     fileSystemMock.StorageAccessFramework.readDirectoryAsync.mockImplementation(async (uri: string) => {
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -399,15 +399,15 @@ describe('attachment sync', () => {
 
     expect(resolved).toEqual({
       type: 'saf',
-      dirUri: 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup',
+      dirUri: 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup',
       attachmentsDirUri,
     });
     expect(fileSystemMock.StorageAccessFramework.makeDirectoryAsync).not.toHaveBeenCalled();
   });
 
   it('avoids creating duplicate SAF attachments folders on repeated file-sync attachment checks', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
     const remoteFileUri = `${attachmentsDirUri}f7d7d7-photo.jpg`;
 
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
@@ -415,7 +415,7 @@ describe('attachment sync', () => {
       if (uri === attachmentsDirUri) {
         return [remoteFileUri];
       }
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -460,13 +460,13 @@ describe('attachment sync', () => {
   });
 
   it('proves a remote-only SAF attachment during file-backend activation', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
     const remoteFileUri = `${attachmentsDirUri}remote-only.txt`;
 
     fileSystemMock.StorageAccessFramework.readDirectoryAsync.mockImplementation(async (uri: string) => {
       if (uri === attachmentsDirUri) return [remoteFileUri];
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) return [attachmentsDirUri];
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) return [attachmentsDirUri];
       return [];
     });
 
@@ -514,8 +514,8 @@ describe('attachment sync', () => {
   });
 
   it('reads the SAF attachments directory once per file-sync pass', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
     const firstRemoteFileUri = `${attachmentsDirUri}first.txt`;
     const secondRemoteFileUri = `${attachmentsDirUri}second.txt`;
 
@@ -524,7 +524,7 @@ describe('attachment sync', () => {
       if (uri === attachmentsDirUri) {
         return [firstRemoteFileUri, secondRemoteFileUri];
       }
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -582,8 +582,8 @@ describe('attachment sync', () => {
   });
 
   it('migrates legacy content-uri attachments into app-managed storage during sync', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
     const remoteFileUri = `${attachmentsDirUri}legacy.txt`;
     const legacyContentUri = 'content://com.android.providers.downloads.documents/document/msf%3A42';
     const managedUri = 'file://document/attachments/legacy.txt';
@@ -596,7 +596,7 @@ describe('attachment sync', () => {
       if (uri === attachmentsDirUri) {
         return [remoteFileUri];
       }
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -649,8 +649,8 @@ describe('attachment sync', () => {
   });
 
   it('limits legacy content-uri migration work per attachment sync pass', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
 
     fileSystemMock.getInfoAsync
       .mockResolvedValueOnce({ exists: false, size: 0 })
@@ -664,7 +664,7 @@ describe('attachment sync', () => {
       if (uri === attachmentsDirUri) {
         return ['legacy-0.txt', 'legacy-1.txt', 'legacy-2.txt', 'legacy-3.txt'].map((name) => `${attachmentsDirUri}${name}`);
       }
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -790,8 +790,8 @@ describe('attachment sync', () => {
   });
 
   it('uploads a pending SAF file attachment into the existing attachments directory', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
     const createdRemoteFileUri = `${attachmentsDirUri}upload-me.jpg`;
 
     fileSystemMock.getInfoAsync.mockImplementation(async (uri: string) => ({
@@ -803,7 +803,7 @@ describe('attachment sync', () => {
       if (uri === attachmentsDirUri) {
         return [];
       }
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -860,8 +860,8 @@ describe('attachment sync', () => {
   });
 
   it('aborts file attachment sync before writing stale bytes', async () => {
-    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fdata.json';
-    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FMindwtr%20Backup/document/primary%3ADocuments%2FMindwtr%20Backup%2Fattachments/';
+    const syncFileUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fdata.json';
+    const attachmentsDirUri = 'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FTiny%20Bubbles%20Backup/document/primary%3ADocuments%2FTiny%20Bubbles%20Backup%2Fattachments/';
     const controller = new AbortController();
 
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
@@ -869,7 +869,7 @@ describe('attachment sync', () => {
       if (uri === attachmentsDirUri) {
         return [];
       }
-      if (uri.includes('primary%3ADocuments%2FMindwtr%20Backup')) {
+      if (uri.includes('primary%3ADocuments%2FTiny%20Bubbles%20Backup')) {
         return [attachmentsDirUri];
       }
       return [];
@@ -919,7 +919,7 @@ describe('attachment sync', () => {
   it('passes abort signals through WebDAV attachment transfers', async () => {
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     vi.mocked(core.webdavPutFile).mockResolvedValue(undefined);
     vi.mocked(core.webdavFileExists).mockResolvedValue(false);
 
@@ -983,7 +983,7 @@ describe('attachment sync', () => {
     fileSystemMock.copyAsync.mockRejectedValueOnce(new Error('copy failed'));
     fileSystemMock.writeAsStringAsync.mockRejectedValueOnce(new Error('write failed'));
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     const appData: AppData = {
       tasks: [
         {
@@ -1043,7 +1043,7 @@ describe('attachment sync', () => {
       uri === localUri ? { exists: true, size: 3 } : { exists: false }
     ));
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     const appData: AppData = {
       tasks: [{
         id: 'task-1',
@@ -1094,7 +1094,7 @@ describe('attachment sync', () => {
   it('cleans up a cloud upload when local data changes before metadata is stamped', async () => {
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     const abortError = new Error('Local changes detected during sync');
     let assertCalls = 0;
     const appData: AppData = {
@@ -1156,7 +1156,7 @@ describe('attachment sync', () => {
   it('propagates abort signals into cloud attachment uploads', async () => {
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     const abortController = new AbortController();
     const uploadError = new Error('Upload aborted by sync lifecycle');
     const appData: AppData = {
@@ -1387,7 +1387,7 @@ describe('attachment sync', () => {
   it('does not leave partial cloud metadata when a later attachment aborts the batch', async () => {
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     const abortError = new Error('Local changes detected during sync');
     let assertCalls = 0;
     const appData: AppData = {
@@ -1457,7 +1457,7 @@ describe('attachment sync', () => {
   it('cleans up uncertain cloud uploads after a network failure without dropping earlier successful metadata', async () => {
     fileSystemMock.getInfoAsync.mockResolvedValue({ exists: true, size: 3 });
     fileSystemMock.readAsStringAsync.mockResolvedValue('AQID');
-    const core = await import('@mindwtr/core');
+    const core = await import('@tinybubbles/core');
     const networkError = new Error('network flap');
     const appData: AppData = {
       tasks: [

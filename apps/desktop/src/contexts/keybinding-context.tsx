@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { shallow, useTaskStore } from '@mindwtr/core';
+import { shallow, useTaskStore } from '@tinybubbles/core';
 import { useLanguage } from './language-context';
 import { KeybindingHelpModal } from '../components/KeybindingHelpModal';
 import { isFlatpakRuntime, isTauriRuntime } from '../lib/runtime';
@@ -15,8 +15,8 @@ import {
     matchesGlobalQuickAddShortcut,
     normalizeGlobalQuickAddShortcut,
 } from '../lib/global-quick-add-shortcut';
-import { areaFilterSelectionToFilters } from '@mindwtr/core';
-import type { TaskStatus } from '@mindwtr/core';
+import { areaFilterSelectionToFilters } from '@tinybubbles/core';
+import type { TaskStatus } from '@tinybubbles/core';
 
 export type KeybindingStyle = 'vim' | 'emacs' | 'standard';
 
@@ -147,7 +147,7 @@ function triggerGlobalSearch() {
 }
 
 function triggerQuickAdd() {
-    window.dispatchEvent(new Event('mindwtr:quick-add'));
+    window.dispatchEvent(new Event('tinybubbles:quick-add'));
 }
 
 // Click the current view's visible add-task affordance so a keyboard add
@@ -189,7 +189,7 @@ function getAreaChordKey(event: KeyboardEvent): string {
 
 function triggerTaskEditCancel(taskId: string) {
     const CancelEvent = typeof window.CustomEvent === 'function' ? window.CustomEvent : CustomEvent;
-    window.dispatchEvent(new CancelEvent('mindwtr:cancel-task-edit', { detail: { taskId } }));
+    window.dispatchEvent(new CancelEvent('tinybubbles:cancel-task-edit', { detail: { taskId } }));
 }
 
 export function KeybindingProvider({

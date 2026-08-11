@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from './file-system';
-import type { Attachment } from '@mindwtr/core';
-import { cloudGetFile, webdavGetFile, withRetry } from '@mindwtr/core';
+import type { Attachment } from '@tinybubbles/core';
+import { cloudGetFile, webdavGetFile, withRetry } from '@tinybubbles/core';
 import { downloadDropboxFile } from './dropbox-sync';
 import {
   CLOUD_PROVIDER_KEY,

@@ -15,8 +15,8 @@ import { Task,
     getLocalizedWeekdayButtons,
     getLocalizedWeekdayLabels,
     normalizeClockTimeInput,
-    shallow, tFallback, } from '@mindwtr/core';
-import { taskDraftToUpdatePatch } from '@mindwtr/core/task-draft';
+    shallow, tFallback, } from '@tinybubbles/core';
+import { taskDraftToUpdatePatch } from '@tinybubbles/core/task-draft';
 import { useLanguage } from '../contexts/language-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { ToastViewport, useToast } from '@/contexts/toast-context';

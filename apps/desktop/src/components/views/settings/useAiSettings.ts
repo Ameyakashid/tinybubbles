@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AIProviderId, AIReasoningEffort, AiSettings, AppData, AudioCaptureMode, AudioFieldStrategy } from '@mindwtr/core';
+import type { AIProviderId, AIReasoningEffort, AiSettings, AppData, AudioCaptureMode, AudioFieldStrategy } from '@tinybubbles/core';
 import {
     DEFAULT_ANTHROPIC_THINKING_BUDGET,
     DEFAULT_GEMINI_THINKING_BUDGET,
@@ -10,7 +10,7 @@ import {
     getCopilotModelOptions,
     getModelOptions,
     mergeModelOptions,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { exists, remove, size } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
 import { getManagedPath } from '../../../lib/managed-paths';

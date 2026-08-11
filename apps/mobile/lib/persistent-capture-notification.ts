@@ -8,7 +8,7 @@ import {
 
 // Device-local preference (P14): a notification pinned to this device's status
 // bar is per-device UX state and must not enter the synced settings document.
-const STORAGE_KEY = 'mindwtr:persistentCaptureNotification';
+const STORAGE_KEY = 'tinybubbles:persistentCaptureNotification';
 
 export type PersistentCaptureStrings = {
     title: string;

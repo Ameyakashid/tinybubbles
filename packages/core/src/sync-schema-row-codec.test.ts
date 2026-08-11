@@ -65,7 +65,7 @@ const ISO = '2026-01-01T00:00:00.000Z';
 const sparseTask: Task = {
     id: 'task-sparse', title: 'Sparse task', status: 'inbox', tags: [], contexts: [],
     createdAt: ISO, updatedAt: ISO,
-    showFutureRecurrence: false, isFocusedToday: false, suppressMindwtrReminders: false,
+    showFutureRecurrence: false, isFocusedToday: false, suppressTinyBubblesReminders: false,
     // Nullable BY DESIGN (`T | null`, not just `T | undefined`): the write side collapses an
     // absent value to SQLite NULL (`?? null`), so "omitted" can never round-trip back to
     // `undefined` — only ever `null`. Set explicitly rather than asserting an impossible round

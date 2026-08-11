@@ -1,5 +1,5 @@
 import { BookOpen, Edit3, Link2, Paperclip } from 'lucide-react';
-import { tFallback, type Attachment } from '@mindwtr/core';
+import { tFallback, type Attachment } from '@tinybubbles/core';
 import { useBareFileReferenceCheck } from '../../../lib/attachment-reference';
 import { getAttachmentDisplayTitle } from '../../../lib/attachment-utils';
 import { isImageAttachment } from '../task-item-attachment-utils';

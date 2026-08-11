@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { AttachmentProgress, globalProgressTracker } from '@mindwtr/core';
+import { AttachmentProgress, globalProgressTracker } from '@tinybubbles/core';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useLanguage } from '../contexts/language-context';
 

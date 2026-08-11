@@ -8,7 +8,7 @@ import {
     type Task,
     type TaskEnergyLevel,
     type TaskStatus,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { reportError } from '../../../lib/report-error';
 import { registerUndoableAction } from '../../../lib/undo-registry';
 

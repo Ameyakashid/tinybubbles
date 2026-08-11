@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
   back: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     ...actual,
     useTaskStore: (selector: (state: { addTask: typeof mocks.addTask }) => unknown) =>

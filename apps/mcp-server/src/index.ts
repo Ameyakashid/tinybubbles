@@ -5,14 +5,14 @@ import { fileURLToPath } from 'url';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { TASK_STATUS_VALUES } from '@mindwtr/core';
+import { TASK_STATUS_VALUES } from '@tinybubbles/core';
 import * as z from 'zod';
 
 import { createCloudService } from './cloud-service.js';
-import { getMindwtrToolErrorCode, ReadOnlyError, ValidationError } from './errors.js';
+import { getTinyBubblesToolErrorCode, ReadOnlyError, ValidationError } from './errors.js';
 import { parseArgs, parseBooleanFlag, readStringFlag, type FlagEnv, type FlagMap } from './flags.js';
 import {
-  createMindwtrHttpServer,
+  createTinyBubblesHttpServer,
   resolveHttpConfig,
   startHttpServer,
   type HttpServerConfig,
@@ -35,7 +35,7 @@ import {
   normalizeOptionalTaskTokens,
   taskRecurrenceInputSchema,
 } from './input-validation.js';
-import { createService, type MindwtrService } from './service.js';
+import { createService, type TinyBubblesService } from './service.js';
 import type {
   AddTaskInput,
   TaskGeneratedCreateFields,
@@ -111,7 +111,7 @@ const createMcpTextResponse = (payload: Record<string, unknown>): McpToolRespons
 
 const createMcpErrorResponse = (error: unknown): McpToolResponse => {
   const message = error instanceof Error ? error.message : String(error);
-  const code = getMindwtrToolErrorCode(error);
+  const code = getTinyBubblesToolErrorCode(error);
   return {
     content: [{ type: 'text', text: JSON.stringify({ error: message, code }, null, 2) }],
     isError: true,
@@ -166,8 +166,8 @@ export const resolveServerConfig = (
   env: FlagEnv = process.env,
 ): ServerConfig => {
   const { readonly, keepAlive } = resolveServerModeFlags(flags);
-  const cloudUrl = readStringFlag(flags, 'cloud-url', 'cloudUrl') ?? env.MINDWTR_MCP_CLOUD_URL;
-  const cloudToken = readStringFlag(flags, 'cloud-token', 'cloudToken') ?? env.MINDWTR_MCP_CLOUD_TOKEN;
+  const cloudUrl = readStringFlag(flags, 'cloud-url', 'cloudUrl') ?? env.TINYBUBBLES_MCP_CLOUD_URL;
+  const cloudToken = readStringFlag(flags, 'cloud-token', 'cloudToken') ?? env.TINYBUBBLES_MCP_CLOUD_TOKEN;
   const http = resolveHttpConfig(flags, env);
 
   if (cloudUrl || cloudToken) {
@@ -180,7 +180,7 @@ export const resolveServerConfig = (
       allowInsecureHttp: parseBooleanFlag(
         flags['cloud-allow-insecure-http']
         ?? flags.cloudAllowInsecureHttp
-        ?? env.MINDWTR_MCP_CLOUD_ALLOW_INSECURE_HTTP
+        ?? env.TINYBUBBLES_MCP_CLOUD_ALLOW_INSECURE_HTTP
       ) ?? false,
       readonly,
       keepAlive,
@@ -444,9 +444,9 @@ const deletePersonSchema = z.object({
   id: z.string(),
 });
 
-export const registerMindwtrTools = (
+export const registerTinyBubblesTools = (
   server: McpServer,
-  service: MindwtrService,
+  service: TinyBubblesService,
   readonly: boolean,
   options: { readonlyMessage?: string } = {},
 ) => {
@@ -459,12 +459,12 @@ export const registerMindwtrTools = (
   });
 
   server.registerTool(
-    'mindwtr_list_tasks',
+    'tinybubbles_list_tasks',
     {
-      description: "List tasks from the configured Mindwtr backend. Supports filtering by status, project, date range, search, and today's focus (isFocusedToday). Supports sorting by various fields.",
+      description: "List tasks from the configured Tiny Bubbles backend. Supports filtering by status, project, date range, search, and today's focus (isFocusedToday). Supports sorting by various fields.",
       inputSchema: listTasksSchema,
     },
-    withMcpErrorHandling('mindwtr_list_tasks', async (input) => {
+    withMcpErrorHandling('tinybubbles_list_tasks', async (input) => {
       const tasks = await service.listTasks({
         ...input,
       });
@@ -473,96 +473,96 @@ export const registerMindwtrTools = (
   );
 
   server.registerTool(
-    'mindwtr_list_projects',
+    'tinybubbles_list_projects',
     {
-      description: 'List projects from the configured Mindwtr backend.',
+      description: 'List projects from the configured Tiny Bubbles backend.',
       inputSchema: listProjectsSchema,
     },
-    withMcpErrorHandling('mindwtr_list_projects', async () => {
+    withMcpErrorHandling('tinybubbles_list_projects', async () => {
       const projects = await service.listProjects();
       return createMcpTextResponse({ projects });
     }),
   );
 
   server.registerTool(
-    'mindwtr_get_project',
+    'tinybubbles_get_project',
     {
-      description: 'Get a single project by ID from the configured Mindwtr backend.',
+      description: 'Get a single project by ID from the configured Tiny Bubbles backend.',
       inputSchema: getProjectSchema,
     },
-    withMcpErrorHandling('mindwtr_get_project', async (input) => {
+    withMcpErrorHandling('tinybubbles_get_project', async (input) => {
       const project = await service.getProject({ id: input.id, includeDeleted: input.includeDeleted });
       return createMcpTextResponse({ project });
     }),
   );
 
   server.registerTool(
-    'mindwtr_list_sections',
+    'tinybubbles_list_sections',
     {
-      description: 'List project sections from the configured Mindwtr backend. Optionally filter by projectId.',
+      description: 'List project sections from the configured Tiny Bubbles backend. Optionally filter by projectId.',
       inputSchema: listSectionsSchema,
     },
-    withMcpErrorHandling('mindwtr_list_sections', async (input) => {
+    withMcpErrorHandling('tinybubbles_list_sections', async (input) => {
       const sections = await service.listSections(input);
       return createMcpTextResponse({ sections });
     }),
   );
 
   server.registerTool(
-    'mindwtr_get_section',
+    'tinybubbles_get_section',
     {
-      description: 'Get a single project section by ID from the configured Mindwtr backend.',
+      description: 'Get a single project section by ID from the configured Tiny Bubbles backend.',
       inputSchema: getSectionSchema,
     },
-    withMcpErrorHandling('mindwtr_get_section', async (input) => {
+    withMcpErrorHandling('tinybubbles_get_section', async (input) => {
       const section = await service.getSection({ id: input.id, includeDeleted: input.includeDeleted });
       return createMcpTextResponse({ section });
     }),
   );
 
   server.registerTool(
-    'mindwtr_list_areas',
+    'tinybubbles_list_areas',
     {
-      description: 'List areas from the configured Mindwtr backend.',
+      description: 'List areas from the configured Tiny Bubbles backend.',
       inputSchema: listAreasSchema,
     },
-    withMcpErrorHandling('mindwtr_list_areas', async () => {
+    withMcpErrorHandling('tinybubbles_list_areas', async () => {
       const areas = await service.listAreas();
       return createMcpTextResponse({ areas });
     }),
   );
 
   server.registerTool(
-    'mindwtr_list_people',
+    'tinybubbles_list_people',
     {
-      description: 'List managed people from the configured Mindwtr backend.',
+      description: 'List managed people from the configured Tiny Bubbles backend.',
       inputSchema: listPeopleSchema,
     },
-    withMcpErrorHandling('mindwtr_list_people', async (input) => {
+    withMcpErrorHandling('tinybubbles_list_people', async (input) => {
       const people = await service.listPeople(input);
       return createMcpTextResponse({ people });
     }),
   );
 
   server.registerTool(
-    'mindwtr_get_person',
+    'tinybubbles_get_person',
     {
-      description: 'Get a single managed person by ID from the configured Mindwtr backend.',
+      description: 'Get a single managed person by ID from the configured Tiny Bubbles backend.',
       inputSchema: getPersonSchema,
     },
-    withMcpErrorHandling('mindwtr_get_person', async (input) => {
+    withMcpErrorHandling('tinybubbles_get_person', async (input) => {
       const person = await service.getPerson({ id: input.id, includeDeleted: input.includeDeleted });
       return createMcpTextResponse({ person });
     }),
   );
 
   server.registerTool(
-    'mindwtr_add_task',
+    'tinybubbles_add_task',
     {
-      description: 'Add a task to the configured Mindwtr backend.',
+      description: 'Add a task to the configured Tiny Bubbles backend.',
       inputSchema: addTaskSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_add_task', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_add_task', async (input) => {
       const normalizedInput = normalizeAddTaskInput(input);
       // buildTaskCreateFieldsShape()'s generic Record<string, ZodTypeAny> return type erases
       // the specific generated field names from z.infer (see normalizeAddTaskInput above), so
@@ -576,13 +576,13 @@ export const registerMindwtrTools = (
   );
 
   server.registerTool(
-    'mindwtr_update_task',
+    'tinybubbles_update_task',
     {
-      description: 'Update a task in the configured Mindwtr backend.',
+      description: 'Update a task in the configured Tiny Bubbles backend.',
       inputSchema: updateTaskSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_update_task', async (input) => {
-      // See the matching comment on mindwtr_add_task above.
+    withReadonlyMcpErrorHandling('tinybubbles_update_task', async (input) => {
+      // See the matching comment on tinybubbles_add_task above.
       const task = await service.updateTask({
         ...normalizeUpdateTaskInput(input),
       } as UpdateTaskInput);
@@ -591,204 +591,204 @@ export const registerMindwtrTools = (
   );
 
   server.registerTool(
-    'mindwtr_complete_task',
+    'tinybubbles_complete_task',
     {
-      description: 'Mark a task as done in the configured Mindwtr backend.',
+      description: 'Mark a task as done in the configured Tiny Bubbles backend.',
       inputSchema: completeTaskSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_complete_task', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_complete_task', async (input) => {
       const task = await service.completeTask(input.id);
       return createMcpTextResponse({ task });
     }),
   );
 
   server.registerTool(
-    'mindwtr_delete_task',
+    'tinybubbles_delete_task',
     {
-      description: 'Soft-delete a task in the configured Mindwtr backend.',
+      description: 'Soft-delete a task in the configured Tiny Bubbles backend.',
       inputSchema: deleteTaskSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_delete_task', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_delete_task', async (input) => {
       const task = await service.deleteTask(input.id);
       return createMcpTextResponse({ task });
     }),
   );
 
   server.registerTool(
-    'mindwtr_get_task',
+    'tinybubbles_get_task',
     {
-      description: 'Get a single task by ID from the configured Mindwtr backend.',
+      description: 'Get a single task by ID from the configured Tiny Bubbles backend.',
       inputSchema: getTaskSchema,
     },
-    withMcpErrorHandling('mindwtr_get_task', async (input) => {
+    withMcpErrorHandling('tinybubbles_get_task', async (input) => {
       const task = await service.getTask({ id: input.id, includeDeleted: input.includeDeleted });
       return createMcpTextResponse({ task });
     }),
   );
 
   server.registerTool(
-    'mindwtr_restore_task',
+    'tinybubbles_restore_task',
     {
-      description: 'Restore a soft-deleted task in the configured Mindwtr backend.',
+      description: 'Restore a soft-deleted task in the configured Tiny Bubbles backend.',
       inputSchema: restoreTaskSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_restore_task', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_restore_task', async (input) => {
       const task = await service.restoreTask(input.id);
       return createMcpTextResponse({ task });
     }),
   );
 
   server.registerTool(
-    'mindwtr_add_project',
+    'tinybubbles_add_project',
     {
-      description: 'Add a project to the configured Mindwtr backend.',
+      description: 'Add a project to the configured Tiny Bubbles backend.',
       inputSchema: addProjectSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_add_project', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_add_project', async (input) => {
       const project = await service.addProject(input);
       return createMcpTextResponse({ project });
     }),
   );
 
   server.registerTool(
-    'mindwtr_update_project',
+    'tinybubbles_update_project',
     {
-      description: 'Update a project in the configured Mindwtr backend.',
+      description: 'Update a project in the configured Tiny Bubbles backend.',
       inputSchema: updateProjectSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_update_project', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_update_project', async (input) => {
       const project = await service.updateProject(input);
       return createMcpTextResponse({ project });
     }),
   );
 
   server.registerTool(
-    'mindwtr_delete_project',
+    'tinybubbles_delete_project',
     {
-      description: 'Soft-delete a project in the configured Mindwtr backend.',
+      description: 'Soft-delete a project in the configured Tiny Bubbles backend.',
       inputSchema: deleteProjectSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_delete_project', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_delete_project', async (input) => {
       const project = await service.deleteProject(input.id);
       return createMcpTextResponse({ project });
     }),
   );
 
   server.registerTool(
-    'mindwtr_add_section',
+    'tinybubbles_add_section',
     {
-      description: 'Add a project-scoped section to the configured Mindwtr backend.',
+      description: 'Add a project-scoped section to the configured Tiny Bubbles backend.',
       inputSchema: addSectionSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_add_section', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_add_section', async (input) => {
       const section = await service.addSection(input);
       return createMcpTextResponse({ section });
     }),
   );
 
   server.registerTool(
-    'mindwtr_update_section',
+    'tinybubbles_update_section',
     {
-      description: 'Update a project section in the configured Mindwtr backend.',
+      description: 'Update a project section in the configured Tiny Bubbles backend.',
       inputSchema: updateSectionSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_update_section', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_update_section', async (input) => {
       const section = await service.updateSection(input);
       return createMcpTextResponse({ section });
     }),
   );
 
   server.registerTool(
-    'mindwtr_delete_section',
+    'tinybubbles_delete_section',
     {
-      description: 'Soft-delete a project section in the configured Mindwtr backend. Tasks in the section are kept and moved to no section by core.',
+      description: 'Soft-delete a project section in the configured Tiny Bubbles backend. Tasks in the section are kept and moved to no section by core.',
       inputSchema: deleteSectionSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_delete_section', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_delete_section', async (input) => {
       const section = await service.deleteSection(input.id);
       return createMcpTextResponse({ section });
     }),
   );
 
   server.registerTool(
-    'mindwtr_add_area',
+    'tinybubbles_add_area',
     {
-      description: 'Add an area to the configured Mindwtr backend.',
+      description: 'Add an area to the configured Tiny Bubbles backend.',
       inputSchema: addAreaSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_add_area', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_add_area', async (input) => {
       const area = await service.addArea(input);
       return createMcpTextResponse({ area });
     }),
   );
 
   server.registerTool(
-    'mindwtr_update_area',
+    'tinybubbles_update_area',
     {
-      description: 'Update an area in the configured Mindwtr backend.',
+      description: 'Update an area in the configured Tiny Bubbles backend.',
       inputSchema: updateAreaSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_update_area', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_update_area', async (input) => {
       const area = await service.updateArea(input);
       return createMcpTextResponse({ area });
     }),
   );
 
   server.registerTool(
-    'mindwtr_delete_area',
+    'tinybubbles_delete_area',
     {
-      description: 'Soft-delete an area in the configured Mindwtr backend.',
+      description: 'Soft-delete an area in the configured Tiny Bubbles backend.',
       inputSchema: deleteAreaSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_delete_area', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_delete_area', async (input) => {
       const area = await service.deleteArea(input.id);
       return createMcpTextResponse({ area });
     }),
   );
 
   server.registerTool(
-    'mindwtr_add_person',
+    'tinybubbles_add_person',
     {
-      description: 'Add a managed person to the configured Mindwtr backend.',
+      description: 'Add a managed person to the configured Tiny Bubbles backend.',
       inputSchema: addPersonSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_add_person', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_add_person', async (input) => {
       const person = await service.addPerson(input);
       return createMcpTextResponse({ person });
     }),
   );
 
   server.registerTool(
-    'mindwtr_update_person',
+    'tinybubbles_update_person',
     {
-      description: 'Update managed person metadata in the configured Mindwtr backend.',
+      description: 'Update managed person metadata in the configured Tiny Bubbles backend.',
       inputSchema: updatePersonSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_update_person', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_update_person', async (input) => {
       const person = await service.updatePerson(input);
       return createMcpTextResponse({ person });
     }),
   );
 
   server.registerTool(
-    'mindwtr_rename_person',
+    'tinybubbles_rename_person',
     {
       description: 'Rename a managed person. By default, matching task assignees are updated too.',
       inputSchema: renamePersonSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_rename_person', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_rename_person', async (input) => {
       const person = await service.renamePerson(input);
       return createMcpTextResponse({ person });
     }),
   );
 
   server.registerTool(
-    'mindwtr_delete_person',
+    'tinybubbles_delete_person',
     {
-      description: 'Soft-delete a managed person in the configured Mindwtr backend.',
+      description: 'Soft-delete a managed person in the configured Tiny Bubbles backend.',
       inputSchema: deletePersonSchema,
     },
-    withReadonlyMcpErrorHandling('mindwtr_delete_person', async (input) => {
+    withReadonlyMcpErrorHandling('tinybubbles_delete_person', async (input) => {
       const person = await service.deletePerson(input.id);
       return createMcpTextResponse({ person });
     }),
@@ -798,15 +798,15 @@ export const registerMindwtrTools = (
 /**
  * Builds the McpServer + registered tool set shared by both the stdio path and the
  * per-request stateless HTTP path. Each HTTP POST /mcp request gets its own McpServer
- * instance (per the SDK's stateless pattern); the MindwtrService is shared across requests.
+ * instance (per the SDK's stateless pattern); the TinyBubblesService is shared across requests.
  */
-export const createMindwtrMcpServer = (service: MindwtrService, config: ServerConfig): McpServer => {
+export const createTinyBubblesMcpServer = (service: TinyBubblesService, config: ServerConfig): McpServer => {
   const server = new McpServer({
-    name: 'mindwtr-mcp',
+    name: 'tinybubbles-mcp',
     version: resolvePackageVersion(),
   });
 
-  registerMindwtrTools(server, service, config.readonly, {
+  registerTinyBubblesTools(server, service, config.readonly, {
     readonlyMessage: config.backend === 'cloud'
       ? 'Cloud MCP mode is read-only by default. Start the server with --write to enable edits.'
       : undefined,
@@ -815,7 +815,7 @@ export const createMindwtrMcpServer = (service: MindwtrService, config: ServerCo
   return server;
 };
 
-const attachLifecycleHandlers = (service: MindwtrService, onShutdown?: () => void) => {
+const attachLifecycleHandlers = (service: TinyBubblesService, onShutdown?: () => void) => {
   const closeService = () => {
     onShutdown?.();
     void service.close().catch((error) => {
@@ -851,8 +851,8 @@ export async function startMcpServer(argv: string[] = process.argv.slice(2)) {
 
   const httpConfig = config.http;
   if (httpConfig) {
-    const httpServer = createMindwtrHttpServer({
-      createServer: () => createMindwtrMcpServer(service, config),
+    const httpServer = createTinyBubblesHttpServer({
+      createServer: () => createTinyBubblesMcpServer(service, config),
       token: httpConfig.token,
       logError,
     });
@@ -874,7 +874,7 @@ export async function startMcpServer(argv: string[] = process.argv.slice(2)) {
 
   attachLifecycleHandlers(service);
 
-  const server = createMindwtrMcpServer(service, config);
+  const server = createTinyBubblesMcpServer(service, config);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

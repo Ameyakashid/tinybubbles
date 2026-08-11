@@ -1,6 +1,6 @@
 import { type ClipboardEvent, type KeyboardEvent, type MouseEvent, type RefObject } from 'react';
 import { Loader2, Maximize2, Mic, Square } from 'lucide-react';
-import { tFallback, type MarkdownSelection, type MarkdownToolbarActionId, type MarkdownToolbarResult } from '@mindwtr/core';
+import { tFallback, type MarkdownSelection, type MarkdownToolbarActionId, type MarkdownToolbarResult } from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
 import { ExpandedMarkdownEditor } from '../../ExpandedMarkdownEditor';

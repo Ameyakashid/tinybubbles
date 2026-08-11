@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { AppData, MergeStats, createSyncOrchestrator, runSerializedSyncDocumentOperation, runSharedSyncCycle, useTaskStore, webdavGetJson, webdavHeadFile, webdavPutJson, cloudGetJson, cloudHeadJson, cloudPutJson, flushPendingSave, performSyncCycle, withRetry, isRetryableError, isRetryableWebdavReadError, isWebdavInvalidJsonError, normalizeWebdavUrl, normalizeCloudUrl, createSyncBackendIO, buildFastSyncScope, hasPendingSyncSideEffects, injectExternalCalendars as injectExternalCalendarsForSync, persistExternalCalendars as persistExternalCalendarsForSync, getInMemoryAppDataSnapshot, createAbortableFetch, normalizeCloudProvider as normalizeCoreCloudProvider, isDropboxUnauthorizedError, parseFastSyncState, serializeFastSyncState, summarizeTaskLifecycleCounts, decodeUriSafe, SYNC_FILE_NAME, CLOUD_PROVIDER_DROPBOX, CLOUD_PROVIDER_SELF_HOSTED, type Attachment, type CloudProvider, type FastSyncState, type SyncBackendContext, type SyncBackendIO, type SyncRunDiagnosticEvent, type SyncRunNotifier, type SyncRunPlatformHooks, type SyncRunStorage, type SyncTransport } from '@mindwtr/core';
+import { AppData, MergeStats, createSyncOrchestrator, runSerializedSyncDocumentOperation, runSharedSyncCycle, useTaskStore, webdavGetJson, webdavHeadFile, webdavPutJson, cloudGetJson, cloudHeadJson, cloudPutJson, flushPendingSave, performSyncCycle, withRetry, isRetryableError, isRetryableWebdavReadError, isWebdavInvalidJsonError, normalizeWebdavUrl, normalizeCloudUrl, createSyncBackendIO, buildFastSyncScope, hasPendingSyncSideEffects, injectExternalCalendars as injectExternalCalendarsForSync, persistExternalCalendars as persistExternalCalendarsForSync, getInMemoryAppDataSnapshot, createAbortableFetch, normalizeCloudProvider as normalizeCoreCloudProvider, isDropboxUnauthorizedError, parseFastSyncState, serializeFastSyncState, summarizeTaskLifecycleCounts, decodeUriSafe, SYNC_FILE_NAME, CLOUD_PROVIDER_DROPBOX, CLOUD_PROVIDER_SELF_HOSTED, type Attachment, type CloudProvider, type FastSyncState, type SyncBackendContext, type SyncBackendIO, type SyncRunDiagnosticEvent, type SyncRunNotifier, type SyncRunPlatformHooks, type SyncRunStorage, type SyncTransport } from '@tinybubbles/core';
 import { mobileStorage } from './storage-adapter';
 import { logInfo, logSyncError, logWarn, sanitizeLogMessage } from './app-log';
 import { readSyncFile, resolveSyncFileUri, writeSyncFile } from './storage-file';
@@ -51,8 +51,8 @@ const WEBDAV_RETRY_OPTIONS = { maxAttempts: 5, baseDelayMs: 2000, maxDelayMs: 30
 const WEBDAV_READ_RETRY_OPTIONS = { ...WEBDAV_RETRY_OPTIONS, shouldRetry: isRetryableWebdavReadError };
 const DROPBOX_RETRY_OPTIONS = { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 8000 };
 const SYNC_CONFIG_CACHE_TTL_MS = 30_000;
-const FAST_SYNC_STATE_KEY = '@mindwtr_fast_sync_state_v1';
-const LOCAL_SYNC_STATUS_KEY = '@mindwtr_local_sync_status_v1';
+const FAST_SYNC_STATE_KEY = '@tinybubbles_fast_sync_state_v1';
+const LOCAL_SYNC_STATUS_KEY = '@tinybubbles_local_sync_status_v1';
 const syncConfigCache = new Map<string, { value: string | null; readAt: number }>();
 
 type LocalSyncStatus = Pick<AppData['settings'], 'lastSyncAt' | 'lastSyncStatus' | 'lastSyncError' | 'lastSyncStats' | 'lastSyncHistory'>;
@@ -715,7 +715,7 @@ class MobileSyncRun {
           throw new Error('Dropbox app key is not configured');
         }
         this.dropboxLastRev = (await getCachedConfigValue(DROPBOX_LAST_REV_KEY))?.trim() ?? null;
-        this.syncUrl = 'dropbox://Apps/Mindwtr/data.json';
+        this.syncUrl = 'dropbox://Apps/Tiny Bubbles/data.json';
         return;
       }
 
@@ -741,7 +741,7 @@ class MobileSyncRun {
         throw new Error('Dropbox app key is not configured');
       }
       this.dropboxLastRev = (await getCachedConfigValue(DROPBOX_LAST_REV_KEY))?.trim() ?? null;
-      this.syncUrl = 'dropbox://Apps/Mindwtr/data.json';
+      this.syncUrl = 'dropbox://Apps/Tiny Bubbles/data.json';
     } else {
       const url = (await getCachedConfigValue(CLOUD_URL_KEY))?.trim() ?? null;
       if (!url) throw new Error('Self-hosted URL not configured');
@@ -873,7 +873,7 @@ class MobileSyncRun {
           {
             scope: 'sync',
             extra: mergeLog.extra,
-            // Resolved conflicts must stay auditable in mindwtr.log even when
+            // Resolved conflicts must stay auditable in tinybubbles.log even when
             // diagnostics logging is off; the extra carries ids and field names
             // only, never task content (#854).
             force: mergeLog.summary.conflicts > 0,

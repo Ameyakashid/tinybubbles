@@ -1,5 +1,5 @@
 import { CheckSquare, ChevronsUpDown, Filter, List, SlidersHorizontal } from 'lucide-react';
-import { tFallback, type TaskSortBy } from '@mindwtr/core';
+import { tFallback, type TaskSortBy } from '@tinybubbles/core';
 import { FOCUS_AXES, type TaskListGroupBy } from './next-grouping';
 import { GroupBySelect } from './GroupBySelect';
 import { SortBySelect, ToolbarButton } from './list-toolbar';

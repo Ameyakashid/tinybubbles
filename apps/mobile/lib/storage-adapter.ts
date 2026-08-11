@@ -1,4 +1,4 @@
-import { AppData, mergeAppDataWithStats, SqliteAdapter, searchAll, splitSqlStatements, taskMatchesQuery, type SqliteClient, type CalendarSyncEntry, StorageAdapter, type Task } from '@mindwtr/core';
+import { AppData, mergeAppDataWithStats, SqliteAdapter, searchAll, splitSqlStatements, taskMatchesQuery, type SqliteClient, type CalendarSyncEntry, StorageAdapter, type Task } from '@tinybubbles/core';
 import { AppState, NativeModules, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,7 +46,7 @@ const waitForQueuedSqliteWrites = async (): Promise<void> => {
     }
 };
 
-const SQLITE_DB_NAME = 'mindwtr.db';
+const SQLITE_DB_NAME = 'tinybubbles.db';
 // expo-sqlite stored the database under <documentDirectory>/SQLite; op-sqlite must
 // open the exact same directory or existing installs would come up empty (ADR 0024).
 const SQLITE_DIRECTORY_NAME = 'SQLite';
@@ -87,8 +87,8 @@ class JsonAheadRecoveryReadError extends Error {
 class SqliteWriteBlockedError extends Error {
     constructor(reason: 'json-ahead-recovery-read' | 'canonical-reload') {
         super(reason === 'canonical-reload'
-            ? 'Pending local changes were recovered. Reload Mindwtr before saving again.'
-            : 'Saving is temporarily disabled while Mindwtr retries recovery of pending local changes.');
+            ? 'Pending local changes were recovered. Reload Tiny Bubbles before saving again.'
+            : 'Saving is temporarily disabled while Tiny Bubbles retries recovery of pending local changes.');
         this.name = 'SqliteWriteBlockedError';
     }
 }

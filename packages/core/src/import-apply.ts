@@ -1,8 +1,8 @@
-// Shared "apply" step for third-party importers (OmniFocus, TickTick, DGT, Mindwtr CSV) that all
+// Shared "apply" step for third-party importers (OmniFocus, TickTick, DGT, Tiny Bubbles CSV) that all
 // parse into the same area/project/(optional section)/task + sourceKey shape. Each importer keeps
 // its own parser and maps its Parsed*Data into ImportSource before calling applyImport; the only
 // importer-specific behaviour left after mapping is id minting (idFor) and, for TickTick, an
-// inbox->next status promotion. Sections are optional on ImportSource — only Mindwtr CSV supplies
+// inbox->next status promotion. Sections are optional on ImportSource — only Tiny Bubbles CSV supplies
 // them today; every other caller is unaffected.
 //
 // Todoist is intentionally NOT unified here: it has no areas, nests tasks/sections per project
@@ -77,7 +77,7 @@ export type ImportTaskSource = {
 export type ImportSource = {
     areas: ImportAreaSource[];
     projects: ImportProjectSource[];
-    // Optional: only the Mindwtr CSV importer creates sections today. Absent/empty is a no-op,
+    // Optional: only the Tiny Bubbles CSV importer creates sections today. Absent/empty is a no-op,
     // so every other caller of applyImport is unaffected.
     sections?: ImportSectionSource[];
     tasks: ImportTaskSource[];

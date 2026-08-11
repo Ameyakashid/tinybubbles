@@ -9,9 +9,9 @@ import {
 } from './announcements';
 
 const announcement: AppAnnouncement = {
-    id: 'mindwtr-1-0',
-    title: 'Mindwtr 1.0',
-    body: 'Thanks for helping shape Mindwtr.',
+    id: 'tinybubbles-1-0',
+    title: 'TinyBubbles 1.0',
+    body: 'Thanks for helping shape TinyBubbles.',
 };
 
 describe('app announcements', () => {
@@ -21,8 +21,8 @@ describe('app announcements', () => {
     });
 
     it('uses the announcement id for dismissal storage', () => {
-        expect(getAnnouncementDismissalStorageKey(' mindwtr-1-0 ')).toBe(
-            'mindwtr:announcement-dismissed:mindwtr-1-0',
+        expect(getAnnouncementDismissalStorageKey(' tinybubbles-1-0 ')).toBe(
+            'tinybubbles:announcement-dismissed:tinybubbles-1-0',
         );
     });
 

@@ -1,4 +1,4 @@
-import { translateWithFallback } from '@mindwtr/core';
+import { translateWithFallback } from '@tinybubbles/core';
 
 import { reportError } from '../../../lib/report-error';
 

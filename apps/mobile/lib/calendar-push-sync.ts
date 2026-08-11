@@ -23,11 +23,11 @@ import {
     useTaskStore,
     type CalendarPushRunPorts,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     CALENDAR_PUSH_SYNC_CONCURRENCY,
     createCalendarPushScheduler,
-} from '@mindwtr/core/calendar-push-scheduler';
+} from '@tinybubbles/core/calendar-push-scheduler';
 
 import { logInfo, logWarn, logError } from './app-log';
 import {
@@ -40,13 +40,13 @@ import {
 
 // MARK: - Constants
 
-const CALENDAR_PUSH_ENABLED_KEY = 'mindwtr:calendar-push-sync:enabled';
-const CALENDAR_ID_KEY = 'mindwtr:calendar-push-sync:calendar-id';
-const CALENDAR_TARGET_ID_KEY = 'mindwtr:calendar-push-sync:target-calendar-id';
-const CALENDAR_COLOR_KEY = 'mindwtr:calendar-push-sync:color';
+const CALENDAR_PUSH_ENABLED_KEY = 'tinybubbles:calendar-push-sync:enabled';
+const CALENDAR_ID_KEY = 'tinybubbles:calendar-push-sync:calendar-id';
+const CALENDAR_TARGET_ID_KEY = 'tinybubbles:calendar-push-sync:target-calendar-id';
+const CALENDAR_COLOR_KEY = 'tinybubbles:calendar-push-sync:color';
 const PLATFORM = Platform.OS;
-const MANAGED_CALENDAR_TITLE = 'Mindwtr';
-const MANAGED_CALENDAR_NAME = 'mindwtr';
+const MANAGED_CALENDAR_TITLE = 'Tiny Bubbles';
+const MANAGED_CALENDAR_NAME = 'tinybubbles';
 const DEFAULT_MANAGED_CALENDAR_COLOR = '#3B82F6';
 const PROJECTED_RECURRENCE_EVENT_DATE_FORMAT = 'PP';
 
@@ -66,8 +66,8 @@ export type CalendarPushTargetCalendar = {
     name: string;
     sourceName?: string;
     color?: string;
-    isMindwtrDedicated: boolean;
-    isMindwtrManaged: boolean;
+    isTinyBubblesDedicated: boolean;
+    isTinyBubblesManaged: boolean;
     isLocalOnly: boolean;
 };
 
@@ -220,17 +220,17 @@ function isWritableCalendar(calendar: Calendar.Calendar): boolean {
     return true;
 }
 
-function isMindwtrNamedCalendar(calendar: Calendar.Calendar): boolean {
+function isTinyBubblesNamedCalendar(calendar: Calendar.Calendar): boolean {
     const title = getCalendarDisplayName(calendar).trim().toLowerCase();
     const name = typeof calendar.name === 'string' ? calendar.name.trim().toLowerCase() : '';
     return title === MANAGED_CALENDAR_TITLE.toLowerCase() || name === MANAGED_CALENDAR_NAME;
 }
 
-function isStoredMindwtrManagedCalendar(calendar: Calendar.Calendar, storedCalendarId: string | null): boolean {
+function isStoredTinyBubblesManagedCalendar(calendar: Calendar.Calendar, storedCalendarId: string | null): boolean {
     return Boolean(storedCalendarId && calendar.id === storedCalendarId);
 }
 
-function isAppCreatedMindwtrCalendar(calendar: Calendar.Calendar): boolean {
+function isAppCreatedTinyBubblesCalendar(calendar: Calendar.Calendar): boolean {
     const title = getCalendarDisplayName(calendar).trim().toLowerCase();
     const name = typeof calendar.name === 'string' ? calendar.name.trim().toLowerCase() : '';
     return title === MANAGED_CALENDAR_TITLE.toLowerCase() && name === MANAGED_CALENDAR_NAME;
@@ -249,20 +249,20 @@ export const getCalendarPushTargetCalendars = async (): Promise<CalendarPushTarg
                 && isWritableCalendar(calendar)
             )
             .map((calendar) => {
-                const isMindwtrDedicated = isMindwtrNamedCalendar(calendar);
+                const isTinyBubblesDedicated = isTinyBubblesNamedCalendar(calendar);
                 return {
                     id: calendar.id,
                     name: getCalendarDisplayName(calendar),
                     sourceName: getCalendarSourceName(calendar),
                     color: typeof calendar.color === 'string' && calendar.color.trim().length > 0 ? calendar.color : undefined,
-                    isMindwtrDedicated,
-                    isMindwtrManaged: isStoredMindwtrManagedCalendar(calendar, storedCalendarId),
+                    isTinyBubblesDedicated,
+                    isTinyBubblesManaged: isStoredTinyBubblesManagedCalendar(calendar, storedCalendarId),
                     isLocalOnly: isLocalOnlyCalendar(calendar),
                 };
             })
             .sort((a, b) => {
-                if (a.isMindwtrManaged !== b.isMindwtrManaged) return a.isMindwtrManaged ? -1 : 1;
-                if (a.isMindwtrDedicated !== b.isMindwtrDedicated) return a.isMindwtrDedicated ? -1 : 1;
+                if (a.isTinyBubblesManaged !== b.isTinyBubblesManaged) return a.isTinyBubblesManaged ? -1 : 1;
+                if (a.isTinyBubblesDedicated !== b.isTinyBubblesDedicated) return a.isTinyBubblesDedicated ? -1 : 1;
                 return a.name.localeCompare(b.name);
             });
     } catch (error) {
@@ -313,10 +313,10 @@ function getAndroidManagedCalendarSeed(
 }
 
 /**
- * Returns the ID of the managed "Mindwtr" calendar, creating it if needed.
+ * Returns the ID of the managed "Tiny Bubbles" calendar, creating it if needed.
  * Returns null if the calendar cannot be created (e.g. no permission, no source).
  */
-export const ensureMindwtrCalendar = async (): Promise<string | null> => {
+export const ensureTinyBubblesCalendar = async (): Promise<string | null> => {
     try {
         const storedId = await getStoredCalendarId();
         const allCalendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
@@ -333,7 +333,7 @@ export const ensureMindwtrCalendar = async (): Promise<string | null> => {
             // or some calendar providers will keep them hidden from the OS calendar app.
             const androidSeed = getAndroidManagedCalendarSeed(allCalendars, color);
             if (!androidSeed) {
-                void logWarn('No owned Android calendar source available; cannot create Mindwtr calendar', {
+                void logWarn('No owned Android calendar source available; cannot create Tiny Bubbles calendar', {
                     scope: 'calendar-push',
                     extra: { calendarCount: String(allCalendars.length) },
                 });
@@ -349,7 +349,7 @@ export const ensureMindwtrCalendar = async (): Promise<string | null> => {
                 sources[0];
 
             if (!source) {
-                void logWarn('No calendar source available; cannot create Mindwtr calendar', {
+                void logWarn('No calendar source available; cannot create Tiny Bubbles calendar', {
                     scope: 'calendar-push',
                 });
                 return null;
@@ -367,25 +367,25 @@ export const ensureMindwtrCalendar = async (): Promise<string | null> => {
         const newId = await Calendar.createCalendarAsync(calendarDetails);
 
         await setStoredCalendarId(newId);
-        void logInfo('Created Mindwtr calendar', {
+        void logInfo('Created Tiny Bubbles calendar', {
             scope: 'calendar-push',
             extra: { calendarId: newId },
         });
         return newId;
     } catch (error) {
-        void logError(error, { scope: 'calendar-push', extra: { operation: 'ensureMindwtrCalendar' } });
+        void logError(error, { scope: 'calendar-push', extra: { operation: 'ensureTinyBubblesCalendar' } });
         return null;
     }
 };
 
-export const updateMindwtrCalendarColor = async (color: string): Promise<boolean> => {
+export const updateTinyBubblesCalendarColor = async (color: string): Promise<boolean> => {
     const normalized = await setCalendarPushColor(color);
     try {
         if (typeof Calendar.updateCalendarAsync !== 'function') return false;
         const storedCalendarId = await getStoredCalendarId();
         const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
         const target = calendars.find((calendar) => storedCalendarId && calendar.id === storedCalendarId)
-            ?? calendars.find(isAppCreatedMindwtrCalendar);
+            ?? calendars.find(isAppCreatedTinyBubblesCalendar);
         if (!target || !isWritableCalendar(target)) return false;
 
         // Android's CalendarProvider only stores a calendar's color at creation
@@ -393,13 +393,13 @@ export const updateMindwtrCalendarColor = async (color: string): Promise<boolean
         // updating it in place never reaches third-party calendar apps (#726).
         // Recreate the managed calendar with the freshly stored color instead.
         if (Platform.OS === 'android') {
-            return await recreateManagedMindwtrCalendar();
+            return await recreateManagedTinyBubblesCalendar();
         }
 
         await Calendar.updateCalendarAsync(target.id, { color: normalized });
         return true;
     } catch (error) {
-        void logWarn('Failed to update Mindwtr calendar color', {
+        void logWarn('Failed to update Tiny Bubbles calendar color', {
             scope: 'calendar-push',
             extra: { error: getCalendarErrorMessage(error) },
         });
@@ -408,7 +408,7 @@ export const updateMindwtrCalendarColor = async (color: string): Promise<boolean
 };
 
 /**
- * Deletes and recreates the managed "Mindwtr" calendar so a color change takes
+ * Deletes and recreates the managed "Tiny Bubbles" calendar so a color change takes
  * effect on Android. The provider ignores post-creation color updates, so the
  * only way to change the color third-party calendar apps render is to drop the
  * calendar and create a fresh one with the already-stored color, then re-push
@@ -416,11 +416,11 @@ export const updateMindwtrCalendarColor = async (color: string): Promise<boolean
  * concurrent push and duplicate events (#743). Returns true when a new managed
  * calendar was created.
  */
-async function recreateManagedMindwtrCalendar(): Promise<boolean> {
+async function recreateManagedTinyBubblesCalendar(): Promise<boolean> {
     let recreatedId: string | null = null;
     await enqueueCalendarSync(async () => {
-        await deleteMindwtrCalendar();
-        recreatedId = await ensureMindwtrCalendar();
+        await deleteTinyBubblesCalendar();
+        recreatedId = await ensureTinyBubblesCalendar();
         if (!recreatedId) return;
         await runFullCalendarSyncUnsafe();
     });
@@ -437,7 +437,7 @@ async function resolveCalendarPushTarget(): Promise<CalendarPushTarget | null> {
                 return { id: selectedId };
             }
             await setCalendarPushTargetCalendarId(null);
-            void logWarn('Selected calendar push target is unavailable; falling back to Mindwtr calendar', {
+            void logWarn('Selected calendar push target is unavailable; falling back to Tiny Bubbles calendar', {
                 scope: 'calendar-push',
                 extra: { calendarId: selectedId },
             });
@@ -446,15 +446,15 @@ async function resolveCalendarPushTarget(): Promise<CalendarPushTarget | null> {
         }
     }
 
-    const managedId = await ensureMindwtrCalendar();
+    const managedId = await ensureTinyBubblesCalendar();
     return managedId ? { id: managedId } : null;
 }
 
 /**
- * Deletes the managed Mindwtr calendar and removes the stored ID.
+ * Deletes the managed Tiny Bubbles calendar and removes the stored ID.
  * Called when the user disables calendar push sync and chooses to clean up.
  */
-export const deleteMindwtrCalendar = async (): Promise<void> => {
+export const deleteTinyBubblesCalendar = async (): Promise<void> => {
     const storedId = await getStoredCalendarId();
     const selectedTargetId = await getCalendarPushTargetCalendarId();
     const calendarIdsToDelete = new Set<string>();
@@ -465,12 +465,12 @@ export const deleteMindwtrCalendar = async (): Promise<void> => {
     try {
         const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
         calendars.forEach((calendar) => {
-            if (isAppCreatedMindwtrCalendar(calendar)) {
+            if (isAppCreatedTinyBubblesCalendar(calendar)) {
                 calendarIdsToDelete.add(calendar.id);
             }
         });
     } catch (error) {
-        void logWarn('Failed to inspect calendars before deleting Mindwtr calendar', {
+        void logWarn('Failed to inspect calendars before deleting Tiny Bubbles calendar', {
             scope: 'calendar-push',
             extra: { error: String(error) },
         });
@@ -484,7 +484,7 @@ export const deleteMindwtrCalendar = async (): Promise<void> => {
                 await setCalendarPushTargetCalendarId(null);
             }
         }
-        void logInfo('Deleted Mindwtr calendar', {
+        void logInfo('Deleted Tiny Bubbles calendar', {
             scope: 'calendar-push',
             extra: { deletedCalendars: '0' },
         });
@@ -511,13 +511,13 @@ export const deleteMindwtrCalendar = async (): Promise<void> => {
             deletedEntries.map((entry) => deleteCalendarSyncEntry(entry.taskId, PLATFORM))
         );
     } catch (error) {
-        void logWarn('Failed to clear deleted Mindwtr calendar sync entries', {
+        void logWarn('Failed to clear deleted Tiny Bubbles calendar sync entries', {
             scope: 'calendar-push',
             extra: { error: String(error) },
         });
     }
 
-    void logInfo('Deleted Mindwtr calendar', {
+    void logInfo('Deleted Tiny Bubbles calendar', {
         scope: 'calendar-push',
         extra: { deletedCalendars: String(calendarIdsToDelete.size) },
     });
@@ -537,8 +537,8 @@ function formatCalendarEventTitle(title: string, occurrenceDateLabel = ''): stri
 function formatProjectedRecurrenceNote(task: Task): string {
     const occurrenceDateLabel = formatProjectedRecurrenceEventDate(task);
     return occurrenceDateLabel
-        ? `Projected recurring occurrence for ${occurrenceDateLabel}. Complete the current Mindwtr task to create the real next task.`
-        : 'Projected recurring occurrence. Complete the current Mindwtr task to create the real next task.';
+        ? `Projected recurring occurrence for ${occurrenceDateLabel}. Complete the current Tiny Bubbles task to create the real next task.`
+        : 'Projected recurring occurrence. Complete the current Tiny Bubbles task to create the real next task.';
 }
 
 function buildEventDetails(task: Task) {
@@ -788,7 +788,7 @@ export const startCalendarPushSync = (): (() => void) => {
                     prev.description !== task.description ||
                     prev.location !== task.location ||
                     prev.timeEstimate !== task.timeEstimate ||
-                    prev.suppressMindwtrReminders !== task.suppressMindwtrReminders ||
+                    prev.suppressTinyBubblesReminders !== task.suppressTinyBubblesReminders ||
                     prev.recurrence !== task.recurrence ||
                     prev.showFutureRecurrence !== task.showFutureRecurrence
                 ) {

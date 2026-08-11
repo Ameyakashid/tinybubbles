@@ -7,7 +7,7 @@ export {
     WHISPER_MODEL_BASE_URL,
     WHISPER_MODELS,
     type WhisperModelDescriptor as WhisperModelOption,
-} from '@mindwtr/core/whisper-models';
+} from '@tinybubbles/core/whisper-models';
 
 export type ParakeetModelOption = {
     id: string;

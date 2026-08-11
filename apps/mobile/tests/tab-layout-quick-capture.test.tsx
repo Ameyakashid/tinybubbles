@@ -103,7 +103,7 @@ vi.mock('@react-navigation/elements', () => ({
   getHeaderTitle: (_options: unknown, fallback: string) => fallback,
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   // This suite drives the store hook itself, so it supplies its own.
   return mockCore(importOriginal, () => ({}), { useTaskStore: mockUseTaskStore });
@@ -581,7 +581,7 @@ describe('mobile tab quick capture', () => {
   });
 
   it('boosts the capture FAB to the high-emphasis M3 primary role under Material', () => {
-    // Capture is Mindwtr's most important action, so under M3 the FAB uses the
+    // Capture is Tiny Bubbles's most important action, so under M3 the FAB uses the
     // high-emphasis FAB role (primary/onPrimary), not the deliberately subdued
     // primaryContainer. Other primary buttons stay primaryContainer (canonical),
     // preserving M3's emphasis hierarchy with capture at the top.

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
-import { useTaskStore, type Task } from '@mindwtr/core';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
 import { SearchView } from './SearchView';

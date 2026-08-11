@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { useTaskStore, type Task } from '@mindwtr/core';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 import { LanguageProvider } from '../../contexts/language-context';
 import { DESKTOP_POMODORO_SESSION_STORAGE_KEY, PomodoroPanel } from './PomodoroPanel';
 const nowIso = '2026-07-01T12:00:00.000Z';

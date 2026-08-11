@@ -4,18 +4,18 @@ import * as Calendar from 'expo-calendar';
 import {
     expandCategoryCalendars,
     generateUUID,
-    isMindwtrMirrorCalendar,
+    isTinyBubblesMirrorCalendar,
     mergeExternalCalendarSources,
     normalizeExternalCalendarColor,
     parseIcsWithMetadata,
     type ExternalCalendarEvent,
     type ExternalCalendarSourceResult,
     type ExternalCalendarSubscription,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import * as FileSystem from './file-system';
 
-export const EXTERNAL_CALENDARS_KEY = 'mindwtr-external-calendars';
-export const SYSTEM_CALENDAR_SETTINGS_KEY = 'mindwtr-system-calendar-settings';
+export const EXTERNAL_CALENDARS_KEY = 'tinybubbles-external-calendars';
+export const SYSTEM_CALENDAR_SETTINGS_KEY = 'tinybubbles-system-calendar-settings';
 
 const SYSTEM_CALENDAR_SOURCE_PREFIX = 'system';
 
@@ -91,12 +91,12 @@ function getCalendarDisplayName(calendar: Calendar.Calendar): string {
     return preferred.trim() || 'Calendar';
 }
 
-function isMindwtrNamedCalendar(calendar: Calendar.Calendar): boolean {
-    if (isMindwtrMirrorCalendar({ name: getCalendarDisplayName(calendar) })) {
+function isTinyBubblesNamedCalendar(calendar: Calendar.Calendar): boolean {
+    if (isTinyBubblesMirrorCalendar({ name: getCalendarDisplayName(calendar) })) {
         return true;
     }
     return typeof calendar.name === 'string'
-        && isMindwtrMirrorCalendar({ name: calendar.name });
+        && isTinyBubblesMirrorCalendar({ name: calendar.name });
 }
 
 function getSystemCalendarSourceId(calendarId: string): string {
@@ -209,7 +209,7 @@ export async function getSystemCalendars(): Promise<SystemCalendarInfo[]> {
         const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
         return calendars
             .filter((calendar) => typeof calendar.id === 'string' && calendar.id.trim().length > 0)
-            .filter((calendar) => !isMindwtrNamedCalendar(calendar))
+            .filter((calendar) => !isTinyBubblesNamedCalendar(calendar))
             .map((calendar) => ({
                 id: calendar.id,
                 name: getCalendarDisplayName(calendar),
@@ -399,7 +399,7 @@ async function fetchSystemCalendarEvents(rangeStart: Date, rangeEnd: Date, signa
     const rawCalendars = await withAbortSignal(Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT), signal);
     const availableCalendars = rawCalendars
         .filter((calendar) => typeof calendar.id === 'string' && calendar.id.trim().length > 0)
-        .filter((calendar) => !isMindwtrNamedCalendar(calendar));
+        .filter((calendar) => !isTinyBubblesNamedCalendar(calendar));
     if (availableCalendars.length === 0) {
         return { calendars: [], events: [] };
     }

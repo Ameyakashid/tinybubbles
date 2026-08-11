@@ -1,4 +1,4 @@
-export const TASK_ROW_ACTION_EVENT = 'mindwtr:task-row-action';
+export const TASK_ROW_ACTION_EVENT = 'tinybubbles:task-row-action';
 
 export type TaskRowAction = 'toggle-focus' | 'rename-title';
 

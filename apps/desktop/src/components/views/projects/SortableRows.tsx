@@ -1,4 +1,4 @@
-import { type Area, type Project, type ProjectSequenceTaskCue, type StoreActionResult, type Task } from '@mindwtr/core';
+import { type Area, type Project, type ProjectSequenceTaskCue, type StoreActionResult, type Task } from '@tinybubbles/core';
 import { useDraggable } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';

@@ -2,26 +2,26 @@ import { describe, expect, it } from 'vitest';
 
 import { TRAY_TOOLTIP_MAX_LENGTH, buildTrayTooltip } from './tray-tooltip';
 
-const build = (titles: string[], appName = 'Mindwtr', focusLabel = "Today's Focus") =>
+const build = (titles: string[], appName = 'Tiny Bubbles', focusLabel = "Today's Focus") =>
     buildTrayTooltip({ appName, focusLabel, titles });
 
 describe('buildTrayTooltip', () => {
     it('falls back to the app name when nothing is in Focus', () => {
         // The tray used to set no tooltip at all, which is what produced the
         // empty hover rectangle in #935 — never return an empty string.
-        expect(build([])).toBe('Mindwtr');
-        expect(build(['   ', ''])).toBe('Mindwtr');
+        expect(build([])).toBe('Tiny Bubbles');
+        expect(build(['   ', ''])).toBe('Tiny Bubbles');
     });
 
     it('lists the focus titles under a heading carrying the total', () => {
         expect(build(['Write report', 'Call Bob'])).toBe(
-            "Mindwtr — Today's Focus (2)\n• Write report\n• Call Bob"
+            "Tiny Bubbles — Today's Focus (2)\n• Write report\n• Call Bob"
         );
     });
 
     it('collapses newlines and runs of whitespace inside a title', () => {
         expect(build(['Write\n  the   report'])).toBe(
-            "Mindwtr — Today's Focus (1)\n• Write the report"
+            "Tiny Bubbles — Today's Focus (1)\n• Write the report"
         );
     });
 
@@ -32,13 +32,13 @@ describe('buildTrayTooltip', () => {
 
         expect(tooltip.length).toBeLessThanOrEqual(TRAY_TOOLTIP_MAX_LENGTH);
         expect(tooltip.endsWith('…')).toBe(true);
-        expect(tooltip.startsWith("Mindwtr — Today's Focus (12)")).toBe(true);
+        expect(tooltip.startsWith("Tiny Bubbles — Today's Focus (12)")).toBe(true);
     });
 
     it('keeps every title when they all fit, with no trailing ellipsis', () => {
         const tooltip = build(['A', 'B', 'C']);
 
-        expect(tooltip).toBe("Mindwtr — Today's Focus (3)\n• A\n• B\n• C");
+        expect(tooltip).toBe("Tiny Bubbles — Today's Focus (3)\n• A\n• B\n• C");
         expect(tooltip.endsWith('…')).toBe(false);
     });
 
@@ -52,7 +52,7 @@ describe('buildTrayTooltip', () => {
 
     it('stays within budget even when the heading itself is verbose', () => {
         const tooltip = buildTrayTooltip({
-            appName: 'Mindwtr',
+            appName: 'Tiny Bubbles',
             focusLabel: 'F'.repeat(200),
             titles: ['Anything'],
         });

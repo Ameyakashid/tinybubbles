@@ -2,7 +2,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 import { BoardView } from './BoardView';
 import { LanguageProvider } from '../../contexts/language-context';
-import { useTaskStore, type AppData, type Area, type Project, type Task } from '@mindwtr/core';
+import { useTaskStore, type AppData, type Area, type Project, type Task } from '@tinybubbles/core';
 import { useUiStore } from '../../store/ui-store';
 import { expectScrolledEndGap } from '../../test/list-end-gap';
 

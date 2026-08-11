@@ -2,7 +2,7 @@ import React from 'react';
 import { FlatList, Text, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { safeFormatDate, type Task } from '@mindwtr/core';
+import { safeFormatDate, type Task } from '@tinybubbles/core';
 
 const routerPushMock = vi.hoisted(() => vi.fn());
 const setHighlightTaskMock = vi.hoisted(() => vi.fn());
@@ -24,8 +24,8 @@ const storeState = vi.hoisted(() => ({
     setHighlightTask: setHighlightTaskMock,
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@tinybubbles/core')>();
     return {
         ...actual,
         getStorageAdapter: () => (storageAdapterState.searchAll ? { searchAll: storageAdapterState.searchAll } : {}),

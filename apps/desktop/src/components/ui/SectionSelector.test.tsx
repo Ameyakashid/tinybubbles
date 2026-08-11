@@ -1,7 +1,7 @@
 import { act, fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Section } from '@mindwtr/core';
+import type { Section } from '@tinybubbles/core';
 
 import { SectionSelector } from './SectionSelector';
 

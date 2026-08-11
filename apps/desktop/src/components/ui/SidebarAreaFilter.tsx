@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { Area, AreaFilterSelection } from '@mindwtr/core';
+import type { Area, AreaFilterSelection } from '@tinybubbles/core';
 import { Check, ChevronDown, Layers, X } from 'lucide-react';
 
 import {
     AREA_FILTER_NONE,
     cycleAreaFilterSelection,
     isAreaFilterSelectionActive,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { cn } from '../../lib/utils';
 import { useDropdownPosition } from './use-dropdown-position';
 

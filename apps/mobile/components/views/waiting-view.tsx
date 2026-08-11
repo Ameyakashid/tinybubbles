@@ -1,7 +1,7 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { getTranslationsSync, getWaitingPerson, safeParseDueDate, shallow, useTaskStore } from '@mindwtr/core';
+import { getTranslationsSync, getWaitingPerson, safeParseDueDate, shallow, useTaskStore } from '@tinybubbles/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Task, TaskStatus } from '@mindwtr/core';
+import type { Task, TaskStatus } from '@tinybubbles/core';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
 import { PauseCircle } from 'lucide-react-native';

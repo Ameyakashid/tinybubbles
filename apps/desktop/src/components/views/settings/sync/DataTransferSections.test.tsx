@@ -26,8 +26,8 @@ const labels = {
     importDgtDesc: 'Import DGT GTD exports.',
     importOmniFocus: 'Import from OmniFocus',
     importOmniFocusDesc: 'Import OmniFocus exports.',
-    importMindwtrCsv: 'Import from Mindwtr CSV',
-    importMindwtrCsvDesc: 'Import a Mindwtr CSV file.',
+    importTinyBubblesCsv: 'Import from TinyBubbles CSV',
+    importTinyBubblesCsvDesc: 'Import a TinyBubbles CSV file.',
     syncing: 'Working...',
 };
 
@@ -47,7 +47,7 @@ const importProps = {
     onImportTickTick: vi.fn(),
     onImportDgt: vi.fn(),
     onImportOmniFocus: vi.fn(),
-    onImportMindwtrCsv: vi.fn(),
+    onImportTinyBubblesCsv: vi.fn(),
 } as unknown as ComponentProps<typeof ImportSection>;
 
 // The rows are folded away until the header is clicked, which is also the
@@ -147,7 +147,7 @@ describe('ImportSection', () => {
         ['import:ticktick', /import from ticktick/i],
         ['import:dgt', /import from dgt gtd/i],
         ['import:omnifocus', /import from omnifocus/i],
-        ['import:mindwtr-csv', /import from mindwtr csv/i],
+        ['import:tinybubbles-csv', /import from tinybubbles csv/i],
     ] as const)('shows progress only on the active %s row', (transferAction, activeLabel) => {
         const { getAllByText, getByRole } = render(
             <ImportSection {...importProps} transferAction={transferAction} />

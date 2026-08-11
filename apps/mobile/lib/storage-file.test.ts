@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 import { Directory } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import { Platform } from 'react-native';
@@ -103,7 +103,7 @@ const bookmarkMocks = vi.hoisted(() => ({
 vi.mock('./sync-path-bookmarks', () => bookmarkMocks);
 
 const syncFileUri =
-  'content://com.android.externalstorage.documents/tree/primary%3AMindwtr/document/primary%3AMindwtr%2Fdata.json';
+  'content://com.android.externalstorage.documents/tree/primary%3ATiny%20Bubbles/document/primary%3ATiny%20Bubbles%2Fdata.json';
 
 const appData = (settings: AppData['settings']): AppData => ({
   tasks: [],
@@ -165,7 +165,7 @@ describe('storage-file sync writes', () => {
   it('completes Android folder setup when the test-file content write fails after creation', async () => {
     const treeUri = 'content://com.chiller3.rsaf.documents/tree/remote%3AStaleCheck';
     const dataUri = `${treeUri}/document/remote%3AStaleCheck%2Fdata.json`;
-    const testUri = `${treeUri}/document/remote%3AStaleCheck%2Fmindwtr-write-test`;
+    const testUri = `${treeUri}/document/remote%3AStaleCheck%2Ftinybubbles-write-test`;
     fileSystemMock.StorageAccessFramework.requestDirectoryPermissionsAsync.mockResolvedValue({
       granted: true,
       directoryUri: treeUri,
@@ -202,16 +202,16 @@ describe('iOS sync file bookmarks', () => {
       .pickDirectoryAsync.mockRejectedValue(new Error('Operation was canceled'));
     (DocumentPicker.getDocumentAsync as ReturnType<typeof vi.fn>).mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///gdrive/Mindwtr/backup.json' }],
+      assets: [{ uri: 'file:///gdrive/Tiny Bubbles/backup.json' }],
     });
     bookmarkMocks.createSyncPathBookmark.mockResolvedValue('bm-token');
-    expoFilesMock.set('file:///gdrive/Mindwtr/backup.json', JSON.stringify(appData({})));
+    expoFilesMock.set('file:///gdrive/Tiny Bubbles/backup.json', JSON.stringify(appData({})));
 
     const result = await pickAndParseSyncFolder();
 
-    expect(bookmarkMocks.createSyncPathBookmark).toHaveBeenCalledWith('file:///gdrive/Mindwtr/backup.json');
+    expect(bookmarkMocks.createSyncPathBookmark).toHaveBeenCalledWith('file:///gdrive/Tiny Bubbles/backup.json');
     expect(result?.__fileBookmark).toBe('bm-token');
-    expect(result?.__fileUri).toBe('file:///gdrive/Mindwtr/backup.json');
+    expect(result?.__fileUri).toBe('file:///gdrive/Tiny Bubbles/backup.json');
   });
 
   it('writes the sync file through the bookmarked native path when available', async () => {
@@ -219,7 +219,7 @@ describe('iOS sync file bookmarks', () => {
     bookmarkMocks.writeBookmarkedSyncFileText.mockResolvedValue(undefined);
 
     const data = appData({});
-    await writeSyncFile('file:///gdrive/Mindwtr/backup.json', data, { bookmark: 'bm-token' });
+    await writeSyncFile('file:///gdrive/Tiny Bubbles/backup.json', data, { bookmark: 'bm-token' });
 
     expect(bookmarkMocks.writeBookmarkedSyncFileText).toHaveBeenCalledWith(
       'bm-token',
@@ -232,7 +232,7 @@ describe('iOS sync file bookmarks', () => {
     const remote = appData({ weekStart: 'monday' });
     bookmarkMocks.readBookmarkedSyncFileText.mockResolvedValue(JSON.stringify(remote));
 
-    await expect(readSyncFile('file:///gdrive/Mindwtr/backup.json', { bookmark: 'bm-token' }))
+    await expect(readSyncFile('file:///gdrive/Tiny Bubbles/backup.json', { bookmark: 'bm-token' }))
       .resolves.toEqual(remote);
   });
 
@@ -240,9 +240,9 @@ describe('iOS sync file bookmarks', () => {
     bookmarkMocks.supportsBookmarkedSyncFileIO.mockReturnValue(true);
     bookmarkMocks.readBookmarkedSyncFileText.mockResolvedValue(null);
     const remote = appData({ weekStart: 'sunday' });
-    expoFilesMock.set('file:///gdrive/Mindwtr/backup.json', JSON.stringify(remote));
+    expoFilesMock.set('file:///gdrive/Tiny Bubbles/backup.json', JSON.stringify(remote));
 
-    await expect(readSyncFile('file:///gdrive/Mindwtr/backup.json', { bookmark: 'bm-token' }))
+    await expect(readSyncFile('file:///gdrive/Tiny Bubbles/backup.json', { bookmark: 'bm-token' }))
       .resolves.toEqual(remote);
   });
 
@@ -250,7 +250,7 @@ describe('iOS sync file bookmarks', () => {
     bookmarkMocks.supportsBookmarkedSyncFileIO.mockReturnValue(true);
     bookmarkMocks.readBookmarkedSyncFileText.mockRejectedValue(new Error('scope lost'));
 
-    await expect(readSyncFile('file:///gdrive/Mindwtr/backup.json', { bookmark: 'bm-token' }))
+    await expect(readSyncFile('file:///gdrive/Tiny Bubbles/backup.json', { bookmark: 'bm-token' }))
       .resolves.toBeNull();
   });
 });

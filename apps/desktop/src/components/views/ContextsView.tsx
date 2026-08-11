@@ -11,7 +11,7 @@ import {
     collectBulkTaskTokens,
     tFallback,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { AtSign, CheckSquare, ChevronDown, ChevronRight, Filter, Hash, Tag, type LucideIcon } from 'lucide-react';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';

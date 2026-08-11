@@ -70,20 +70,20 @@ describe('task-draft', () => {
             ...baseTask,
             status: 'done',
             completedAt: '2026-01-02T12:00:00.000Z',
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         };
         const draft = createTaskDraft(completed);
 
         expect(draft).toMatchObject({
             completedAt: '2026-01-02T12:00:00.000Z',
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         });
         const reopened = setTaskDraftField(draft, 'status', 'next');
         expect(reopened.completedAt).toBe('');
         expect(taskDraftToUpdatePatch(reopened, completed)).toMatchObject({
             status: 'next',
             completedAt: undefined,
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         });
     });
 

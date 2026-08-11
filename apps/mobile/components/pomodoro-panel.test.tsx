@@ -19,8 +19,8 @@ const { storeState } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   const useTaskStore = Object.assign((selector?: (state: typeof storeState) => unknown) => (
     selector ? selector(storeState) : storeState
   ), {
@@ -144,7 +144,7 @@ describe('PomodoroPanel', () => {
     await act(async () => undefined);
 
     const lastWrite = vi.mocked(AsyncStorage.setItem).mock.calls.at(-1);
-    expect(lastWrite?.[0]).toBe('@mindwtr_pomodoro_state');
+    expect(lastWrite?.[0]).toBe('@tinybubbles_pomodoro_state');
     expect(JSON.parse(String(lastWrite?.[1]))).toMatchObject({
       timerState: expect.objectContaining({ completedFocusSessions: 4 }),
       selectedTaskId: 'task-1',
@@ -251,7 +251,7 @@ describe('PomodoroPanel', () => {
   });
 
   it('folds down to the clock and phase when collapsed, keeping the timer readable (#946)', async () => {
-    mockStorage({ '@mindwtr_pomodoro_collapsed': 'true' });
+    mockStorage({ '@tinybubbles_pomodoro_collapsed': 'true' });
 
     const tree = await renderPanel();
     const textValues = tree.root.findAllByType(Text).map((node) => flattenText(node.props.children));
@@ -276,7 +276,7 @@ describe('PomodoroPanel', () => {
     };
     storeState.tasks = [linkedTask];
     mockStorage({
-      '@mindwtr_pomodoro_state': JSON.stringify({
+      '@tinybubbles_pomodoro_state': JSON.stringify({
         durations: { focusMinutes: 25, breakMinutes: 5 },
         timerState: {
           phase: 'focus',
@@ -306,8 +306,8 @@ describe('PomodoroPanel', () => {
   it('announces whether a collapsed timer is running', async () => {
     const phaseEndsAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     mockStorage({
-      '@mindwtr_pomodoro_collapsed': 'true',
-      '@mindwtr_pomodoro_state': JSON.stringify({
+      '@tinybubbles_pomodoro_collapsed': 'true',
+      '@tinybubbles_pomodoro_state': JSON.stringify({
         durations: { focusMinutes: 25, breakMinutes: 5 },
         timerState: {
           phase: 'focus',
@@ -336,11 +336,11 @@ describe('PomodoroPanel', () => {
       toggle?.props.onPress();
     });
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('@mindwtr_pomodoro_collapsed', 'true');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('@tinybubbles_pomodoro_collapsed', 'true');
     // Collapsing is a presentation choice, not task data: it must never ride
     // along in the synced session payload.
     const sessionWrites = vi.mocked(AsyncStorage.setItem).mock.calls
-      .filter(([key]) => key === '@mindwtr_pomodoro_state');
+      .filter(([key]) => key === '@tinybubbles_pomodoro_state');
     sessionWrites.forEach(([, value]) => {
       expect(String(value)).not.toContain('collapsed');
     });

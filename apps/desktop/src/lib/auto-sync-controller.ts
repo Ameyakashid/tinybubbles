@@ -1,4 +1,4 @@
-import { createSyncOrchestrator, resolveSyncFailureCooldownMs } from '@mindwtr/core';
+import { createSyncOrchestrator, resolveSyncFailureCooldownMs } from '@tinybubbles/core';
 
 type SyncResult = {
     success: boolean;

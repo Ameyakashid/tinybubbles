@@ -6,7 +6,7 @@ import {
     type Task,
     type TaskDraft,
     type TaskDraftSetter,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 type UseTaskItemEditStateOptions = {
     task: Task;

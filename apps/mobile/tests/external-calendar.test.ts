@@ -99,10 +99,10 @@ beforeEach(() => {
 });
 
 describe('getSystemCalendars', () => {
-    it('hides Mindwtr output calendars from the device calendar input list', async () => {
+    it('hides Tiny Bubbles output calendars from the device calendar input list', async () => {
         mockGetCalendarsAsync.mockResolvedValue([
             { id: 'google-primary', title: 'Google', color: '#888888' },
-            { id: 'google-mindwtr', title: 'Mindwtr', color: '#a17464' },
+            { id: 'google-tinybubbles', title: 'Tiny Bubbles', color: '#a17464' },
             { id: 'local-account', title: 'local account', color: '#000000' },
         ]);
 
@@ -230,18 +230,18 @@ describe('fetchExternalCalendarEvents', () => {
         expect(result.events.map((event) => event.title)).toEqual(['January work']);
     });
 
-    it('does not import Mindwtr-pushed events back into the Mindwtr calendar view', async () => {
+    it('does not import Tiny Bubbles-pushed events back into the Tiny Bubbles calendar view', async () => {
         const rangeStart = new Date('2026-04-20T00:00:00.000Z');
         const rangeEnd = new Date('2026-04-21T00:00:00.000Z');
         mockGetCalendarsAsync.mockResolvedValue([
             { id: 'google-primary', title: 'Google', color: '#888888' },
-            { id: 'google-mindwtr', title: 'Mindwtr', color: '#a17464' },
+            { id: 'google-tinybubbles', title: 'Tiny Bubbles', color: '#a17464' },
         ]);
         mockGetEventsAsync.mockResolvedValue([
             {
-                id: 'mindwtr-pushed',
+                id: 'tinybubbles-pushed',
                 calendarId: 'google-primary',
-                title: 'Mindwtr: Follow up',
+                title: 'Tiny Bubbles: Follow up',
                 startDate: new Date('2026-04-20T10:00:00.000Z'),
                 endDate: new Date('2026-04-20T10:30:00.000Z'),
                 allDay: false,

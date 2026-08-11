@@ -13,7 +13,7 @@ import {
     shallow,
     tFallback,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useTheme } from '@/contexts/theme-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';

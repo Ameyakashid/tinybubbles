@@ -9,7 +9,7 @@ import {
     sleep,
     toStableJson,
     type SyncBackend,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { normalizeAttachmentPathForUrl } from './attachment-paths';
 
 export { ATTACHMENTS_DIR_NAME, buildCloudKey, extractExtension };

@@ -76,7 +76,7 @@ use install::{
     is_flatpak, is_niri_session,
 };
 use linux_calendar::{
-    create_linux_calendar_event, delete_linux_calendar_event, ensure_linux_mindwtr_calendar,
+    create_linux_calendar_event, delete_linux_calendar_event, ensure_linux_tinybubbles_calendar,
     get_linux_calendar_events, get_linux_calendar_permission_status, get_linux_writable_calendars,
     request_linux_calendar_permission, update_linux_calendar_event,
 };
@@ -96,7 +96,7 @@ use platform::{
     cloudkit_ensure_subscription, cloudkit_ensure_zone, cloudkit_fetch_all_records,
     cloudkit_fetch_attachment_asset, cloudkit_fetch_changes, cloudkit_register_for_notifications,
     cloudkit_save_attachment_asset, cloudkit_save_records, create_macos_calendar_event,
-    delete_macos_calendar_event, ensure_macos_mindwtr_calendar, get_macos_calendar_events,
+    delete_macos_calendar_event, ensure_macos_tinybubbles_calendar, get_macos_calendar_events,
     get_macos_calendar_permission_status, get_macos_writable_calendars, get_managed_data_dir,
     import_attachment_file, migrate_portable_attachments, open_path,
     request_macos_calendar_permission, set_macos_activation_policy, update_macos_calendar_event,
@@ -138,13 +138,13 @@ pub(crate) use sync::expand_tauri_fs_scope;
 use sync::resolve_sync_path_bookmark;
 
 /// App name used for config directories and files
-const APP_NAME: &str = "mindwtr";
+const APP_NAME: &str = "tinybubbles";
 const CONFIG_FILE_NAME: &str = "config.toml";
 const SECRETS_FILE_NAME: &str = "secrets.toml";
 const DROPBOX_CREDENTIAL_STATE_FILE_NAME: &str = "dropbox-credential-state.json";
 const DROPBOX_CREDENTIAL_STATE_VERSION: u8 = 1;
 const DATA_FILE_NAME: &str = "data.json";
-const DB_FILE_NAME: &str = "mindwtr.db";
+const DB_FILE_NAME: &str = "tinybubbles.db";
 const KEYRING_WEB_DAV_PASSWORD: &str = "webdav_password";
 const KEYRING_CLOUD_TOKEN: &str = "cloud_token";
 const KEYRING_DROPBOX_TOKENS: &str = "dropbox_tokens";
@@ -215,7 +215,7 @@ const WEBKIT_DISABLE_COMPOSITING_MODE_ENV: &str = "WEBKIT_DISABLE_COMPOSITING_MO
 #[cfg(any(target_os = "linux", test))]
 const WEBKIT_DISABLE_COMPOSITING_MODE_VALUE: &str = "1";
 #[cfg(any(target_os = "linux", test))]
-const MINDWTR_WEBKIT_ENABLE_DMABUF_ENV: &str = "MINDWTR_WEBKIT_ENABLE_DMABUF";
+const TINYBUBBLES_WEBKIT_ENABLE_DMABUF_ENV: &str = "TINYBUBBLES_WEBKIT_ENABLE_DMABUF";
 
 #[cfg(target_os = "linux")]
 fn flatpak_notification_id() -> String {
@@ -224,7 +224,7 @@ fn flatpak_notification_id() -> String {
         .map(|duration| duration.as_millis())
         .unwrap_or_default();
     let random = rand::thread_rng().next_u32();
-    format!("mindwtr-{millis}-{random}")
+    format!("tinybubbles-{millis}-{random}")
 }
 
 #[cfg(target_os = "linux")]
@@ -477,7 +477,7 @@ struct MacOsCalendarPushTarget {
     name: String,
     source_name: Option<String>,
     color: Option<String>,
-    is_mindwtr_dedicated: bool,
+    is_tinybubbles_dedicated: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -505,53 +505,53 @@ struct MacOsCalendarEventWriteResult {
 
 #[cfg(target_os = "macos")]
 unsafe extern "C" {
-    fn mindwtr_macos_calendar_permission_status_json() -> *mut c_char;
-    fn mindwtr_macos_calendar_request_permission_json() -> *mut c_char;
-    fn mindwtr_macos_calendar_events_json(
+    fn tinybubbles_macos_calendar_permission_status_json() -> *mut c_char;
+    fn tinybubbles_macos_calendar_request_permission_json() -> *mut c_char;
+    fn tinybubbles_macos_calendar_events_json(
         range_start: *const c_char,
         range_end: *const c_char,
     ) -> *mut c_char;
-    fn mindwtr_macos_writable_calendars_json() -> *mut c_char;
-    fn mindwtr_macos_ensure_mindwtr_calendar_json(stored_calendar_id: *const c_char)
+    fn tinybubbles_macos_writable_calendars_json() -> *mut c_char;
+    fn tinybubbles_macos_ensure_tinybubbles_calendar_json(stored_calendar_id: *const c_char)
         -> *mut c_char;
-    fn mindwtr_macos_create_calendar_event_json(event_json: *const c_char) -> *mut c_char;
-    fn mindwtr_macos_update_calendar_event_json(
+    fn tinybubbles_macos_create_calendar_event_json(event_json: *const c_char) -> *mut c_char;
+    fn tinybubbles_macos_update_calendar_event_json(
         event_id: *const c_char,
         event_json: *const c_char,
     ) -> *mut c_char;
-    fn mindwtr_macos_delete_calendar_event_json(event_id: *const c_char) -> *mut c_char;
-    fn mindwtr_macos_calendar_free_string(value: *mut c_char);
-    fn mindwtr_macos_create_security_bookmark(path_cstr: *const c_char) -> *mut c_char;
-    fn mindwtr_macos_resolve_security_bookmark(base64_cstr: *const c_char) -> *mut c_char;
-    fn mindwtr_macos_free_bookmark_string(ptr: *mut c_char);
-    fn mindwtr_macos_frontmost_application_pid() -> c_int;
-    fn mindwtr_macos_activate_application(pid: c_int);
+    fn tinybubbles_macos_delete_calendar_event_json(event_id: *const c_char) -> *mut c_char;
+    fn tinybubbles_macos_calendar_free_string(value: *mut c_char);
+    fn tinybubbles_macos_create_security_bookmark(path_cstr: *const c_char) -> *mut c_char;
+    fn tinybubbles_macos_resolve_security_bookmark(base64_cstr: *const c_char) -> *mut c_char;
+    fn tinybubbles_macos_free_bookmark_string(ptr: *mut c_char);
+    fn tinybubbles_macos_frontmost_application_pid() -> c_int;
+    fn tinybubbles_macos_activate_application(pid: c_int);
 
-    fn mindwtr_cloudkit_account_status() -> *mut c_char;
-    fn mindwtr_cloudkit_ensure_zone() -> *mut c_char;
-    fn mindwtr_cloudkit_ensure_subscription() -> *mut c_char;
-    fn mindwtr_cloudkit_fetch_all_records(record_type: *const c_char) -> *mut c_char;
-    fn mindwtr_cloudkit_fetch_changes(change_token_base64: *const c_char) -> *mut c_char;
-    fn mindwtr_cloudkit_save_records(
+    fn tinybubbles_cloudkit_account_status() -> *mut c_char;
+    fn tinybubbles_cloudkit_ensure_zone() -> *mut c_char;
+    fn tinybubbles_cloudkit_ensure_subscription() -> *mut c_char;
+    fn tinybubbles_cloudkit_fetch_all_records(record_type: *const c_char) -> *mut c_char;
+    fn tinybubbles_cloudkit_fetch_changes(change_token_base64: *const c_char) -> *mut c_char;
+    fn tinybubbles_cloudkit_save_records(
         record_type: *const c_char,
         records_json: *const c_char,
     ) -> *mut c_char;
-    fn mindwtr_cloudkit_save_attachment_asset(
+    fn tinybubbles_cloudkit_save_attachment_asset(
         record_name: *const c_char,
         file_path: *const c_char,
         metadata_json: *const c_char,
     ) -> *mut c_char;
-    fn mindwtr_cloudkit_fetch_attachment_asset(
+    fn tinybubbles_cloudkit_fetch_attachment_asset(
         record_name: *const c_char,
         target_path: *const c_char,
     ) -> *mut c_char;
-    fn mindwtr_cloudkit_delete_records(
+    fn tinybubbles_cloudkit_delete_records(
         record_type: *const c_char,
         record_ids_json: *const c_char,
     ) -> *mut c_char;
-    fn mindwtr_cloudkit_register_for_remote_notifications();
-    fn mindwtr_cloudkit_consume_pending_remote_change() -> i32;
-    fn mindwtr_cloudkit_free_string(ptr: *mut c_char);
+    fn tinybubbles_cloudkit_register_for_remote_notifications();
+    fn tinybubbles_cloudkit_consume_pending_remote_change() -> i32;
+    fn tinybubbles_cloudkit_free_string(ptr: *mut c_char);
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -783,7 +783,7 @@ fn should_configure_linux_webkit_disable_dmabuf(
 #[cfg(target_os = "linux")]
 fn configure_linux_webkit_renderer(disable_hardware_acceleration: bool) {
     let existing_disable_dmabuf = env::var(WEBKIT_DISABLE_DMABUF_RENDERER_ENV).ok();
-    let enable_dmabuf_override = env::var(MINDWTR_WEBKIT_ENABLE_DMABUF_ENV).ok();
+    let enable_dmabuf_override = env::var(TINYBUBBLES_WEBKIT_ENABLE_DMABUF_ENV).ok();
     if should_configure_linux_webkit_disable_dmabuf(
         existing_disable_dmabuf.as_deref(),
         enable_dmabuf_override.as_deref(),
@@ -1124,7 +1124,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_autostart::Builder::new()
-                .app_name("Mindwtr")
+                .app_name("Tiny Bubbles")
                 .args([STARTUP_LAUNCH_CLI_FLAG])
                 .build(),
         )
@@ -1140,7 +1140,7 @@ pub fn run() {
                 let docs_item = MenuItem::with_id(
                     handle,
                     MENU_HELP_DOCS_ID,
-                    "Mindwtr Help",
+                    "Tiny Bubbles Help",
                     true,
                     None::<&str>,
                 )?;
@@ -1158,10 +1158,10 @@ pub fn run() {
         })
         .on_menu_event(|_app, event| match event.id().as_ref() {
             MENU_HELP_DOCS_ID => {
-                let _ = open::that("https://github.com/dongdongbh/Mindwtr#readme");
+                let _ = open::that("https://github.com/tinybubbles-app/tinybubbles#readme");
             }
             MENU_HELP_ISSUES_ID => {
-                let _ = open::that("https://github.com/dongdongbh/Mindwtr/issues");
+                let _ = open::that("https://github.com/tinybubbles-app/tinybubbles/issues");
             }
             _ => {}
         });
@@ -1348,14 +1348,14 @@ pub fn run() {
                     let _ = window.set_decorations(false);
                 }
                 if diagnostics_enabled {
-                    let _ = window.eval("window.__MINDWTR_DIAGNOSTICS__ = true;");
+                    let _ = window.eval("window.__TINYBUBBLES_DIAGNOSTICS__ = true;");
                     #[cfg(any(debug_assertions, feature = "diagnostics"))]
                     {
                         let _ = window.open_devtools();
                     }
                 }
                 if is_flatpak_install {
-                    let _ = window.eval("window.__MINDWTR_FLATPAK__ = true;");
+                    let _ = window.eval("window.__TINYBUBBLES_FLATPAK__ = true;");
                 }
             }
 
@@ -1371,7 +1371,7 @@ pub fn run() {
                 let quick_add_item =
                     MenuItem::with_id(handle, "quick_add", "Quick Add", true, None::<&str>)?;
                 let show_item =
-                    MenuItem::with_id(handle, "show", "Show Mindwtr", true, None::<&str>)?;
+                    MenuItem::with_id(handle, "show", "Show Tiny Bubbles", true, None::<&str>)?;
                 let quit_item = MenuItem::with_id(handle, "quit", "Quit", true, None::<&str>)?;
                 let tray_menu =
                     Menu::with_items(handle, &[&quick_add_item, &show_item, &quit_item])?;
@@ -1563,7 +1563,7 @@ pub fn run() {
             request_macos_calendar_permission,
             get_macos_calendar_events,
             get_macos_writable_calendars,
-            ensure_macos_mindwtr_calendar,
+            ensure_macos_tinybubbles_calendar,
             create_macos_calendar_event,
             update_macos_calendar_event,
             delete_macos_calendar_event,
@@ -1571,7 +1571,7 @@ pub fn run() {
             request_linux_calendar_permission,
             get_linux_calendar_events,
             get_linux_writable_calendars,
-            ensure_linux_mindwtr_calendar,
+            ensure_linux_tinybubbles_calendar,
             create_linux_calendar_event,
             update_linux_calendar_event,
             delete_linux_calendar_event,
@@ -1651,7 +1651,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system clock should be after unix epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("mindwtr-{name}-{}-{nanos}", std::process::id()))
+        std::env::temp_dir().join(format!("tinybubbles-{name}-{}-{nanos}", std::process::id()))
     }
 
     #[test]
@@ -1736,12 +1736,12 @@ mod tests {
 
     #[test]
     fn launch_requests_startup_matches_flag() {
-        assert!(launch_requests_startup(["mindwtr", "--startup"]));
-        assert!(launch_requests_startup(["mindwtr", "--STARTUP"]));
-        assert!(!launch_requests_startup(["mindwtr"]));
-        assert!(!launch_requests_startup(["mindwtr", "--quick-add"]));
+        assert!(launch_requests_startup(["tinybubbles", "--startup"]));
+        assert!(launch_requests_startup(["tinybubbles", "--STARTUP"]));
+        assert!(!launch_requests_startup(["tinybubbles"]));
+        assert!(!launch_requests_startup(["tinybubbles", "--quick-add"]));
         // Mixed with other flags, order doesn't matter.
-        assert!(launch_requests_startup(["mindwtr", "--foo", "--startup"]));
+        assert!(launch_requests_startup(["tinybubbles", "--foo", "--startup"]));
     }
 
     #[test]
@@ -1756,7 +1756,7 @@ mod tests {
     fn flatpak_install_channel_reads_branch_from_instance_section() {
         let contents = r#"
 [Application]
-name=tech.dongdongbh.mindwtr
+name=app.tinybubbles
 
 [Instance]
 instance-id=123456
@@ -1772,10 +1772,10 @@ arch=x86_64
 
     #[test]
     fn launch_requests_quick_add_matches_flag() {
-        assert!(launch_requests_quick_add(["mindwtr", "--quick-add"]));
-        assert!(launch_requests_quick_add(["mindwtr", "--QUICK-ADD"]));
-        assert!(!launch_requests_quick_add(["mindwtr"]));
-        assert!(!launch_requests_quick_add(["mindwtr", "--foo"]));
+        assert!(launch_requests_quick_add(["tinybubbles", "--quick-add"]));
+        assert!(launch_requests_quick_add(["tinybubbles", "--QUICK-ADD"]));
+        assert!(!launch_requests_quick_add(["tinybubbles"]));
+        assert!(!launch_requests_quick_add(["tinybubbles", "--foo"]));
     }
 
     #[test]
@@ -1854,11 +1854,11 @@ arch=x86_64
     #[test]
     fn flatpak_instance_request_preserves_quick_add_launches() {
         assert_eq!(
-            flatpak_instance_request(["mindwtr", "--quick-add"]),
+            flatpak_instance_request(["tinybubbles", "--quick-add"]),
             FLATPAK_INSTANCE_REQUEST_QUICK_ADD
         );
         assert_eq!(
-            flatpak_instance_request(["mindwtr"]),
+            flatpak_instance_request(["tinybubbles"]),
             FLATPAK_INSTANCE_REQUEST_SHOW
         );
     }
@@ -1870,18 +1870,18 @@ arch=x86_64
 
         assert_eq!(
             flatpak_instance_socket_path(runtime_dir),
-            PathBuf::from("/run/user/1000/mindwtr/instance.sock")
+            PathBuf::from("/run/user/1000/tinybubbles/instance.sock")
         );
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn tray_icon_path_uses_app_cache_dir() {
-        let app_cache_dir = Path::new("/home/user/.var/app/tech.dongdongbh.mindwtr/cache");
+        let app_cache_dir = Path::new("/home/user/.var/app/app.tinybubbles/cache");
 
         assert_eq!(
             tray_icon_temp_dir(app_cache_dir),
-            PathBuf::from("/home/user/.var/app/tech.dongdongbh.mindwtr/cache/tray-icon")
+            PathBuf::from("/home/user/.var/app/app.tinybubbles/cache/tray-icon")
         );
     }
 

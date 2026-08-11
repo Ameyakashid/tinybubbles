@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr is local-first and needs a single persistence approach that works across desktop and mobile without introducing a separate database service or sync-specific storage tier.
+Tiny Bubbles is local-first and needs a single persistence approach that works across desktop and mobile without introducing a separate database service or sync-specific storage tier.
 
 The storage layer needs to support:
 
@@ -25,6 +25,6 @@ This remains the default persistence stack for desktop and mobile adapters unles
 ## Consequences
 
 - Search stays local and fast without introducing an external search service.
-- Readers can continue while writes are in progress, which fits Mindwtr's offline-first model better than a single locked JSON file.
+- Readers can continue while writes are in progress, which fits Tiny Bubbles's offline-first model better than a single locked JSON file.
 - We must manage schema migrations, FTS index rebuilds, and corruption recovery explicitly in application code.
 - JSON backups and exports remain important as portability and repair mechanisms, but they are not the primary runtime store.

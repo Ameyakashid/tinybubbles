@@ -5,16 +5,16 @@ Status: Accepted
 
 ## Context
 
-Mindwtr currently uses SQLite as the primary local store and JSON snapshots as the sync and backup bridge. The shared core sync path validates and normalizes local and remote snapshots, merges entity arrays with `rev`/`revBy`, preserves tombstones, repairs references, records conflict diagnostics, and writes the merged result back through backend-specific ports.
+Tiny Bubbles currently uses SQLite as the primary local store and JSON snapshots as the sync and backup bridge. The shared core sync path validates and normalizes local and remote snapshots, merges entity arrays with `rev`/`revBy`, preserves tombstones, repairs references, records conflict diagnostics, and writes the merged result back through backend-specific ports.
 
 Loro is a strong CRDT candidate for local-first software:
 
 - it is implemented in Rust and exposes JavaScript/TypeScript and Swift bindings
 - it supports byte-oriented update import/export that can be moved through arbitrary transports
 - it includes movable tree, movable list, text, map, version vector, snapshot, and time-travel primitives
-- its movable tree model is relevant if Mindwtr grows into deeper recursive task/project hierarchies
+- its movable tree model is relevant if Tiny Bubbles grows into deeper recursive task/project hierarchies
 
-However, adopting CRDT is not a drop-in replacement for the current sync algorithm. Mindwtr's product and data model are still mostly personal GTD snapshots:
+However, adopting CRDT is not a drop-in replacement for the current sync algorithm. Tiny Bubbles's product and data model are still mostly personal GTD snapshots:
 
 - hierarchy is represented by flat records with `areaId`, `projectId`, and `sectionId`, not an arbitrary recursive tree
 - checklist items are task-local arrays, not independent cross-device entities
@@ -27,7 +27,7 @@ Switching the production source of sync truth to a CRDT document would require a
 
 ## Decision
 
-Mindwtr will not replace the current production sync engine with a CRDT document at this time.
+Tiny Bubbles will not replace the current production sync engine with a CRDT document at this time.
 
 The current architecture remains:
 
@@ -48,7 +48,7 @@ A CRDT prototype must prove at least:
 CRDT adoption should be reconsidered only if one or more product requirements materially change:
 
 - real-time multi-user collaboration becomes a first-class feature
-- Mindwtr introduces recursive outliner-style tasks or project trees where concurrent moves are common
+- Tiny Bubbles introduces recursive outliner-style tasks or project trees where concurrent moves are common
 - peer-to-peer sync becomes a supported backend
 - edit-history/time-travel recovery becomes a core user feature
 - snapshot size or sync latency crosses the thresholds described in ADR 0008

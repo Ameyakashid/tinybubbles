@@ -3,7 +3,7 @@
  * https://docs.expo.dev/guides/color-schemes/
  */
 
-import { resolveThemeColorScheme } from '@mindwtr/core';
+import { resolveThemeColorScheme } from '@tinybubbles/core';
 import { Colors, Material3 } from '@/constants/theme';
 import { THEME_PRESETS } from '@/constants/theme-presets';
 import { useTheme } from '@/contexts/theme-context';

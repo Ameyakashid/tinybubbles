@@ -1,16 +1,16 @@
-# Maintainer: dongdongbh <dongdongbhbh@gmail.com>
-pkgname=mindwtr-bin
+# Maintainer: tinybubbles-app
+pkgname=tinybubbles-bin
 pkgver=0.3.4
 pkgrel=1
 pkgdesc="A complete Getting Things Done (GTD) productivity system - Mind Like Water"
 arch=('x86_64')
-url="https://github.com/dongdongbh/Mindwtr"
+url="https://github.com/tinybubbles-app/tinybubbles"
 license=('AGPL3')
 depends=('webkit2gtk-4.1' 'gtk3' 'libappindicator-gtk3')
 optdepends=('evolution-data-server: GNOME system calendar integration')
-provides=('mindwtr')
-conflicts=('mindwtr')
-source_x86_64=("${url}/releases/download/v${pkgver}/mindwtr_${pkgver}_amd64.deb")
+provides=('tinybubbles')
+conflicts=('tinybubbles')
+source_x86_64=("${url}/releases/download/v${pkgver}/tinybubbles_${pkgver}_amd64.deb")
 sha256sums_x86_64=('4cc5e024b0930acec9164b24077c857a9fcf94259ee446d65999d528d9594d27')
 
 package() {

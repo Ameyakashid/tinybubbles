@@ -2,12 +2,12 @@ import {
     generateUUID,
     normalizeExternalCalendarColor,
     type ExternalCalendarSubscription,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { reportError } from './report-error';
 import { invokeNative } from './tauri-invoke';
 
-const EXTERNAL_CALENDARS_KEY = 'mindwtr-external-calendars';
+const EXTERNAL_CALENDARS_KEY = 'tinybubbles-external-calendars';
 
 function safeJsonParse<T>(raw: string | null, fallback: T): T {
     if (!raw) return fallback;

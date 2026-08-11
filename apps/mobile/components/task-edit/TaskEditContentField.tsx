@@ -17,7 +17,7 @@ import {
     useTaskStore,
     type MarkdownSelection,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { MarkdownReferenceAutocomplete } from '../markdown-reference-autocomplete';
 import { MarkdownText } from '../markdown-text';

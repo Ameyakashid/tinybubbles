@@ -2,8 +2,8 @@ import React from 'react';
 import { Platform, Text, TextInput, TouchableOpacity } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { configureDateFormatting, type Task } from '@mindwtr/core';
-import { createTaskDraft } from '@mindwtr/core/task-draft';
+import { configureDateFormatting, type Task } from '@tinybubbles/core';
+import { createTaskDraft } from '@tinybubbles/core/task-draft';
 
 import { TaskEditScheduleField } from './TaskEditScheduleField';
 
@@ -55,8 +55,8 @@ const t = (key: string) => ({
     'common.done': 'Done',
     'taskEdit.dueDateLabel': 'Due Date',
     'taskEdit.startDateLabel': 'Start Date',
-    'taskEdit.suppressMindwtrReminders': 'Skip reminders',
-    'taskEdit.suppressMindwtrRemindersHint': 'Skip start and due reminders for this task. It still appears in Focus and your lists.',
+    'taskEdit.suppressTinyBubblesReminders': 'Skip reminders',
+    'taskEdit.suppressTinyBubblesRemindersHint': 'Skip start and due reminders for this task. It still appears in Focus and your lists.',
     'taskEdit.repeatReminderLabel': 'Repeat reminder',
     'taskEdit.repeatReminderOff': 'Off',
     'taskEdit.repeatReminderEveryMinutes': 'Every {count} min',
@@ -415,7 +415,7 @@ describe('TaskEditScheduleField', () => {
             handoffSwitch.props.onPress();
         });
 
-        expect(setDraftField).toHaveBeenCalledWith('suppressMindwtrReminders', true);
+        expect(setDraftField).toHaveBeenCalledWith('suppressTinyBubblesReminders', true);
     });
 
     it('collapses repeat reminder options until the compact row is pressed', () => {

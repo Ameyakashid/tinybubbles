@@ -13,8 +13,8 @@ import {
     taskMatchesAreaFilterSelection,
     tFallback,
     useTaskStore,
-} from '@mindwtr/core';
-import type { Project, Task, TaskSortBy } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { Project, Task, TaskSortBy } from '@tinybubbles/core';
 import { FilterChip, TaskFilterSheet } from '@/components/task-filter-sheet';
 import { resolveTimeEstimateFilterOptions } from '@/components/time-estimate-filter-utils';
 import { taskMatchesFilterSelections, useTaskFilterSelections } from '@/hooks/use-task-filter-selections';

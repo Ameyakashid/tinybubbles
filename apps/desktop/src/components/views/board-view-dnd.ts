@@ -1,4 +1,4 @@
-import type { TaskStatus } from '@mindwtr/core';
+import type { TaskStatus } from '@tinybubbles/core';
 
 export type BoardDragEndAction =
     | { type: 'none' }

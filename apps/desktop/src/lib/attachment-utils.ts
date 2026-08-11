@@ -1,1 +1,1 @@
-export { getAttachmentDisplayTitle, normalizeAttachmentInput } from '@mindwtr/core';
+export { getAttachmentDisplayTitle, normalizeAttachmentInput } from '@tinybubbles/core';

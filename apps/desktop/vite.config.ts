@@ -11,11 +11,11 @@ export default defineConfig({
     alias: [
       { find: "@", replacement: path.resolve(__dirname, "./src") },
       {
-        find: /^@mindwtr\/core$/,
+        find: /^@tinybubbles\/core$/,
         replacement: path.resolve(__dirname, "../../packages/core/src/index.ts"),
       },
       {
-        find: /^@mindwtr\/core\/(.+)$/,
+        find: /^@tinybubbles\/core\/(.+)$/,
         replacement: path.resolve(__dirname, "../../packages/core/src/$1.ts"),
       },
     ],
@@ -32,8 +32,8 @@ export default defineConfig({
     fs: {
       allow: [
         path.resolve(__dirname, '..', '..'),
-        ...(fs.existsSync(path.resolve(__dirname, '../../../Mindwtr'))
-          ? [path.resolve(__dirname, '../../../Mindwtr')]
+        ...(fs.existsSync(path.resolve(__dirname, '../../../tinybubbles'))
+          ? [path.resolve(__dirname, '../../../tinybubbles')]
           : []),
       ],
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Area, Project, Task } from '@mindwtr/core';
+import type { Area, Project, Task } from '@tinybubbles/core';
 
 import { createVisibleTaskContextDeriver } from './use-visible-tasks';
 

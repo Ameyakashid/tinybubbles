@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal, Pressable, Text, View } from 'react-native';
-import type { TaskSortBy } from '@mindwtr/core';
+import type { TaskSortBy } from '@tinybubbles/core';
 
 import { styles } from './task-list.styles';
 

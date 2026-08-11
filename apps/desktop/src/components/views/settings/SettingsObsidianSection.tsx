@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { safeFormatDate } from '@mindwtr/core';
+import { safeFormatDate } from '@tinybubbles/core';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
 import { Switch } from '../../ui/Switch';
@@ -215,7 +215,7 @@ export function SettingsObsidianSection({
                             value={obsidianInboxFile}
                             aria-label={t.obsidianInboxFile}
                             onChange={(event) => onObsidianInboxFileChange(event.target.value)}
-                            placeholder="Mindwtr/Inbox.md"
+                            placeholder="Tiny Bubbles/Inbox.md"
                             className="bg-muted p-2 rounded text-sm font-mono border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                         <p className="text-xs text-muted-foreground">{t.obsidianInboxFileHint}</p>

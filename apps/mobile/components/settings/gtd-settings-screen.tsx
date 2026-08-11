@@ -40,7 +40,7 @@ import {
     type TaskEditorSectionId,
     type TimeEstimate,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { SettingRow, SettingToggleRow } from './setting-row';
 import type { SettingsScreen } from './settings.constants';

@@ -1,4 +1,4 @@
-import type { ObsidianSourceRef } from '@mindwtr/core';
+import type { ObsidianSourceRef } from '@tinybubbles/core';
 import { getDesktopTimerHost, isTauriRuntime } from './runtime';
 import { reportError } from './report-error';
 import { invokeNative, invokeNativeOr } from './tauri-invoke';
@@ -14,7 +14,7 @@ import {
     type ObsidianScanResult,
 } from './obsidian-scanner';
 
-const OBSIDIAN_CONFIG_KEY = 'mindwtr-obsidian-config';
+const OBSIDIAN_CONFIG_KEY = 'tinybubbles-obsidian-config';
 const FORBIDDEN_PATH_RETRY_DELAYS_MS = [75, 250, 500];
 
 export type ObsidianFilesChangedPayload = {

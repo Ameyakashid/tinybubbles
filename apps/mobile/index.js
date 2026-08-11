@@ -30,7 +30,7 @@ const installKeepAwakeActivationGuard = () => {
       return;
     }
 
-    if (keepAwakeModule.__mindwtrActivateWrapped) {
+    if (keepAwakeModule.__tinybubblesActivateWrapped) {
       return;
     }
 
@@ -42,18 +42,18 @@ const installKeepAwakeActivationGuard = () => {
         const details = error instanceof Error ? (error.stack || error.message) : String(error);
         if (details.includes('Unable to activate keep awake')) {
           startupProfiler?.markStartupPhase?.('js.index.keep_awake_activate_ignored');
-          console.warn('[MindwtrStartup] keep-awake activation skipped until activity is ready');
+          console.warn('[TinyBubblesStartup] keep-awake activation skipped until activity is ready');
           return;
         }
         throw error;
       }
     };
-    keepAwakeModule.__mindwtrActivateWrapped = true;
+    keepAwakeModule.__tinybubblesActivateWrapped = true;
     startupProfiler?.markStartupPhase?.('js.index.keep_awake_activate_guard_installed');
   } catch (error) {
     const details = error instanceof Error ? (error.stack || error.message) : String(error);
     startupProfiler?.markStartupPhase?.('js.index.keep_awake_activate_guard_failed');
-    console.warn(`[MindwtrStartup] keep-awake guard install failed: ${details}`);
+    console.warn(`[TinyBubblesStartup] keep-awake guard install failed: ${details}`);
   }
 };
 
@@ -67,7 +67,7 @@ const loadWidgetHandler = () => {
   } catch (error) {
     const details = error instanceof Error ? (error.stack || error.message) : String(error);
     startupProfiler?.markStartupPhase?.('js.index.widget_handler_failed');
-    console.error(`[MindwtrStartup] phase=js.index.widget_handler_failed_error details=${details}`);
+    console.error(`[TinyBubblesStartup] phase=js.index.widget_handler_failed_error details=${details}`);
   }
 };
 
@@ -115,6 +115,6 @@ try {
 } catch (error) {
   const details = error instanceof Error ? (error.stack || error.message) : String(error);
   startupProfiler?.markStartupPhase?.('js.index.expo_router_entry_failed');
-  console.error(`[MindwtrStartup] phase=js.index.expo_router_entry_failed_error details=${details}`);
+  console.error(`[TinyBubblesStartup] phase=js.index.expo_router_entry_failed_error details=${details}`);
   throw error;
 }

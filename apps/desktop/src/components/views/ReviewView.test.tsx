@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react';
-import { useTaskStore, type Project, type Task } from '@mindwtr/core';
+import { useTaskStore, type Project, type Task } from '@tinybubbles/core';
 import { ReviewView } from './ReviewView';
 import { LanguageProvider } from '../../contexts/language-context';
 import { useUiStore } from '../../store/ui-store';
@@ -66,7 +66,7 @@ describe('ReviewView', () => {
     });
 
     beforeEach(() => {
-        window.localStorage.removeItem('mindwtr:view:review:v1');
+        window.localStorage.removeItem('tinybubbles:view:review:v1');
         useTaskStore.setState(initialTaskState, true);
         useUiStore.setState(initialUiState, true);
         vi.mocked(fetchExternalCalendarEvents).mockClear();

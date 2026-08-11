@@ -1,4 +1,4 @@
-import { Attachment } from '@mindwtr/core';
+import { Attachment } from '@tinybubbles/core';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { normalizeAttachmentPathForUrl, isLocalAttachmentPath, resolveAttachmentOpenTarget } from '../../lib/attachment-paths';
 import { isTauriRuntime } from '../../lib/runtime';

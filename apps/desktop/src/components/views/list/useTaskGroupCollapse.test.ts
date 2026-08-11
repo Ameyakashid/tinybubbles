@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { buildGroupedVirtualRows } from './GroupedTaskSections';
 import type { CollapsedGroups, TaskGroup } from './next-grouping';
 import { buildSectionDomId, getGroupDomIdSegment, useTaskGroupCollapse } from './useTaskGroupCollapse';

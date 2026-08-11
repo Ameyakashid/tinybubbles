@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { safeFormatDate, type Project, tFallback } from '@mindwtr/core';
+import { safeFormatDate, type Project, tFallback } from '@tinybubbles/core';
 import { ChevronDown, ChevronRight, Folder, type LucideIcon } from 'lucide-react';
 
 import { cn } from '../../../lib/utils';

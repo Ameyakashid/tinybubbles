@@ -1,8 +1,8 @@
 import { useMemo, useCallback, useEffect, useState, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ErrorBoundary } from '../ErrorBoundary';
-import { collectBulkTaskTokens, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, tFallback } from '@mindwtr/core';
-import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
+import { collectBulkTaskTokens, shallow, useTaskStore, filterTasksBySearch, sortTasksBy, tFallback } from '@tinybubbles/core';
+import type { BulkOrganizeTaskUpdateInput } from '@tinybubbles/core';
 import { useLanguage } from '../../contexts/language-context';
 import { Trash2 } from 'lucide-react';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
@@ -13,7 +13,7 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { cn } from '../../lib/utils';
-import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { resolveAreaFilterSelection, taskMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import {
     LIST_VIRTUALIZATION_THRESHOLD,

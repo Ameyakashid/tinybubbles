@@ -18,7 +18,7 @@ Stale-item detection already existed in core (`getStaleItems`, 14-day threshold 
 
 1. **Weekly Review gets a "Stale items" step; Daily Review stays date-driven.** The weekly wizard shows the plain `getStaleItems` list to everyone (no AI required). When AI review is enabled, the AI analysis tools appear inside the same step instead of a separate AI-only step — one surface, no duplication. The step auto-skips when there are no stale items, so date-driven users see nothing new unless items actually go stale.
 2. **"Review in 1 week" joins "Mark reviewed" as a post-review action.** The interval is a fixed 7 days from now (`getAdvancedReviewDate` in core), matching the weekly review cadence. No per-task interval field and no settings knob: per-task intervals are recurrence-style complexity for a niche need, and editing `reviewAt` directly remains available for custom cadences. The new date preserves the original value's date-only vs datetime shape.
-3. **Candidate logic stays a core predicate.** Both platforms consume `getStaleItems` and `getAdvancedReviewDate` from `@mindwtr/core`; no per-platform copies.
+3. **Candidate logic stays a core predicate.** Both platforms consume `getStaleItems` and `getAdvancedReviewDate` from `@tinybubbles/core`; no per-platform copies.
 
 ## Consequences
 

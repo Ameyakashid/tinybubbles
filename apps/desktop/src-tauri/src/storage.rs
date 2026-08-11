@@ -92,7 +92,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   isFocusedToday INTEGER,
   timeEstimate TEXT,
   timeSpentMinutes INTEGER,
-  suppressMindwtrReminders INTEGER,
+  suppressTinyBubblesReminders INTEGER,
   repeatReminderMinutes INTEGER,
   reviewAt TEXT,
   completedAt TEXT,
@@ -481,7 +481,7 @@ fn initialize_sqlite_schema(conn: &mut Connection) -> Result<i64, String> {
         ensure_column(&transaction, "tasks", "textDirection", "TEXT")?;
         ensure_column(&transaction, "tasks", "relativeStartOffset", "TEXT")?;
         ensure_column(&transaction, "tasks", "showFutureRecurrence", "INTEGER")?;
-        ensure_column(&transaction, "tasks", "suppressMindwtrReminders", "INTEGER")?;
+        ensure_column(&transaction, "tasks", "suppressTinyBubblesReminders", "INTEGER")?;
         ensure_column(&transaction, "tasks", "repeatReminderMinutes", "INTEGER")?;
         ensure_column(&transaction, "tasks", "timeSpentMinutes", "INTEGER")?;
         ensure_column(&transaction, "tasks", "statusBeforeProjectArchive", "TEXT")?;
@@ -804,7 +804,7 @@ fn write_data_json_file(data_path: &Path, data: &Value) -> Result<(), String> {
         .parent()
         .ok_or_else(|| "Failed to resolve data.json parent directory".to_string())?;
     let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-data-")
+        .prefix(".tinybubbles-data-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|e| e.to_string())?;
@@ -849,7 +849,7 @@ fn write_initial_data_json_file(data_path: &Path, data: &Value) -> Result<bool, 
         // duration of this publication so mere existence cannot suppress a
         // valid bootstrap retry.
         let quarantine = tempfile::Builder::new()
-            .prefix(".mindwtr-invalid-data-")
+            .prefix(".tinybubbles-invalid-data-")
             .suffix(".tmp")
             .tempfile_in(parent)
             .map_err(|e| e.to_string())?
@@ -860,7 +860,7 @@ fn write_initial_data_json_file(data_path: &Path, data: &Value) -> Result<bool, 
 
     let content = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
     let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-data-bootstrap-")
+        .prefix(".tinybubbles-data-bootstrap-")
         .suffix(".tmp")
         .tempfile_in(parent)
         .map_err(|e| e.to_string())?;
@@ -1660,7 +1660,7 @@ fn replace_task_row(conn: &Connection, task: &Value) -> Result<(), String> {
     let normalized_rev = normalized_revision_for_storage(task.get("rev"));
     let normalized_rev_by = normalized_rev_by(task.get("revBy"));
     conn.execute(
-        "INSERT OR REPLACE INTO tasks (id, title, status, priority, energyLevel, assignedTo, taskMode, startTime, relativeStartOffset, dueDate, recurrence, showFutureRecurrence, pushCount, tags, contexts, checklist, description, textDirection, attachments, location, projectId, sectionId, areaId, orderNum, boardOrder, focusOrder, isFocusedToday, timeEstimate, suppressMindwtrReminders, repeatReminderMinutes, reviewAt, completedAt, statusBeforeProjectArchive, completedAtBeforeProjectArchive, isFocusedTodayBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt, timeSpentMinutes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
+        "INSERT OR REPLACE INTO tasks (id, title, status, priority, energyLevel, assignedTo, taskMode, startTime, relativeStartOffset, dueDate, recurrence, showFutureRecurrence, pushCount, tags, contexts, checklist, description, textDirection, attachments, location, projectId, sectionId, areaId, orderNum, boardOrder, focusOrder, isFocusedToday, timeEstimate, suppressTinyBubblesReminders, repeatReminderMinutes, reviewAt, completedAt, statusBeforeProjectArchive, completedAtBeforeProjectArchive, isFocusedTodayBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt, timeSpentMinutes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
         params![
             task.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
             task.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -1697,7 +1697,7 @@ fn replace_task_row(conn: &Connection, task: &Value) -> Result<(), String> {
             task.get("focusOrder").and_then(|v| v.as_f64()),
             task.get("isFocusedToday").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
             task.get("timeEstimate").and_then(|v| v.as_str()),
-            task.get("suppressMindwtrReminders").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
+            task.get("suppressTinyBubblesReminders").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
             task.get("repeatReminderMinutes").and_then(|v| v.as_i64()),
             task.get("reviewAt").and_then(|v| v.as_str()),
             task.get("completedAt").and_then(|v| v.as_str()),
@@ -1889,9 +1889,9 @@ fn row_to_task_value(row: &rusqlite::Row<'_>) -> Result<Value, rusqlite::Error> 
             map.insert("timeEstimate".to_string(), Value::String(v));
         }
     }
-    if let Ok(val) = row.get::<_, i64>("suppressMindwtrReminders") {
+    if let Ok(val) = row.get::<_, i64>("suppressTinyBubblesReminders") {
         map.insert(
-            "suppressMindwtrReminders".to_string(),
+            "suppressTinyBubblesReminders".to_string(),
             Value::Bool(val != 0),
         );
     }
@@ -2422,7 +2422,7 @@ fn take_orphan_section_tombstones(data: &mut Value) -> Vec<Value> {
         // marker. It is untrusted input: scrub it and derive sidecar routing
         // solely from the persisted entity relationship.
         if let Some(section) = section.as_object_mut() {
-            section.remove("_mindwtrOrphanSectionTombstone");
+            section.remove("_tinybubblesOrphanSectionTombstone");
         }
         let parent_is_physically_absent = optional_id(section.get("projectId"))
             .map_or(true, |project_id| !project_ids.contains(&project_id));
@@ -2717,7 +2717,7 @@ fn normalize_entity_signature_pair(current: &Value, incoming: &Value) -> (Value,
     for key in [
         "showFutureRecurrence",
         "isFocusedToday",
-        "suppressMindwtrReminders",
+        "suppressTinyBubblesReminders",
         "isSequential",
         "isFocused",
         "isCollapsed",
@@ -3153,7 +3153,7 @@ fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Val
         let checklist_json = json_str(task.get("checklist"));
         let attachments_json = json_str(task.get("attachments"));
         conn.execute(
-            "INSERT OR REPLACE INTO tasks (id, title, status, priority, energyLevel, assignedTo, taskMode, startTime, relativeStartOffset, dueDate, recurrence, showFutureRecurrence, pushCount, tags, contexts, checklist, description, textDirection, attachments, location, projectId, sectionId, areaId, orderNum, boardOrder, focusOrder, isFocusedToday, timeEstimate, suppressMindwtrReminders, repeatReminderMinutes, reviewAt, completedAt, statusBeforeProjectArchive, completedAtBeforeProjectArchive, isFocusedTodayBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt, timeSpentMinutes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
+            "INSERT OR REPLACE INTO tasks (id, title, status, priority, energyLevel, assignedTo, taskMode, startTime, relativeStartOffset, dueDate, recurrence, showFutureRecurrence, pushCount, tags, contexts, checklist, description, textDirection, attachments, location, projectId, sectionId, areaId, orderNum, boardOrder, focusOrder, isFocusedToday, timeEstimate, suppressTinyBubblesReminders, repeatReminderMinutes, reviewAt, completedAt, statusBeforeProjectArchive, completedAtBeforeProjectArchive, isFocusedTodayBeforeProjectArchive, projectArchivedAt, rev, revBy, createdAt, updatedAt, deletedAt, purgedAt, timeSpentMinutes) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41, ?42, ?43)",
             params![
                 task.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
                 task.get("title").and_then(|v| v.as_str()).unwrap_or_default(),
@@ -3190,7 +3190,7 @@ fn replace_data_in_transaction(conn: &Connection, mut data: Value) -> Result<Val
                 task.get("focusOrder").and_then(|v| v.as_f64()),
                 task.get("isFocusedToday").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
                 task.get("timeEstimate").and_then(|v| v.as_str()),
-                task.get("suppressMindwtrReminders").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
+                task.get("suppressTinyBubblesReminders").and_then(|v| v.as_bool()).unwrap_or(false) as i32,
                 task.get("repeatReminderMinutes").and_then(|v| v.as_i64()),
                 task.get("reviewAt").and_then(|v| v.as_str()),
                 task.get("completedAt").and_then(|v| v.as_str()),
@@ -4507,7 +4507,7 @@ fn write_new_data_snapshot(
 ) -> Result<String, String> {
     let content = serde_json::to_string_pretty(canonical).map_err(|e| e.to_string())?;
     let mut temp_file = tempfile::Builder::new()
-        .prefix(".mindwtr-snapshot-")
+        .prefix(".tinybubbles-snapshot-")
         .suffix(".tmp")
         .tempfile_in(snapshot_dir)
         .map_err(|e| e.to_string())?;
@@ -5027,7 +5027,7 @@ mod tests {
 
     #[test]
     fn detect_storage_mode_returns_standard_without_marker() {
-        let exe_dir = std::env::temp_dir().join("mindwtr-portable-mode-without-marker");
+        let exe_dir = std::env::temp_dir().join("tinybubbles-portable-mode-without-marker");
 
         let mode = detect_storage_mode_from_exe_dir(Some(&exe_dir));
 
@@ -5037,7 +5037,7 @@ mod tests {
     #[test]
     fn empty_leftover_directory_is_removed() {
         let parent = tempfile::tempdir().expect("should create temp parent");
-        let target = parent.path().join("mindwtr-empty");
+        let target = parent.path().join("tinybubbles-empty");
         fs::create_dir(&target).expect("should create target dir");
 
         assert!(remove_dir_if_empty(&target));
@@ -5049,7 +5049,7 @@ mod tests {
         // The whole point of remove_dir over remove_dir_all: if another component
         // has written into the OS config dir, the cleanup must not take it.
         let parent = tempfile::tempdir().expect("should create temp parent");
-        let target = parent.path().join("mindwtr-occupied");
+        let target = parent.path().join("tinybubbles-occupied");
         fs::create_dir(&target).expect("should create target dir");
         let occupant = target.join("someone-elses.json");
         fs::write(&occupant, b"{}").expect("should write occupant file");
@@ -5115,7 +5115,7 @@ mod tests {
 
     #[test]
     fn portable_profile_root_is_nested_under_executable_dir() {
-        let exe_dir = std::env::temp_dir().join("mindwtr-portable");
+        let exe_dir = std::env::temp_dir().join("tinybubbles-portable");
 
         assert_eq!(
             portable_profile_root_for_exe_dir(&exe_dir),
@@ -5344,7 +5344,7 @@ mod tests {
             "textDirection": "rtl",
             "order": 7,
             "isFocusedToday": false,
-            "suppressMindwtrReminders": false,
+            "suppressTinyBubblesReminders": false,
             "statusBeforeProjectArchive": "next",
             "completedAtBeforeProjectArchive": "2026-05-20T00:00:00.000Z",
             "isFocusedTodayBeforeProjectArchive": true,
@@ -5369,7 +5369,7 @@ mod tests {
         assert_eq!(task.get("orderNum"), Some(&Value::Number(7.into())));
         assert_eq!(task.get("isFocusedToday"), Some(&Value::Bool(false)));
         assert_eq!(
-            task.get("suppressMindwtrReminders"),
+            task.get("suppressTinyBubblesReminders"),
             Some(&Value::Bool(false))
         );
         assert_eq!(
@@ -5432,7 +5432,7 @@ mod tests {
                 "order": 11,
                 "showFutureRecurrence": false,
                 "isFocusedToday": false,
-                "suppressMindwtrReminders": false,
+                "suppressTinyBubblesReminders": false,
                 "statusBeforeProjectArchive": "waiting",
                 "completedAtBeforeProjectArchive": "2026-05-20T00:00:00.000Z",
                 "isFocusedTodayBeforeProjectArchive": false,
@@ -5496,7 +5496,7 @@ mod tests {
         assert_eq!(task.get("showFutureRecurrence"), Some(&Value::Bool(false)));
         assert_eq!(task.get("isFocusedToday"), Some(&Value::Bool(false)));
         assert_eq!(
-            task.get("suppressMindwtrReminders"),
+            task.get("suppressTinyBubblesReminders"),
             Some(&Value::Bool(false))
         );
         assert_eq!(
@@ -5620,7 +5620,7 @@ mod tests {
             "isFocusedToday": true,
             "timeEstimate": "45m",
             "timeSpentMinutes": 95,
-            "suppressMindwtrReminders": true,
+            "suppressTinyBubblesReminders": true,
             "repeatReminderMinutes": 15,
             "reviewAt": "2026-06-03T09:00:00.000Z",
             "completedAt": "2026-06-04T10:00:00.000Z",
@@ -5736,7 +5736,7 @@ mod tests {
             "isFocusedToday",
             "timeEstimate",
             "timeSpentMinutes",
-            "suppressMindwtrReminders",
+            "suppressTinyBubblesReminders",
             "repeatReminderMinutes",
             "reviewAt",
             "completedAt",
@@ -7147,7 +7147,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let snapshot_dir = temp.path().join("snapshots");
         fs::create_dir(&snapshot_dir).expect("snapshot dir");
-        let partial = snapshot_dir.join(".mindwtr-snapshot-partial.tmp");
+        let partial = snapshot_dir.join(".tinybubbles-snapshot-partial.tmp");
         fs::write(&partial, b"{\"tasks\":[").expect("partial temp");
 
         assert!(list_snapshot_entries(&snapshot_dir).is_empty());
@@ -7210,7 +7210,7 @@ mod tests {
             .all(|entry| !entry
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".mindwtr-data-")));
+                .starts_with(".tinybubbles-data-")));
     }
 
     #[test]
@@ -8565,7 +8565,7 @@ mod tests {
                 "order": 0, "rev": 1, "revBy": "remote-a",
                 "createdAt": "2026-08-01T10:00:00Z",
                 "updatedAt": "2026-08-01T10:00:00Z",
-                "_mindwtrOrphanSectionTombstone": true
+                "_tinybubblesOrphanSectionTombstone": true
             }],
             "areas": [], "people": [], "settings": { "deviceId": "desktop-a" }
         });
@@ -8576,7 +8576,7 @@ mod tests {
         assert_eq!(canonical["sections"].as_array().map(Vec::len), Some(1));
         assert_eq!(canonical["sections"][0]["id"], "section-live");
         assert!(canonical["sections"][0]
-            .get("_mindwtrOrphanSectionTombstone")
+            .get("_tinybubblesOrphanSectionTombstone")
             .is_none());
         assert_eq!(
             conn.query_row(

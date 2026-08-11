@@ -13,7 +13,7 @@ OUTPUT_DIR="$4"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "$PACKAGE_NAME" in
-  mindwtr|mindwtr-bin|mindwtr-bin-beta) ;;
+  tinybubbles|tinybubbles-bin|tinybubbles-bin-beta) ;;
   *) echo "Unsupported AUR package: $PACKAGE_NAME" >&2; exit 2 ;;
 esac
 
@@ -31,7 +31,7 @@ cp "$PACKAGE_DIR/PKGBUILD" "$OUTPUT_DIR/PKGBUILD"
 cp "$PACKAGE_DIR/.SRCINFO" "$OUTPUT_DIR/.SRCINFO"
 
 : > "$OUTPUT_DIR/delete-files.txt"
-if [ "$PACKAGE_NAME" = "mindwtr" ]; then
+if [ "$PACKAGE_NAME" = "tinybubbles" ]; then
   if [ -f "$PACKAGE_DIR/tauri-v2-schema.patch" ]; then
     cp "$PACKAGE_DIR/tauri-v2-schema.patch" "$OUTPUT_DIR/tauri-v2-schema.patch"
   elif git -C "$PACKAGE_DIR" ls-files --error-unmatch tauri-v2-schema.patch >/dev/null 2>&1; then

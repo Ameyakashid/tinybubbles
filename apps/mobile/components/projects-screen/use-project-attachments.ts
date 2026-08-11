@@ -6,7 +6,7 @@ import {
   normalizeLinkAttachmentInput,
   Project,
   validateAttachmentForUpload,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Linking from 'expo-linking';
 import * as Sharing from 'expo-sharing';

@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Mindwtr",
-    "slug": "mindwtr",
+    "name": "Tiny Bubbles",
+    "slug": "tinybubbles",
     "version": "1.2.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "scheme": "mindwtr",
+    "scheme": "tinybubbles",
     "userInterfaceStyle": "automatic",
     "jsEngine": "hermes",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "tech.dongdongbh.mindwtr",
+      "bundleIdentifier": "app.tinybubbles",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Mindwtr uses the microphone to capture voice notes.",
+        "NSMicrophoneUsageDescription": "Tiny Bubbles uses the microphone to capture voice notes.",
         "ITSAppUsesNonExemptEncryption": false,
         "LSSupportsOpeningDocumentsInPlace": true,
         "NSAppTransportSecurity": {
@@ -37,7 +37,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "versionCode": 116,
-      "package": "tech.dongdongbh.mindwtr",
+      "package": "app.tinybubbles",
       "permissions": [
         "RECORD_AUDIO",
         "POST_NOTIFICATIONS",
@@ -81,7 +81,7 @@
           "widgets": [
             {
               "name": "TasksWidget",
-              "label": "Mindwtr",
+              "label": "Tiny Bubbles",
               "description": "Inbox, focus, and quick capture",
               "minWidth": "120dp",
               "minHeight": "120dp",
@@ -110,7 +110,7 @@
       [
         "expo-share-intent",
         {
-          "iosAppGroupIdentifier": "group.tech.dongdongbh.mindwtr",
+          "iosAppGroupIdentifier": "group.app.tinybubbles",
           "iosActivationRules": {
             "NSExtensionActivationSupportsText": true,
             "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
@@ -145,14 +145,14 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Mindwtr needs calendar access to show your events alongside tasks.",
-          "remindersPermission": "Mindwtr needs reminders access to import your chosen Apple Reminders capture list into Inbox."
+          "calendarPermission": "Tiny Bubbles needs calendar access to show your events alongside tasks.",
+          "remindersPermission": "Tiny Bubbles needs reminders access to import your chosen Apple Reminders capture list into Inbox."
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Mindwtr uses Face ID to unlock the app when app lock is enabled."
+          "faceIDPermission": "Tiny Bubbles uses Face ID to unlock the app when app lock is enabled."
         }
       ],
       "expo-secure-store",
@@ -171,9 +171,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "b50c904d-6a26-481c-b9bf-b1e2d57fccad"
+        "projectId": "EAS_PROJECT_ID_PLACEHOLDER"
       }
     },
-    "owner": "dongdongbh"
+    "owner": "EXPO_OWNER_PLACEHOLDER"
   }
 }

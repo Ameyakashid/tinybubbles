@@ -98,7 +98,7 @@ const applyAlarmDuplicateToastPatchToSource = (original) => original.replace(
         }
 
 `,
-  `        // Duplicate alarms are reported to JS via promise rejection. Mindwtr retries silently.
+  `        // Duplicate alarms are reported to JS via promise rejection. Tiny Bubbles retries silently.
 `
 );
 
@@ -375,7 +375,7 @@ const applyAlarmReminderBehaviorPatchToSource = (original) => {
   );
   next = next.replace(
     'NotificationChannel mChannel = new NotificationChannel(channelID, "Alarm Notify", NotificationManager.IMPORTANCE_HIGH);',
-    'NotificationChannel mChannel = new NotificationChannel(channelID, "Mindwtr reminders", NotificationManager.IMPORTANCE_DEFAULT);'
+    'NotificationChannel mChannel = new NotificationChannel(channelID, "Tiny Bubbles reminders", NotificationManager.IMPORTANCE_DEFAULT);'
   );
   next = next.replace(
     `                mChannel.setVibrationPattern(null);
@@ -479,7 +479,7 @@ const applyAlarmTaskOpenIntentPatchToSource = (original) => {
     next = next.replace('import android.media.MediaPlayer;\n', 'import android.media.MediaPlayer;\nimport android.net.Uri;\n');
   }
 
-  if (next.includes('mindwtr:///focus')) return next;
+  if (next.includes('tinybubbles:///focus')) return next;
 
   return next.replace(
     `            PendingIntent pendingIntent = PendingIntent.getActivity(mContext, notificationID, intent, getUpdateCurrentImmutableFlags());
@@ -491,7 +491,7 @@ const applyAlarmTaskOpenIntentPatchToSource = (original) => {
                     openToken = String.valueOf(alarm.getId());
                 }
                 intent.setAction(Intent.ACTION_VIEW);
-                intent.setData(Uri.parse("mindwtr:///focus")
+                intent.setData(Uri.parse("tinybubbles:///focus")
                         .buildUpon()
                         .appendQueryParameter("taskId", taskId)
                         .appendQueryParameter("openToken", openToken)
@@ -572,8 +572,8 @@ const applyAlarmCompleteReceiverPatchToSource = (original) => {
   if (!next.includes('import java.util.LinkedHashMap;')) {
     next = next.replace('import com.facebook.react.modules.core.DeviceEventManagerModule;\n', 'import com.facebook.react.modules.core.DeviceEventManagerModule;\n\nimport java.util.LinkedHashMap;\n');
   }
-  if (!next.includes('import tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenPayloadStore;')) {
-    next = next.replace('import java.util.LinkedHashMap;\n', 'import java.util.LinkedHashMap;\n\nimport tech.dongdongbh.mindwtr.notificationopenintents.NotificationOpenPayloadStore;\n');
+  if (!next.includes('import app.tinybubbles.notificationopenintents.NotificationOpenPayloadStore;')) {
+    next = next.replace('import java.util.LinkedHashMap;\n', 'import java.util.LinkedHashMap;\n\nimport app.tinybubbles.notificationopenintents.NotificationOpenPayloadStore;\n');
   }
 
   const pendingPayloadCacheBlock = `                            LinkedHashMap<String, String> pendingPayload = new LinkedHashMap<>();
@@ -733,18 +733,18 @@ RCT_EXPORT_METHOD(consumePendingNotificationOpenPayload:(RCTPromiseResolveBlock)
 API_AVAILABLE(ios(10.0)) {
     NSLog(@"show notification");
     [[UIApplication sharedApplication] setIdleTimerDisabled:NO];
-    NSString *mindwtrActionIdentifier = @"open";
+    NSString *tinybubblesActionIdentifier = @"open";
     if ([response.notification.request.content.categoryIdentifier isEqualToString:@"CUSTOM_ACTIONS"]) {
        if ([response.actionIdentifier isEqualToString:@"COMPLETE_ACTION"]) {
-           mindwtrActionIdentifier = @"complete";
+           tinybubblesActionIdentifier = @"complete";
            [RnAlarmNotification stopSound];
            [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:@[response.notification.request.identifier]];
            [[UNUserNotificationCenter currentNotificationCenter] removePendingNotificationRequestsWithIdentifiers:@[response.notification.request.identifier]];
        } else if ([response.actionIdentifier isEqualToString:@"SNOOZE_ACTION"]) {
-           mindwtrActionIdentifier = @"snooze";
+           tinybubblesActionIdentifier = @"snooze";
            [RnAlarmNotification snoozeAlarm:response.notification];
        } else if ([response.actionIdentifier isEqualToString:@"DISMISS_ACTION"]) {
-           mindwtrActionIdentifier = @"dismiss";
+           tinybubblesActionIdentifier = @"dismiss";
            NSLog(@"do dismiss");
            [RnAlarmNotification stopSound];
 
@@ -757,8 +757,8 @@ API_AVAILABLE(ios(10.0)) {
        }
     }
 
-    NSDictionary *formattedNotification = RCTFormatUNNotificationWithAction(response.notification, mindwtrActionIdentifier);
-    if ([mindwtrActionIdentifier isEqualToString:@"complete"]) {
+    NSDictionary *formattedNotification = RCTFormatUNNotificationWithAction(response.notification, tinybubblesActionIdentifier);
+    if ([tinybubblesActionIdentifier isEqualToString:@"complete"]) {
         cachePendingNotificationOpenPayload(formattedNotification);
     }
     [[NSNotificationCenter defaultCenter] postNotificationName:kLocalNotificationReceived
@@ -827,10 +827,10 @@ API_AVAILABLE(ios(10.0)) {
 const applyAlarmIosUniqueIdentifierPatchToSource = (original) => {
   let next = original;
 
-  if (!next.includes('mindwtrAlarmIdCounter')) {
+  if (!next.includes('tinybubblesAlarmIdCounter')) {
     next = next.replace(
       'static id _sharedInstance = nil;\n',
-      'static id _sharedInstance = nil;\nstatic int64_t mindwtrAlarmIdCounter = 0;\n'
+      'static id _sharedInstance = nil;\nstatic int64_t tinybubblesAlarmIdCounter = 0;\n'
     );
   }
 
@@ -838,8 +838,8 @@ const applyAlarmIosUniqueIdentifierPatchToSource = (original) => {
     /NSString \*alarmId = \[NSString stringWithFormat: @"%ld", \(long\) NSDate\.date\.timeIntervalSince1970\];/g,
     `NSString *alarmId;
             @synchronized([RnAlarmNotification class]) {
-                mindwtrAlarmIdCounter = (mindwtrAlarmIdCounter + 1) % 1000;
-                alarmId = [NSString stringWithFormat: @"%lld", ((int64_t)(NSDate.date.timeIntervalSince1970 * 1000.0)) * 1000 + mindwtrAlarmIdCounter];
+                tinybubblesAlarmIdCounter = (tinybubblesAlarmIdCounter + 1) % 1000;
+                alarmId = [NSString stringWithFormat: @"%lld", ((int64_t)(NSDate.date.timeIntervalSince1970 * 1000.0)) * 1000 + tinybubblesAlarmIdCounter];
             }`
   );
 
@@ -927,7 +927,7 @@ const PATCHES = [
     transform: applyAlarmTaskOpenIntentPatchToSource,
     required: true,
     firstMatchOnly: false,
-    appliedMarker: 'mindwtr:///focus',
+    appliedMarker: 'tinybubbles:///focus',
   },
   {
     id: 'alarm-duplicate-toast',
@@ -973,7 +973,7 @@ const PATCHES = [
     transform: applyAlarmReminderBehaviorPatchToSource,
     required: true,
     firstMatchOnly: false,
-    appliedMarker: '"Mindwtr reminders"',
+    appliedMarker: '"Tiny Bubbles reminders"',
   },
   {
     id: 'alarm-lock-screen-privacy',
@@ -1069,7 +1069,7 @@ const PATCHES = [
     required: true,
     // Original loop broke after the first successful write.
     firstMatchOnly: true,
-    appliedMarker: 'mindwtrAlarmIdCounter',
+    appliedMarker: 'tinybubblesAlarmIdCounter',
   },
   {
     id: 'alarm-ios-delete-pending-arg',

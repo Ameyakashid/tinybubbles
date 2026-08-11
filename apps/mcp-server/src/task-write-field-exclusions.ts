@@ -2,13 +2,13 @@
 // that the MCP write surface (task-write-fields.ts) deliberately does NOT expose as generic
 // per-field tool input, each with a one-line reason — no silent gaps.
 //
-// Split out from task-write-fields.ts (which also needs a `@mindwtr/core/task-sync-schema`
+// Split out from task-write-fields.ts (which also needs a `@tinybubbles/core/task-sync-schema`
 // import that requires `bun install` to resolve — safe for apps/mcp-server's own build, but
 // not for scripts/check-synced-field-parity.ts's "native-schema" CI job, which runs with no
 // node_modules at all) so that script can check this list for staleness on its own. The only
 // import here is `import type`, which TypeScript erases entirely before execution — nothing
 // for that job's zero-install environment to resolve.
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 export const TASK_WRITE_FIELD_EXCLUSIONS: Readonly<Partial<Record<keyof Task, string>>> = {
     attachments: 'MCP tools have no file-upload/byte-transport path; attachments need real '

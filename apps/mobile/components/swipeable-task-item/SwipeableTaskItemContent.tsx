@@ -18,8 +18,8 @@ import {
     safeParseDate,
     safeParseDueDate,
     tFallback,
-} from '@mindwtr/core';
-import type { Area, Language, Project, ProjectSequenceTaskCue, Task } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { Area, Language, Project, ProjectSequenceTaskCue, Task } from '@tinybubbles/core';
 import type { ThemeColors } from '../../hooks/use-theme-colors';
 import { AppPressable } from '../app-pressable';
 import { FocusStarIcon } from '../FocusStarIcon';

@@ -14,8 +14,8 @@ import {
     type TaskEditorFieldId,
     type TaskPriority,
     type TimeEstimate,
-} from '@mindwtr/core';
-import type { TaskDraft } from '@mindwtr/core/task-draft';
+} from '@tinybubbles/core';
+import type { TaskDraft } from '@tinybubbles/core/task-draft';
 import {
     getRecurrenceRRuleValue,
     getRecurrenceRuleValue,

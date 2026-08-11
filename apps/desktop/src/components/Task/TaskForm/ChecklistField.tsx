@@ -26,7 +26,7 @@ import {
     type MarkdownSelection,
     type MarkdownToolbarResult,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { taskEditorLabelClassName } from '../task-editor-label';
 import {

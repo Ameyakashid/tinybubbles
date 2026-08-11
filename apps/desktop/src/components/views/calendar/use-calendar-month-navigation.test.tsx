@@ -223,7 +223,7 @@ describe('useCalendarMonthNavigation', () => {
             const { result, unmount } = renderNavigation();
 
             act(() => result.current.setTimelineDayCount(4));
-            expect(window.localStorage.getItem('mindwtr.calendar.timelineDayCount')).toBe('4');
+            expect(window.localStorage.getItem('tinybubbles.calendar.timelineDayCount')).toBe('4');
             // Device-local by design: nothing about the count reaches the URL the
             // way the view mode and date do, so it cannot ride along to another screen.
             expect(window.location.search).not.toMatch(/day|count/i);
@@ -231,7 +231,7 @@ describe('useCalendarMonthNavigation', () => {
 
             expect(renderNavigation().result.current.timelineDayCount).toBe(4);
 
-            window.localStorage.setItem('mindwtr.calendar.timelineDayCount', 'not-a-number');
+            window.localStorage.setItem('tinybubbles.calendar.timelineDayCount', 'not-a-number');
             expect(renderNavigation().result.current.timelineDayCount).toBe(7);
         });
     });

@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTaskStore, type PersistenceFailure } from '@mindwtr/core';
+import { useTaskStore, type PersistenceFailure } from '@tinybubbles/core';
 
 import { useLanguage } from '@/contexts/language-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';

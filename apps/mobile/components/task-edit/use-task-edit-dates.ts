@@ -1,8 +1,8 @@
 import React from 'react';
 import { Platform } from 'react-native';
 import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { buildRRuleString, computeRelativeStartTime, hasTimeComponent, parseRRuleString, safeFormatDate, safeParseDate, safeParseDueDate } from '@mindwtr/core';
-import type { TaskDraft, TaskDraftSetter } from '@mindwtr/core/task-draft';
+import { buildRRuleString, computeRelativeStartTime, hasTimeComponent, parseRRuleString, safeFormatDate, safeParseDate, safeParseDueDate } from '@tinybubbles/core';
+import type { TaskDraft, TaskDraftSetter } from '@tinybubbles/core/task-draft';
 
 
 type TaskEditDatePickerMode = 'start' | 'start-time' | 'due' | 'due-time' | 'review' | 'recurrence-end';

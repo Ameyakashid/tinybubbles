@@ -1,6 +1,6 @@
 import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { createTaskDraft, type Task } from '@mindwtr/core';
+import { createTaskDraft, type Task } from '@tinybubbles/core';
 
 import { TaskItemEditor } from './TaskItemEditor';
 
@@ -390,7 +390,7 @@ describe('TaskItemEditor file drop', () => {
         const { container } = render(<TaskItemEditor {...baseProps} onFilesDropped={onFilesDropped} />);
         const form = container.querySelector('form')!;
 
-        const dataTransfer = createDataTransfer(['application/x-mindwtr-task']);
+        const dataTransfer = createDataTransfer(['application/x-tinybubbles-task']);
         fireEvent.dragOver(form, { dataTransfer });
         fireEvent.drop(form, { dataTransfer });
 

@@ -10,7 +10,7 @@ import {
     type Person,
     type Project,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { logError, logWarn } from './app-log';
 import { normalizeShortcutTags } from './capture-deeplink';

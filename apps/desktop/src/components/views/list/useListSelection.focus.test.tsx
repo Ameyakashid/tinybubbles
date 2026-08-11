@@ -2,7 +2,7 @@ import { act } from 'react';
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { useListSelection } from './useListSelection';
 
 type Scope = {

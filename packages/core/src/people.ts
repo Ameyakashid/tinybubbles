@@ -15,7 +15,7 @@ const normalizeOptionalString = (value: unknown): string | undefined => {
 
 const getBlankPersonTombstoneName = (id: unknown): string => {
     const stableId = typeof id === 'string' ? id.trim() : '';
-    return `__mindwtr_deleted_person__:${stableId || 'invalid-id'}`;
+    return `__tinybubbles_deleted_person__:${stableId || 'invalid-id'}`;
 };
 
 export const normalizePersonName = (value: unknown): string => (

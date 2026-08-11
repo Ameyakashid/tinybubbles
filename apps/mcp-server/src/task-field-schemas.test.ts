@@ -9,7 +9,7 @@
 // isolation.
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { TASK_SYNC_FIELD_SCHEMA } from '@mindwtr/core/task-sync-schema';
+import { TASK_SYNC_FIELD_SCHEMA } from '@tinybubbles/core/task-sync-schema';
 
 import { addTaskSchema, updateTaskSchema } from './index.js';
 import {
@@ -18,7 +18,7 @@ import {
   TASK_WRITE_FIELD_EXCLUSIONS,
 } from './task-write-fields.js';
 
-// Mirrors what a field needs to reach mindwtr_add_task/mindwtr_update_task: writable per the
+// Mirrors what a field needs to reach tinybubbles_add_task/tinybubbles_update_task: writable per the
 // schema, and not the id/title identity fields those tools already expose their own way.
 const DEDICATED_FIELD_NAMES = new Set([
   'title', 'status', 'priority', 'energyLevel', 'assignedTo', 'startTime', 'dueDate',
@@ -61,14 +61,14 @@ describe('MCP task write-surface derivation (TASK_SYNC_FIELD_SCHEMA -> Zod tool 
     expect([...TASK_PATCH_FIELD_NAMES].sort()).toEqual(expected);
   });
 
-  test('mindwtr_add_task exposes every TASK_CREATE_FIELD_NAMES field', () => {
+  test('tinybubbles_add_task exposes every TASK_CREATE_FIELD_NAMES field', () => {
     const shapeKeys = new Set(Object.keys(addTaskSchema.shape));
     for (const name of TASK_CREATE_FIELD_NAMES) {
       expect(shapeKeys.has(name)).toBe(true);
     }
   });
 
-  test('mindwtr_update_task exposes every TASK_PATCH_FIELD_NAMES field', () => {
+  test('tinybubbles_update_task exposes every TASK_PATCH_FIELD_NAMES field', () => {
     const shapeKeys = new Set(Object.keys(updateTaskSchema.shape));
     for (const name of TASK_PATCH_FIELD_NAMES) {
       expect(shapeKeys.has(name)).toBe(true);
@@ -83,8 +83,8 @@ describe('MCP task write-surface derivation (TASK_SYNC_FIELD_SCHEMA -> Zod tool 
 
   test('the canonical README lists every generated task write field', () => {
     const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
-    const addSection = readme.slice(readme.indexOf('- `mindwtr_add_task`'), readme.indexOf('- `mindwtr_update_task`'));
-    const updateSection = readme.slice(readme.indexOf('- `mindwtr_update_task`'), readme.indexOf('- `mindwtr_complete_task`'));
+    const addSection = readme.slice(readme.indexOf('- `tinybubbles_add_task`'), readme.indexOf('- `tinybubbles_update_task`'));
+    const updateSection = readme.slice(readme.indexOf('- `tinybubbles_update_task`'), readme.indexOf('- `tinybubbles_complete_task`'));
 
     for (const name of TASK_CREATE_FIELD_NAMES) expect(addSection).toContain(`${name}?`);
     for (const name of TASK_PATCH_FIELD_NAMES) expect(updateSection).toContain(`${name}?`);
@@ -95,7 +95,7 @@ describe('MCP task write-surface derivation (TASK_SYNC_FIELD_SCHEMA -> Zod tool 
   // this test) made the second test above fail as expected; removing 'attachments' from
   // TASK_WRITE_FIELD_EXCLUSIONS made the third test above fail (extra field not accounted
   // for by DEDICATED_FIELD_NAMES/exclusions). Both were reverted before landing.
-  test('closes the create-time gap: checklist, areaId, reviewAt, isFocusedToday reach mindwtr_add_task', () => {
+  test('closes the create-time gap: checklist, areaId, reviewAt, isFocusedToday reach tinybubbles_add_task', () => {
     const shapeKeys = new Set(Object.keys(addTaskSchema.shape));
     for (const name of ['checklist', 'areaId', 'reviewAt', 'isFocusedToday']) {
       expect(shapeKeys.has(name)).toBe(true);

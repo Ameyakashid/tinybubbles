@@ -21,7 +21,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', () => ({
+vi.mock('@tinybubbles/core', () => ({
   generateUUID: () => 'generated-id',
   resetHeartbeatOptOutMarker,
   sendDailyHeartbeat,

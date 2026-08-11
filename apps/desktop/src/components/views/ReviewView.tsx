@@ -12,14 +12,14 @@ import { TaskBulkOrganizeModal } from './list/TaskBulkOrganizeModal';
 import { DailyReviewGuideModal } from './review/DailyReviewModal';
 import { WeeklyReviewGuideModal } from './review/WeeklyReviewModal';
 
-import { collectBulkTaskTokens, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Task, type TaskStatus } from '@mindwtr/core';
+import { collectBulkTaskTokens, shallow, sortTasksBy, useTaskStore, type BulkOrganizeTaskUpdateInput, type Task, type TaskStatus } from '@tinybubbles/core';
 
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { useLanguage } from '../../contexts/language-context';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { isTaskVisibleInArea } from '@mindwtr/core';
+import { isTaskVisibleInArea } from '@tinybubbles/core';
 import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { useUiStore } from '../../store/ui-store';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
@@ -29,7 +29,7 @@ import { useTaskSelection } from './list/useTaskSelection';
 import { resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
 const STATUS_OPTIONS: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done'];
-const REVIEW_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:review:v1';
+const REVIEW_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:review:v1';
 
 type ReviewPersistedViewState = {
     filterStatus: TaskStatus | 'all';

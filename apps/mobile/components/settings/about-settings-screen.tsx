@@ -5,7 +5,7 @@ import * as Application from 'expo-application';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { submitFeedbackSubmission } from '@mindwtr/core';
+import { submitFeedbackSubmission } from '@tinybubbles/core';
 import { useToast } from '@/contexts/toast-context';
 import { getDeviceLocale, resolveMobileAnalyticsVersion } from '@/lib/analytics-heartbeat';
 import { collectFeedbackDiagnostics } from '@/lib/app-log';
@@ -45,7 +45,7 @@ export function AboutSettingsScreen({
     const currentVersion = Constants.expoConfig?.version || '0.0.0';
     const displayVersion = resolveMobileAnalyticsVersion(currentVersion, extraConfig?.analyticsReleaseVersion);
     const feedbackEndpointUrl = String(extraConfig?.feedbackEndpointUrl ?? '').trim();
-    const appName = Constants.expoConfig?.name || Application.applicationName || 'Mindwtr';
+    const appName = Constants.expoConfig?.name || Application.applicationName || 'Tiny Bubbles';
     const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
     const [feedbackOpen, setFeedbackOpen] = useState(false);
     const [androidInstallerSource, setAndroidInstallerSource] = useState<'play-store' | 'sideload' | 'unknown'>(
@@ -80,13 +80,13 @@ export function AboutSettingsScreen({
     }, [isFossBuild]);
 
     const openLink = (url: string) => Linking.openURL(url);
-    const GITHUB_ISSUES_URL = 'https://github.com/dongdongbh/Mindwtr/issues/new/choose';
-    const GITHUB_RELEASES_API = 'https://api.github.com/repos/dongdongbh/Mindwtr/releases/latest';
-    const GITHUB_RELEASES_URL = 'https://github.com/dongdongbh/Mindwtr/releases/latest';
-    const ANDROID_PACKAGE_NAME = Constants.expoConfig?.android?.package || Application.applicationId || 'tech.dongdongbh.mindwtr';
+    const GITHUB_ISSUES_URL = 'https://github.com/tinybubbles-app/tinybubbles/issues/new/choose';
+    const GITHUB_RELEASES_API = 'https://api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest';
+    const GITHUB_RELEASES_URL = 'https://github.com/tinybubbles-app/tinybubbles/releases/latest';
+    const ANDROID_PACKAGE_NAME = Constants.expoConfig?.android?.package || Application.applicationId || 'app.tinybubbles';
     const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE_NAME}`;
     const PLAY_STORE_MARKET_URL = `market://details?id=${ANDROID_PACKAGE_NAME}`;
-    const APP_STORE_BUNDLE_ID = Constants.expoConfig?.ios?.bundleIdentifier || Application.applicationId || 'tech.dongdongbh.mindwtr';
+    const APP_STORE_BUNDLE_ID = Constants.expoConfig?.ios?.bundleIdentifier || Application.applicationId || 'app.tinybubbles';
     const APP_STORE_LOOKUP_URL = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(APP_STORE_BUNDLE_ID)}&country=US`;
     const APP_STORE_LOOKUP_FALLBACK_URL = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(APP_STORE_BUNDLE_ID)}`;
     const canRateInStore = !isFossBuild && (Platform.OS === 'android' || Platform.OS === 'ios');
@@ -113,7 +113,7 @@ export function AboutSettingsScreen({
         const response = await fetch(GITHUB_RELEASES_API, {
             headers: {
                 Accept: 'application/vnd.github.v3+json',
-                'User-Agent': 'Mindwtr-App',
+                'User-Agent': 'TinyBubbles-App',
             },
         });
         if (!response.ok) {
@@ -133,7 +133,7 @@ export function AboutSettingsScreen({
             const response = await fetch(url, {
                 headers: {
                     Accept: 'application/json',
-                    'User-Agent': 'Mindwtr-App',
+                    'User-Agent': 'TinyBubbles-App',
                 },
                 cache: 'no-store',
             });
@@ -447,17 +447,10 @@ export function AboutSettingsScreen({
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-                        onPress={() => openLink('https://github.com/dongdongbh/Mindwtr')}
+                        onPress={() => openLink('https://github.com/tinybubbles-app/tinybubbles')}
                     >
                         <Text style={[styles.settingLabel, { color: tc.text }]}>GitHub</Text>
-                        <Text style={styles.linkText}>Mindwtr</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-                        onPress={() => openLink('https://mindwtr.app/donate?src=app_about')}
-                    >
-                        <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.sponsorProject')}</Text>
-                        <Text style={styles.linkText}>{tr('settings.donateLinkValue')}</Text>
+                        <Text style={styles.linkText}>Tiny Bubbles</Text>
                     </TouchableOpacity>
                     <View style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}>
                         <Text style={[styles.settingLabel, { color: tc.text }]}>{t('settings.license')}</Text>

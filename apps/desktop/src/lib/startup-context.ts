@@ -1,4 +1,4 @@
-import { SQLITE_SCHEMA_VERSION } from '@mindwtr/core';
+import { SQLITE_SCHEMA_VERSION } from '@tinybubbles/core';
 
 import {
     detectDesktopPlatform,

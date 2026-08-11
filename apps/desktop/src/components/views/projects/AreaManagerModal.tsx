@@ -1,6 +1,6 @@
 import { DndContext, type DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { translateWithFallback, type Area, type StoreActionResult } from '@mindwtr/core';
+import { translateWithFallback, type Area, type StoreActionResult } from '@tinybubbles/core';
 import { useId, type ChangeEventHandler } from 'react';
 import { X } from 'lucide-react';
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from '../../ui/Dialog';

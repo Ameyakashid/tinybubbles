@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { buildRRuleString, getLocalizedWeekdayLabels, parseRRuleString, type RecurrenceWeekday } from '@mindwtr/core';
+import { buildRRuleString, getLocalizedWeekdayLabels, parseRRuleString, type RecurrenceWeekday } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { useLanguage } from '../../../contexts/language-context';
 

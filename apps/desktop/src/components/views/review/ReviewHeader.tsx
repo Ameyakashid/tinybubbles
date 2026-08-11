@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { CheckSquare, ChevronDown, List, SlidersHorizontal } from 'lucide-react';
-import { tFallback, type TaskSortBy } from '@mindwtr/core';
+import { tFallback, type TaskSortBy } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { CONTEXTS_AXES, type ContextsGroupBy } from '../list/next-grouping';
 import { GroupBySelect } from '../list/GroupBySelect';

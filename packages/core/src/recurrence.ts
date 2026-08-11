@@ -9,7 +9,7 @@ import type { Recurrence, RecurrenceByDay, RecurrenceRule, RecurrenceStrategy, R
 export const RECURRENCE_RULES: RecurrenceRule[] = ['daily', 'weekly', 'monthly', 'yearly'];
 export const RECURRENCE_INTERVAL_MAX = 999;
 
-const RRULE_SERIES_ID_KEY = 'X-MINDWTR-SERIES-ID';
+const RRULE_SERIES_ID_KEY = 'X-TINYBUBBLES-SERIES-ID';
 const WEEKDAY_ORDER: RecurrenceWeekday[] = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 
 export function isRecurrenceRule(value: string | undefined | null): value is RecurrenceRule {
@@ -1835,7 +1835,7 @@ export function createNextRecurringTask(
         dueDate: nextDueDate,
         recurrence: nextRecurrence,
         showFutureRecurrence: task.showFutureRecurrence ? true : undefined,
-        suppressMindwtrReminders: task.suppressMindwtrReminders ? true : undefined,
+        suppressTinyBubblesReminders: task.suppressTinyBubblesReminders ? true : undefined,
         repeatReminderMinutes: task.repeatReminderMinutes,
         tags: [...(task.tags || [])],
         contexts: [...(task.contexts || [])],

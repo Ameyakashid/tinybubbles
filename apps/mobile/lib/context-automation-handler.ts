@@ -1,4 +1,4 @@
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import {
   buildContextAutomationNotificationCopy,
@@ -48,7 +48,7 @@ export async function handleContextAutomationPayload(
 
   const copy = buildContextAutomationNotificationCopy(payload.context, matchingTasks, {
     noTasksTitle: resolveText('contextAutomation.noNextActionsTitle', 'No {{context}} next actions'),
-    noTasksMessage: resolveText('contextAutomation.noNextActionsBody', 'Mindwtr did not find any /next tasks for {{context}}.'),
+    noTasksMessage: resolveText('contextAutomation.noNextActionsBody', 'Tiny Bubbles did not find any /next tasks for {{context}}.'),
     oneTaskTitle: resolveText('contextAutomation.oneNextActionTitle', '{{context}} next action'),
     manyTasksTitle: resolveText('contextAutomation.manyNextActionsTitle', '{{count}} {{context}} next actions'),
     moreTasksLine: resolveText('contextAutomation.moreTasksLine', '+{{count}} more'),

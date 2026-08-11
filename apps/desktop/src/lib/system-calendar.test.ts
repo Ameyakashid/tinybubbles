@@ -16,7 +16,7 @@ describe('Linux system calendar adapter', () => {
         invoke.mockReset();
         (window as any).__TAURI_INTERNALS__ = {};
         Object.defineProperty(navigator, 'platform', { configurable: true, value: 'Linux x86_64' });
-        Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Mindwtr Linux' });
+        Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Tiny Bubbles Linux' });
     });
 
     it('uses Evolution Data Server commands and parses returned ICS events', async () => {
@@ -34,7 +34,7 @@ describe('Linux system calendar adapter', () => {
                 };
             }
             if (command === 'get_linux_writable_calendars') {
-                return [{ id: 'work', name: 'Work', isMindwtrDedicated: false }];
+                return [{ id: 'work', name: 'Work', isTinyBubblesDedicated: false }];
             }
             if (command === 'create_linux_calendar_event') {
                 return { ok: true, eventId: '["work","event-2"]' };

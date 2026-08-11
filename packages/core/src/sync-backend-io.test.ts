@@ -65,13 +65,13 @@ describe('createSyncBackendIO', () => {
         it('normalizes the url into syncUrl before reading, writing, and heading', async () => {
             const ctx: SyncBackendContext = {
                 backend: 'webdav', cloudProvider: 'selfhosted',
-                webdav: { url: 'https://dav.example.com/mindwtr/data.json/' }, dropboxRev: null,
+                webdav: { url: 'https://dav.example.com/tinybubbles/data.json/' }, dropboxRev: null,
             };
             const transport = makeTransport();
             const io = createSyncBackendIO(ctx, transport);
 
             await io.readRemote();
-            expect(ctx.syncUrl).toBe('https://dav.example.com/mindwtr/data.json');
+            expect(ctx.syncUrl).toBe('https://dav.example.com/tinybubbles/data.json');
             expect(transport.webdavGet).toHaveBeenCalledTimes(1);
 
             const outcome = await io.writeRemote(APP_DATA);

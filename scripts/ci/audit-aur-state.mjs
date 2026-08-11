@@ -28,7 +28,7 @@ async function fetchJson(url) {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
       const response = await fetch(url, {
-        headers: { "user-agent": "Mindwtr-AUR-security-audit/1" },
+        headers: { "user-agent": "Tiny Bubbles-AUR-security-audit/1" },
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return await response.json();

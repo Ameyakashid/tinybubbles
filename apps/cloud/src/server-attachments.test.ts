@@ -15,7 +15,7 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import type { AppData, Attachment, Project, Task } from '@mindwtr/core';
+import type { AppData, Attachment, Project, Task } from '@tinybubbles/core';
 import {
     appendPendingRemoteAttachmentDeletes,
     collectPendingRemoteDeletesForProjectPurge,
@@ -234,7 +234,7 @@ describe('garbageCollectOrphanAttachments', () => {
     let sandbox = '';
 
     const withSandbox = (fn: (dataDir: string) => void) => {
-        sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-gc-'));
+        sandbox = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-attachment-gc-'));
         try {
             fn(sandbox);
         } finally {
@@ -421,7 +421,7 @@ describe('garbageCollectOrphanAttachments', () => {
 
 describe('handleAttachmentPathRequest DELETE', () => {
     test('returns 500 instead of acknowledging a deletion whose parent fsync fails', async () => {
-        const sandbox = mkdtempSync(join(tmpdir(), 'mindwtr-cloud-attachment-delete-'));
+        const sandbox = mkdtempSync(join(tmpdir(), 'tinybubbles-cloud-attachment-delete-'));
         try {
             const rootRealPath = join(sandbox, 'attachments');
             const filePath = join(rootRealPath, 'file.bin');

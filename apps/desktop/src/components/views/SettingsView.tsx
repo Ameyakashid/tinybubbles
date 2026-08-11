@@ -29,7 +29,7 @@ import {
   submitFeedbackSubmission,
   useTaskStore,
   type AppData,
-} from "@mindwtr/core";
+} from "@tinybubbles/core";
 
 import { useKeybindings } from "../../contexts/keybinding-context";
 import { useLanguage, type Language } from "../../contexts/language-context";
@@ -162,7 +162,7 @@ const SettingsAboutPage = lazy(
   ),
 );
 
-// 'en' plus every locale in the LOCALES table (@mindwtr/core, from i18n/i18n-locales.ts) —
+// 'en' plus every locale in the LOCALES table (@tinybubbles/core, from i18n/i18n-locales.ts) —
 // see that module's header comment for why English isn't a table entry. `label` used to carry the
 // English display name here too, but nothing reads it (SettingsMainPage's LanguageOption
 // only has `native`), so it isn't reintroduced.

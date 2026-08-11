@@ -1,4 +1,4 @@
-import type { AppSettings } from '@mindwtr/core';
+import type { AppSettings } from '@tinybubbles/core';
 
 export type MobileSyncActivityState = 'idle' | 'syncing';
 export type MobileSyncBadgeState = 'hidden' | 'syncing' | 'healthy' | 'attention';

@@ -12,7 +12,7 @@ import {
   SYNC_FILE_NAME,
   type MergeStats,
   type SyncBackend as CoreSyncBackend,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export type SyncBackend = CoreSyncBackend | 'cloudkit';
 export type SyncFailureKind = 'offline' | 'auth' | 'permission' | 'rateLimited' | 'misconfigured' | 'conflict' | 'unknown';

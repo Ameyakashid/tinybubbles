@@ -1,4 +1,4 @@
-import type { Attachment } from '@mindwtr/core';
+import type { Attachment } from '@tinybubbles/core';
 import { Dialog, DialogBody } from '../ui/Dialog';
 
 type TextAttachmentModalProps = {

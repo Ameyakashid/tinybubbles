@@ -4,7 +4,7 @@ import {
     type MarkdownAssistOptions,
     type MarkdownSelection,
     type MarkdownToolbarResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 type MarkdownSelectionReplacement = {
     result: MarkdownToolbarResult;

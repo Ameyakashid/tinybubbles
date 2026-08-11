@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr uses per-entity `rev` values to break otherwise ambiguous sync conflicts. Revisions are stored in JSON snapshots and can pass through JavaScript, SQLite, and platform bridges.
+Tiny Bubbles uses per-entity `rev` values to break otherwise ambiguous sync conflicts. Revisions are stored in JSON snapshots and can pass through JavaScript, SQLite, and platform bridges.
 
 Normal use will not reach integer limits, but a bad migration or repair loop could inflate revision values. If revisions overflow or become non-finite, deterministic conflict resolution becomes unreliable.
 

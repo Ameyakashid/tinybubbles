@@ -29,7 +29,7 @@ const baseProps = {
   handleAddGettingStartedContent: noop,
   handleBackup: noop,
   handleImportDgt: noop,
-  handleImportMindwtrCsv: noop,
+  handleImportTinyBubblesCsv: noop,
   handleImportOmniFocus: noop,
   handleImportTickTick: noop,
   handleImportTodoist: noop,
@@ -56,11 +56,11 @@ describe('SyncBackupSection', () => {
     ['data-transfer-restore', 'settings.syncMobile.restoreBackup', 'settings.syncMobile.replaceLocalDataFromABackupJsonFile'],
     ['data-transfer-merge', 'settings.mergeBackup', 'settings.mergeBackupDesc'],
     ['add-getting-started-content', 'settings.gettingStartedContentAction', 'settings.gettingStartedContentDesc'],
-    ['data-transfer-import-todoist', 'settings.syncMobile.importFromTodoist', 'settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects'],
-    ['data-transfer-import-ticktick', 'settings.syncMobile.importFromTicktick', 'settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas'],
-    ['data-transfer-import-dgt', 'settings.syncMobile.importFromDgtGtd', 'settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas'],
-    ['data-transfer-import-omnifocus', 'settings.syncMobile.importFromOmnifocus', 'settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects'],
-    ['data-transfer-import-mindwtr-csv', 'settings.syncMobile.importFromMindwtrCsv', 'settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks'],
+    ['data-transfer-import-todoist', 'settings.syncMobile.importFromTodoist', 'settings.syncMobile.importTodoistCsvOrZipExportsIntoTinyBubblesProjects'],
+    ['data-transfer-import-ticktick', 'settings.syncMobile.importFromTicktick', 'settings.syncMobile.importTicktickCsvOrZipBackupsIntoTinyBubblesAreas'],
+    ['data-transfer-import-dgt', 'settings.syncMobile.importFromDgtGtd', 'settings.syncMobile.importDgtGtdJsonOrZipExportsIntoTinyBubblesAreas'],
+    ['data-transfer-import-omnifocus', 'settings.syncMobile.importFromOmnifocus', 'settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoTinyBubblesProjects'],
+    ['data-transfer-import-tinybubbles-csv', 'settings.syncMobile.importFromTinyBubblesCsv', 'settings.syncMobile.importTinyBubblesCsvFileIntoTinyBubblesAreasProjectsAndTasks'],
   ] as const;
 
   function expand(tree: renderer.ReactTestRenderer, ...testIDs: string[]) {
@@ -76,14 +76,14 @@ describe('SyncBackupSection', () => {
     ['import:ticktick', 'handleImportTickTick'],
     ['import:dgt', 'handleImportDgt'],
     ['import:omnifocus', 'handleImportOmniFocus'],
-    ['import:mindwtr-csv', 'handleImportMindwtrCsv'],
+    ['import:tinybubbles-csv', 'handleImportTinyBubblesCsv'],
   ] as const)('shows one spinner on the active %s row', (backupAction, handlerName) => {
     const handlers = {
       handleImportTodoist: vi.fn(),
       handleImportTickTick: vi.fn(),
       handleImportDgt: vi.fn(),
       handleImportOmniFocus: vi.fn(),
-      handleImportMindwtrCsv: vi.fn(),
+      handleImportTinyBubblesCsv: vi.fn(),
     };
     let tree!: renderer.ReactTestRenderer;
     act(() => {
@@ -139,7 +139,7 @@ describe('SyncBackupSection', () => {
     const texts = renderedText(tree);
     expect(texts).toContain('settings.exportBackup');
     expect(texts).toContain('settings.gettingStartedContentAction');
-    expect(texts).not.toContain('settings.syncMobile.importFromMindwtrCsv');
+    expect(texts).not.toContain('settings.syncMobile.importFromTinyBubblesCsv');
 
     act(() => {
       tree.root.findAllByProps({ onPress: handleBackup })[0].props.onPress();
@@ -158,7 +158,7 @@ describe('SyncBackupSection', () => {
     expand(tree, 'import-disclosure');
 
     const texts = renderedText(tree);
-    expect(texts).toContain('settings.syncMobile.importFromMindwtrCsv');
+    expect(texts).toContain('settings.syncMobile.importFromTinyBubblesCsv');
     expect(texts).not.toContain('settings.exportBackup');
     expect(texts.indexOf('import-guide')).toBeLessThan(
       texts.indexOf('settings.syncMobile.importFromTodoist'),

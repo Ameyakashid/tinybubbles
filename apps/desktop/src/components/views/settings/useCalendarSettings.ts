@@ -4,7 +4,7 @@ import {
     normalizeExternalCalendarColor,
     type AppData,
     type ExternalCalendarSubscription,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { ExternalCalendarService } from '../../../lib/external-calendar-service';
 import {
     getCalendarSourceFileName,

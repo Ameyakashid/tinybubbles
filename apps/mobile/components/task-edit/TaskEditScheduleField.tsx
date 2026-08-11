@@ -17,7 +17,7 @@ import {
     type RecurrenceRule,
     type RecurrenceStrategy,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { QuickDateChips } from '../QuickDateChips';
 import { CompactText } from '@/components/compact-text';
@@ -266,7 +266,7 @@ export function TaskEditScheduleField({
     const hasReminderHandoffSchedule = hasTimeComponent(draft.startTime) || hasTimeComponent(draft.dueDate);
     const renderReminderHandoffControl = () => {
         if (fieldId !== 'dueDate' || !hasReminderHandoffSchedule) return null;
-        const enabled = draft.suppressMindwtrReminders === true;
+        const enabled = draft.suppressTinyBubblesReminders === true;
         return (
             <TouchableOpacity
                 accessibilityRole="switch"
@@ -279,20 +279,20 @@ export function TaskEditScheduleField({
                         borderColor: enabled ? tc.tint : tc.border,
                     },
                 ]}
-                onPress={() => setDraftField('suppressMindwtrReminders', !draft.suppressMindwtrReminders)}
+                onPress={() => setDraftField('suppressTinyBubblesReminders', !draft.suppressTinyBubblesReminders)}
             >
                 <Text style={[styles.modalLabel, { color: tc.text }]}>
-                    {tFallback(t, 'taskEdit.suppressMindwtrReminders', 'Skip reminders')}
+                    {tFallback(t, 'taskEdit.suppressTinyBubblesReminders', 'Skip reminders')}
                 </Text>
                 <Text style={{ marginTop: 4, color: tc.secondaryText, fontSize: 12, lineHeight: 16 }}>
-                    {tFallback(t, 'taskEdit.suppressMindwtrRemindersHint', 'Skip start and due reminders for this task. It still appears in Focus and your lists.')}
+                    {tFallback(t, 'taskEdit.suppressTinyBubblesRemindersHint', 'Skip start and due reminders for this task. It still appears in Focus and your lists.')}
                 </Text>
             </TouchableOpacity>
         );
     };
     const renderRepeatReminderControl = () => {
         if (fieldId !== 'dueDate' || !hasTimeComponent(draft.dueDate)) return null;
-        if (draft.suppressMindwtrReminders === true) return null;
+        if (draft.suppressTinyBubblesReminders === true) return null;
         const label = tFallback(t, 'taskEdit.repeatReminderLabel', 'Repeat reminder');
         const current = draft.repeatReminderMinutes ?? 0;
         const options = [0, ...REPEAT_REMINDER_INTERVAL_OPTIONS];

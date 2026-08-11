@@ -18,7 +18,7 @@ import { MOBILE_HOME_TAB_ROUTE } from '@/lib/home-route';
 import { useLanguage } from '../../../contexts/language-context';
 import { QuickCaptureSheet } from '@/components/quick-capture-sheet';
 import { QuickCaptureProvider, useQuickCapture, type QuickCaptureOptions } from '../../../contexts/quick-capture-context';
-import { getDefaultTaskAreaMode, useTaskStore, type MobileQuickAccessView, type SavedSearch, type Task } from '@mindwtr/core';
+import { getDefaultTaskAreaMode, useTaskStore, type MobileQuickAccessView, type SavedSearch, type Task } from '@tinybubbles/core';
 import {
   coerceMobileQuickAccessView,
   MOBILE_QUICK_ACCESS_STACK_ROUTE,
@@ -643,7 +643,7 @@ export default function TabLayout() {
 
   const iconTint = tc.tabIconSelected;
   const inactiveTint = tc.tabIconDefault;
-  // Material 3: capture is Mindwtr's most important action, so the FAB uses the
+  // Material 3: capture is Tiny Bubbles's most important action, so the FAB uses the
   // high-emphasis M3 FAB role (primary/onPrimary) rather than the deliberately
   // subdued primaryContainer — keeping it the visual top of the action hierarchy.
   // Other primary buttons stay primaryContainer (canonical). Non-Material themes

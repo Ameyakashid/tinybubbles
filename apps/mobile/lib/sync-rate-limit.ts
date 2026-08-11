@@ -1,4 +1,4 @@
-import { isWebdavRateLimitedError } from '@mindwtr/core';
+import { isWebdavRateLimitedError } from '@tinybubbles/core';
 import type { SyncBackend } from './sync-service-utils';
 
 export const WEBDAV_SYNC_COOLDOWN_MS = 60_000;

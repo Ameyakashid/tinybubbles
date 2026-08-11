@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { getExternalCalendarColorForId, type ExternalCalendarEvent } from '@mindwtr/core';
+import { getExternalCalendarColorForId, type ExternalCalendarEvent } from '@tinybubbles/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchExternalCalendarEvents } from '../../../lib/external-calendar-events';
@@ -15,7 +15,7 @@ vi.mock('../../../lib/external-calendar-events', () => ({
     },
 }));
 
-const HIDDEN_KEY = 'mindwtr.calendar.hiddenExternalCalendars';
+const HIDDEN_KEY = 'tinybubbles.calendar.hiddenExternalCalendars';
 
 const APRIL = { start: new Date(2026, 3, 1), end: new Date(2026, 3, 30) };
 

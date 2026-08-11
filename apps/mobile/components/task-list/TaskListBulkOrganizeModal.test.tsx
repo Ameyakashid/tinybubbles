@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, Text, TouchableOpacity } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import type { Area, Project } from '@mindwtr/core';
+import type { Area, Project } from '@tinybubbles/core';
 
 import { TaskListBulkOrganizeModal } from './TaskListBulkOrganizeModal';
 

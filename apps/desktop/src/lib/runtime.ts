@@ -3,7 +3,7 @@ export function isTauriRuntime(): boolean {
 }
 
 export function isFlatpakRuntime(): boolean {
-    return typeof window !== 'undefined' && Boolean((window as any).__MINDWTR_FLATPAK__);
+    return typeof window !== 'undefined' && Boolean((window as any).__TINYBUBBLES_FLATPAK__);
 }
 
 type DesktopTimerHost = {

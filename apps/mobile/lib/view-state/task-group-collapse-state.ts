@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * the same time cannot write over each other's lists.
  */
 export function getTaskGroupCollapseStorageKey(listKey: string): string {
-  return `mindwtr:view:group-collapse:${listKey}:v1`;
+  return `tinybubbles:view:group-collapse:${listKey}:v1`;
 }
 
 /** Grouping axis → folded group ids. */

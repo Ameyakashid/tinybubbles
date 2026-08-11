@@ -10,8 +10,8 @@ import {
     type MarkdownToolbarActionId,
     type MarkdownToolbarResult,
     type Task,
-} from '@mindwtr/core';
-import type { TaskDraftSetter } from '@mindwtr/core/task-draft';
+} from '@tinybubbles/core';
+import type { TaskDraftSetter } from '@tinybubbles/core/task-draft';
 
 import {
     applyMarkdownPairInsertionWithSelectionFallback,

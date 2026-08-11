@@ -19,8 +19,8 @@ const taskStoreMocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   const useTaskStore = ((selector?: (state: typeof taskStoreMocks.state) => unknown) => (
     typeof selector === 'function' ? selector(taskStoreMocks.state) : taskStoreMocks.state
   )) as typeof actual.useTaskStore;
@@ -256,7 +256,7 @@ describe('MarkdownText', () => {
       },
     ], { find: projectFind });
 
-    const tree = renderMarkdown('[Task link](mindwtr://task/task-1) [Project link](mindwtr://project/project-1)');
+    const tree = renderMarkdown('[Task link](tinybubbles://task/task-1) [Project link](tinybubbles://project/project-1)');
 
     expect(taskFind).not.toHaveBeenCalled();
     expect(projectFind).not.toHaveBeenCalled();

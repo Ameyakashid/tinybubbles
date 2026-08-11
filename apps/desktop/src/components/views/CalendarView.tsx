@@ -14,7 +14,7 @@ import {
     tFallback,
     useTaskStore,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { ErrorBoundary } from '../ErrorBoundary';
 import { cn } from '../../lib/utils';
@@ -48,7 +48,7 @@ import {
 import { useDesktopCalendarController } from './calendar/useDesktopCalendarController';
 
 const PROJECTED_RECURRENCE_LABEL_DATE_FORMAT = 'MMM d';
-const CALENDAR_PLANNING_PANEL_COLLAPSED_KEY = 'mindwtr.calendar.planningPanelCollapsed';
+const CALENDAR_PLANNING_PANEL_COLLAPSED_KEY = 'tinybubbles.calendar.planningPanelCollapsed';
 
 const readPlanningPanelCollapsedPreference = (): boolean => {
     if (typeof window === 'undefined') return true;

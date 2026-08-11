@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { type FilterSettings, useTaskStore } from '@mindwtr/core';
+import { type FilterSettings, useTaskStore } from '@tinybubbles/core';
 
 import {
   AREA_FILTER_ALL,
@@ -8,7 +8,7 @@ import {
   areaFilterSelectionToValue,
   resolveAreaFilterSelection,
   type AreaFilterSelection,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 let staleAreaFilterResetInFlight: string | null = null;
 

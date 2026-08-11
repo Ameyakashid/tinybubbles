@@ -89,7 +89,7 @@ if (typeof (vi as { hoisted?: <T>(factory: () => T) => T }).hoisted !== 'functio
 }
 if (typeof (vi as { importActual?: <T>(path: string) => Promise<T> }).importActual !== 'function') {
     (vi as { importActual?: <T>(path: string) => Promise<T> }).importActual = <T>(path: string) => {
-        if (path === '@mindwtr/core') {
+        if (path === '@tinybubbles/core') {
             const coreUrl = new URL('../../../packages/core/src/index.ts', import.meta.url).href;
             return import(coreUrl) as Promise<T>;
         }

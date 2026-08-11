@@ -2,7 +2,7 @@ import {
     getUsedTaskTokens,
     SAVED_FILTER_NO_PROJECT_ID,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export function splitFocusedTasks<T extends Pick<Task, 'isFocusedToday'>>(tasks: T[]): {
     focusedTasks: T[];

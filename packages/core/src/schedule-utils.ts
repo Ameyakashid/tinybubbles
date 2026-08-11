@@ -66,7 +66,7 @@ function getNextTaskReminderIntent(
 ): TaskReminderIntent | null {
     if (isInactiveTask(task)) return null;
 
-    const includeTaskReminders = task.suppressMindwtrReminders !== true;
+    const includeTaskReminders = task.suppressTinyBubblesReminders !== true;
     const candidates: TaskReminderIntent[] = [];
     const addCandidate = (
         kind: Exclude<TaskReminderIntentKind, 'due-repeat'>,
@@ -124,7 +124,7 @@ export function getNextScheduledAt(task: Task, now: Date = new Date(), options: 
  */
 export function getDueReminderRepeatTimes(task: Task, options: ScheduleOptions = {}): Date[] {
     if (isInactiveTask(task)) return [];
-    if (task.suppressMindwtrReminders === true) return [];
+    if (task.suppressTinyBubblesReminders === true) return [];
     if (options.includeDueDate === false) return [];
 
     const interval = normalizeRepeatReminderMinutes(task.repeatReminderMinutes);
@@ -465,7 +465,7 @@ export function buildReminderSchedule(input: ReminderScheduleInput): ReminderSch
             // actual request both read this same task/now/options, in the same iteration, so
             // they cannot disagree with each other the way two separate traversals could.
             if (trackDiagnostics) {
-                const suppressTaskReminders = task.suppressMindwtrReminders === true;
+                const suppressTaskReminders = task.suppressTinyBubblesReminders === true;
                 const hasSuppressibleReminder = (includeDueDate && hasTimeComponent(task.dueDate))
                     || (includeStartTime && hasTimeComponent(task.startTime));
                 if (suppressTaskReminders && hasSuppressibleReminder) {

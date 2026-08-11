@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Area } from '@mindwtr/core';
+import type { Area } from '@tinybubbles/core';
 
 import { AreaSelector } from './AreaSelector';
 

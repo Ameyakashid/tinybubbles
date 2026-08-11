@@ -35,11 +35,11 @@ jobs:
     timeout-minutes: 60
     env:
       VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY || secrets.VITE_DROPBOX_APP_KEY }}
-      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       VITE_ANALYTICS_RELEASE_VERSION: ${{ inputs.tag }}
 
     steps:
-      - name: Checkout Mindwtr
+      - name: Checkout Tiny Bubbles
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
@@ -96,9 +96,9 @@ jobs:
         run: |
           set -euo pipefail
           BRANCH="${{ steps.stability.outputs.flathub_branch }}"
-          REPO_URL="https://github.com/flathub/tech.dongdongbh.mindwtr.git"
+          REPO_URL="https://github.com/flathub/app.tinybubbles.git"
           if ! git ls-remote --exit-code --heads "$REPO_URL" "$BRANCH" >/dev/null 2>&1; then
-            echo "Missing Flathub branch ${BRANCH} in flathub/tech.dongdongbh.mindwtr. Create it before enabling ${BRANCH} RC publication." >&2
+            echo "Missing Flathub branch ${BRANCH} in flathub/app.tinybubbles. Create it before enabling ${BRANCH} RC publication." >&2
             exit 1
           fi
 
@@ -106,7 +106,7 @@ jobs:
         if: steps.stability.outputs.skip != 'true'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          repository: flathub/tech.dongdongbh.mindwtr
+          repository: flathub/app.tinybubbles
           ref: ${{ steps.stability.outputs.flathub_branch }}
           token: ${{ secrets.FLATHUB_REPO_TOKEN }}
           path: flathub
@@ -190,7 +190,7 @@ jobs:
             --check \
             "$worktree_dir/apps/desktop/package-lock.json"
 
-          python3 - "$GITHUB_WORKSPACE/flathub/tech.dongdongbh.mindwtr.node-sources.json" "$worktree_dir/apps/desktop/package-lock.json" "$worktree_dir/packages/core/package-lock.json" <<'PY'
+          python3 - "$GITHUB_WORKSPACE/flathub/app.tinybubbles.node-sources.json" "$worktree_dir/apps/desktop/package-lock.json" "$worktree_dir/packages/core/package-lock.json" <<'PY'
           import json
           import pathlib
           import sys
@@ -253,7 +253,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="${{ steps.version.outputs.tag }}"
           BRANCH="${{ steps.branch.outputs.branch }}"
-          REPO="flathub/tech.dongdongbh.mindwtr"
+          REPO="flathub/app.tinybubbles"
 
           cd flathub
 
@@ -274,9 +274,9 @@ jobs:
           git config --local user.name "GitHub Actions"
           git config --local user.email "actions@github.com"
           git add \
-            tech.dongdongbh.mindwtr.yml \
-            tech.dongdongbh.mindwtr.node-sources.json \
-            tech.dongdongbh.mindwtr.cargo-sources.json
+            app.tinybubbles.yml \
+            app.tinybubbles.node-sources.json \
+            app.tinybubbles.cargo-sources.json
           if [ -f .gitmodules ]; then
             git add .gitmodules
           fi
@@ -303,7 +303,7 @@ jobs:
             exit 0
           fi
 
-          pr_body=$'Automated update from '"${GITHUB_REPOSITORY}"$' release '"${TAG}"$'.\n\n- Updates the pinned upstream commit\n- Regenerates tech.dongdongbh.mindwtr.cargo-sources.json\n- Regenerates tech.dongdongbh.mindwtr.node-sources.json'
+          pr_body=$'Automated update from '"${GITHUB_REPOSITORY}"$' release '"${TAG}"$'.\n\n- Updates the pinned upstream commit\n- Regenerates app.tinybubbles.cargo-sources.json\n- Regenerates app.tinybubbles.node-sources.json'
 
           pr_url="$(gh pr create \
             --repo "$REPO" \

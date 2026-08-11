@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Bug, Lightbulb, MessageSquare, Send, X } from 'lucide-react';
 
-import { FEEDBACK_CATEGORIES, type FeedbackCategory } from '@mindwtr/core';
+import { FEEDBACK_CATEGORIES, type FeedbackCategory } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { Dialog, DialogBody, DialogHeader } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';

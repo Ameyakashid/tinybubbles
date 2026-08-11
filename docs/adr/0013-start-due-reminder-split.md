@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr tasks can have a start time and a due date. These fields answer different GTD questions:
+Tiny Bubbles tasks can have a start time and a due date. These fields answer different GTD questions:
 
 - start time: when the task should become actionable
 - due date: when the task must be finished
@@ -14,7 +14,7 @@ Using one reminder setting for both made notification behavior ambiguous. Users 
 
 ## Decision
 
-Mindwtr keeps start reminders and due reminders as separate notification settings and scheduling keys.
+Tiny Bubbles keeps start reminders and due reminders as separate notification settings and scheduling keys.
 
 1. Start reminders are scheduled from `startTime`.
 2. Due reminders are scheduled from `dueDate`.

@@ -1,5 +1,5 @@
 /**
- * One honest way to mock `@mindwtr/core` in mobile tests.
+ * One honest way to mock `@tinybubbles/core` in mobile tests.
  *
  * Mobile vitest cannot render a component that calls the real `useTaskStore`:
  * zustand under `packages/core/node_modules` resolves the root React while
@@ -20,7 +20,7 @@
  * ```ts
  * const storeState = vi.hoisted(() => ({ tasks: [], updateTask: vi.fn() }));
  *
- * vi.mock('@mindwtr/core', async (importOriginal) => {
+ * vi.mock('@tinybubbles/core', async (importOriginal) => {
  *   const { mockCore } = await import('../test-support/mock-core');
  *   return mockCore(importOriginal, () => storeState);
  * });

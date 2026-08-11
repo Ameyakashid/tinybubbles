@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
-import { createTaskDraft, setTaskDraftField, taskDraftToUpdatePatch, type Task, type TaskDraft } from '@mindwtr/core';
+import { createTaskDraft, setTaskDraftField, taskDraftToUpdatePatch, type Task, type TaskDraft } from '@tinybubbles/core';
 
 import {
     TaskItemFieldRenderer,
@@ -73,9 +73,9 @@ const t = (key: string) => {
         'taskEdit.repeatReminderEveryMinutes': 'Every {count} min',
         'taskEdit.repeatReminderMinutesShort': '{count} min',
         'taskEdit.remindersSummaryOn': 'Reminders on',
-        'taskEdit.suppressMindwtrReminders': 'Skip reminders',
-        'taskEdit.suppressMindwtrRemindersHint': 'Skip start and due reminders for this task.',
-        'taskEdit.suppressMindwtrRemindersViewValue': 'Mindwtr reminders off',
+        'taskEdit.suppressTinyBubblesReminders': 'Skip reminders',
+        'taskEdit.suppressTinyBubblesRemindersHint': 'Skip start and due reminders for this task.',
+        'taskEdit.suppressTinyBubblesRemindersViewValue': 'Tiny Bubbles reminders off',
         'taskEdit.checklist': 'Checklist',
         'attachments.title': 'Attachments',
         'recurrence.none': 'None',
@@ -259,7 +259,7 @@ function TagAutocompleteHarness() {
     return (
         <DraftFieldHarness
             fieldId="tags"
-            options={{ allTagOptions: ['#music', '#mindwtr'], popularTagOptions: [] }}
+            options={{ allTagOptions: ['#music', '#tinybubbles'], popularTagOptions: [] }}
         />
     );
 }
@@ -512,13 +512,13 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         const { getByRole, queryByRole } = render(
             <TaskItemFieldRenderer
                 fieldId="dueDate"
-                {...createProps({ draft: { dueDate: '2026-04-19T11:45', suppressMindwtrReminders: true } })}
+                {...createProps({ draft: { dueDate: '2026-04-19T11:45', suppressTinyBubblesReminders: true } })}
             />
         );
 
-        expect(getByRole('button', { name: 'Mindwtr reminders off' })).toBeInTheDocument();
+        expect(getByRole('button', { name: 'Tiny Bubbles reminders off' })).toBeInTheDocument();
         // Repeat is meaningless while reminders are skipped, so it stays out of both states.
-        fireEvent.click(getByRole('button', { name: 'Mindwtr reminders off' }));
+        fireEvent.click(getByRole('button', { name: 'Tiny Bubbles reminders off' }));
         expect(queryByRole('group', { name: 'Repeat reminder' })).toBeNull();
     });
 
@@ -1105,12 +1105,12 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         fireEvent.change(input, { target: { value: 'm' } });
 
         expect(await findByRole('option', { name: '#music' })).toBeInTheDocument();
-        expect(await findByRole('option', { name: '#mindwtr' })).toBeInTheDocument();
+        expect(await findByRole('option', { name: '#tinybubbles' })).toBeInTheDocument();
 
         fireEvent.keyDown(input, { key: 'ArrowDown' });
         fireEvent.keyDown(input, { key: 'Enter' });
 
-        expect(input).toHaveValue('#mindwtr');
+        expect(input).toHaveValue('#tinybubbles');
     });
 
     it('suggests existing assignees in the assigned-to field', async () => {
@@ -1586,10 +1586,10 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
 
     /** The checkbox now lives behind the collapsed reminder summary line. */
     const openReminders = (getByRole: ReturnType<typeof render>['getByRole']) => {
-        fireEvent.click(getByRole('button', { name: /^(Reminders on|Mindwtr reminders off)/ }));
+        fireEvent.click(getByRole('button', { name: /^(Reminders on|Tiny Bubbles reminders off)/ }));
     };
 
-    it('reflects the persisted suppressMindwtrReminders state and toggles it (#885)', () => {
+    it('reflects the persisted suppressTinyBubblesReminders state and toggles it (#885)', () => {
         const { getByRole } = render(
             <DraftFieldHarness fieldId="dueDate" initialDraft={{ dueDate: '2026-04-19T11:45' }} />
         );
@@ -1631,15 +1631,15 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
     });
 
     it('serializes on -> true and off -> undefined in the saved patch (#835/#836)', () => {
-        const on = setTaskDraftField(createTaskDraft(timedTask), 'suppressMindwtrReminders', true);
-        expect(taskDraftToUpdatePatch(on, timedTask)).toMatchObject({ suppressMindwtrReminders: true });
+        const on = setTaskDraftField(createTaskDraft(timedTask), 'suppressTinyBubblesReminders', true);
+        expect(taskDraftToUpdatePatch(on, timedTask)).toMatchObject({ suppressTinyBubblesReminders: true });
 
-        const suppressed: Task = { ...timedTask, suppressMindwtrReminders: true };
-        const off = setTaskDraftField(createTaskDraft(suppressed), 'suppressMindwtrReminders', false);
+        const suppressed: Task = { ...timedTask, suppressTinyBubblesReminders: true };
+        const off = setTaskDraftField(createTaskDraft(suppressed), 'suppressTinyBubblesReminders', false);
         const offPatch = taskDraftToUpdatePatch(off, suppressed);
         expect(offPatch).not.toBeNull();
-        expect(offPatch?.suppressMindwtrReminders).toBeUndefined();
-        expect('suppressMindwtrReminders' in (offPatch ?? {})).toBe(true);
+        expect(offPatch?.suppressTinyBubblesReminders).toBeUndefined();
+        expect('suppressTinyBubblesReminders' in (offPatch ?? {})).toBe(true);
     });
 });
 

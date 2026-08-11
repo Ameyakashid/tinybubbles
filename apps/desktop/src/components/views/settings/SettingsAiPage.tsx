@@ -1,5 +1,5 @@
-import type { AIProviderId, AIReasoningEffort, AiSettings } from '@mindwtr/core';
-import { formatOpenAIExtraBodyParams, parseOpenAIExtraBodyParamsInput } from '@mindwtr/core';
+import type { AIProviderId, AIReasoningEffort, AiSettings } from '@tinybubbles/core';
+import { formatOpenAIExtraBodyParams, parseOpenAIExtraBodyParamsInput } from '@tinybubbles/core';
 
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';

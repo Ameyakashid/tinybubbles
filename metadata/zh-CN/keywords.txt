@@ -1,1 +1,1 @@
-gtd,task,todo,planner,productivity,focus,kanban,offline,local,mindwtr,organize,private,list
+gtd,task,todo,planner,productivity,focus,kanban,offline,local,tinybubbles,organize,private,list

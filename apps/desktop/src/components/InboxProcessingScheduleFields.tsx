@@ -1,4 +1,4 @@
-import { safeFormatDate, safeParseDate } from '@mindwtr/core';
+import { safeFormatDate, safeParseDate } from '@tinybubbles/core';
 
 import { cn } from '../lib/utils';
 import { useNativeDateInputLocale } from '../hooks/use-native-date-input-locale';

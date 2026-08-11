@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { safeFormatDate } from '@mindwtr/core';
+import { safeFormatDate } from '@tinybubbles/core';
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 
 import { Switch } from '../../ui/Switch';

@@ -5,7 +5,7 @@ use std::net::{TcpStream, ToSocketAddrs};
 
 const EMAIL_CAPTURE_STATE_FILE_NAME: &str = "email-capture-state.json";
 const EMAIL_CAPTURE_DEFAULT_PORT: u16 = 993;
-const EMAIL_CAPTURE_DEFAULT_FOLDER: &str = "Mindwtr";
+const EMAIL_CAPTURE_DEFAULT_FOLDER: &str = "Tiny Bubbles";
 // Bounded work per poll; the mailbox is the queue, so leftovers are picked up
 // by follow-up polls (`has_more`) instead of one unbounded fetch.
 const EMAIL_CAPTURE_BATCH_LIMIT: usize = 25;
@@ -679,7 +679,7 @@ mod tests {
             enabled: true,
             host: "imap.gmail.com".to_string(),
             port: 993,
-            username: "mindwtr-smoke-test@gmail.com".to_string(),
+            username: "tinybubbles-smoke-test@gmail.com".to_string(),
             folder: default_email_capture_folder(),
         };
         let error = open_email_session(&config, "not-a-real-password")
@@ -717,7 +717,7 @@ mod tests {
             host: String::new(),
             port: 993,
             username: "user".to_string(),
-            folder: "Mindwtr".to_string(),
+            folder: "Tiny Bubbles".to_string(),
         });
         assert!(!disabled.enabled);
     }
@@ -729,7 +729,7 @@ mod tests {
             host: "IMAP.Example.com".to_string(),
             port: 993,
             username: "user@example.com".to_string(),
-            folder: "Mindwtr".to_string(),
+            folder: "Tiny Bubbles".to_string(),
         });
         let same_mailbox = normalize_email_capture_payload(EmailCaptureConfigPayload {
             enabled: false,
@@ -750,7 +750,7 @@ mod tests {
             host: "imap.example.com".to_string(),
             port: 993,
             username: "first@example.com".to_string(),
-            folder: "Mindwtr".to_string(),
+            folder: "Tiny Bubbles".to_string(),
         });
         for changed in [
             EmailCaptureConfigPayload {
@@ -783,7 +783,7 @@ mod tests {
             host: "imap.example.com".to_string(),
             port: 993,
             username: "first@example.com".to_string(),
-            folder: "Mindwtr".to_string(),
+            folder: "Tiny Bubbles".to_string(),
         };
         let second = EmailCaptureMailboxIdentity {
             username: "second@example.com".to_string(),

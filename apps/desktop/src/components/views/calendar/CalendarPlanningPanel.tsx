@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
-import { safeFormatDate, safeParseDueDate, type Task } from '@mindwtr/core';
+import { safeFormatDate, safeParseDueDate, type Task } from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
 import type { DesktopCalendarController } from './useDesktopCalendarController';

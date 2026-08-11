@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Attachment } from '@mindwtr/core';
+import type { Attachment } from '@tinybubbles/core';
 import { cn } from '../../lib/utils';
 import { normalizeAttachmentPathForUrl, resolveAttachmentOpenTarget } from '../../lib/attachment-paths';
 import { isTauriRuntime } from '../../lib/runtime';

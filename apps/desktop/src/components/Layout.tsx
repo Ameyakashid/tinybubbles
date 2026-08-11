@@ -25,8 +25,8 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { shallow, useTaskStore, safeFormatDate, tFallback, isAllowedInsecureUrl } from '@mindwtr/core';
-import type { StoreActionResult, TaskStatus } from '@mindwtr/core';
+import { shallow, useTaskStore, safeFormatDate, tFallback, isAllowedInsecureUrl } from '@tinybubbles/core';
+import type { StoreActionResult, TaskStatus } from '@tinybubbles/core';
 import { registerUndoableAction } from '../lib/undo-registry';
 import { formatTaskMovedMessage } from './views/list/task-list-scope';
 import { useLanguage } from '../contexts/language-context';
@@ -34,7 +34,7 @@ import { useUiStore } from '../store/ui-store';
 import { useObsidianStore } from '../store/obsidian-store';
 import { reportError } from '../lib/report-error';
 import { ToastHost } from './ToastHost';
-import { areaFilterSelectionToFilters, resolveAreaFilterSelection, taskMatchesAreaFilterSelection, type AreaFilterSelection } from '@mindwtr/core';
+import { areaFilterSelectionToFilters, resolveAreaFilterSelection, taskMatchesAreaFilterSelection, type AreaFilterSelection } from '@tinybubbles/core';
 import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
 import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
@@ -80,7 +80,7 @@ const NAV_DROP_STATUSES: Record<string, TaskStatus> = {
     done: 'done',
     archived: 'archived',
 };
-const SECTION_COLLAPSE_STORAGE_KEY = 'mindwtr:sidebar:collapsedSections';
+const SECTION_COLLAPSE_STORAGE_KEY = 'tinybubbles:sidebar:collapsedSections';
 const DEFAULT_COLLAPSED_SECTION_KEYS: string[] = [];
 
 function createDefaultCollapsedSections(): Set<string> {
@@ -511,11 +511,11 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     }, [clearCalendarDragNavTimeout, currentView, onViewChange, t]);
 
     const triggerSearch = () => {
-        window.dispatchEvent(new CustomEvent('mindwtr:open-search'));
+        window.dispatchEvent(new CustomEvent('tinybubbles:open-search'));
     };
 
     const triggerInboxCapture = () => {
-        window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+        window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
             detail: { initialProps: { status: 'inbox' } },
         }));
     };
@@ -668,7 +668,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                     {!isCollapsed && (
                         <img
                             src="/logo.png"
-                            alt="Mindwtr"
+                            alt="Tiny Bubbles"
                             className="w-7 h-7 rounded-md"
                         />
                     )}

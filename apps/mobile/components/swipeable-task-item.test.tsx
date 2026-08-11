@@ -95,7 +95,7 @@ const translate = vi.hoisted(() => {
   return translator;
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   storeState.addTask = addTask;
   storeState.updateTask = updateTask;
@@ -894,7 +894,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
     const onContextPress = vi.fn();
     const onTagPress = vi.fn();
     storeState.projects = [
-      { id: 'project-1', title: 'Mindwtr', areaId: undefined },
+      { id: 'project-1', title: 'Tiny Bubbles', areaId: undefined },
     ];
 
     let tree!: renderer.ReactTestRenderer;
@@ -930,7 +930,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       );
     });
 
-    const projectButton = tree.root.find((node) => node.props.accessibilityLabel === 'Open project Mindwtr');
+    const projectButton = tree.root.find((node) => node.props.accessibilityLabel === 'Open project Tiny Bubbles');
     const contextButton = tree.root.find((node) => node.props.accessibilityLabel === 'Open context @work');
     const tagButton = tree.root.find((node) => node.props.accessibilityLabel === 'Open tag #urgent');
 
@@ -947,7 +947,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
 
   it('can hide project meta when the task is already shown inside that project', () => {
     storeState.projects = [
-      { id: 'project-1', title: 'Mindwtr', areaId: undefined },
+      { id: 'project-1', title: 'Tiny Bubbles', areaId: undefined },
     ];
 
     let tree!: renderer.ReactTestRenderer;
@@ -981,7 +981,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       );
     });
 
-    expect(() => tree.root.find((node) => node.props.accessibilityLabel === 'Open project Mindwtr')).toThrow();
+    expect(() => tree.root.find((node) => node.props.accessibilityLabel === 'Open project Tiny Bubbles')).toThrow();
     expect(hasText(tree, '@work')).toBe(true);
   });
 
@@ -1225,7 +1225,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       'status.inbox': 'Boite de reception',
       'status.next': 'Suivante',
     };
-    storeState.projects = [{ id: 'project-1', title: 'Mindwtr' }];
+    storeState.projects = [{ id: 'project-1', title: 'Tiny Bubbles' }];
 
     let tree!: renderer.ReactTestRenderer;
     renderer.act(() => {
@@ -1260,7 +1260,7 @@ it('can keep the focus star without adding a redundant focus outline', () => {
       );
     });
 
-    expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le projet Mindwtr' })).toBeDefined();
+    expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le projet Tiny Bubbles' })).toBeDefined();
     expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le contexte @travail' })).toBeDefined();
     expect(tree.root.findByProps({ accessibilityLabel: 'Ouvrir le tag #urgent' })).toBeDefined();
     expect(tree.root.findByProps({ accessibilityLabel: 'Action : Suivante' })).toBeDefined();

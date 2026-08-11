@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/react';
-import { loadTranslations, useTaskStore } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { loadTranslations, useTaskStore } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../../contexts/language-context';
 import { KeybindingProvider } from '../../contexts/keybinding-context';
@@ -15,7 +15,7 @@ import { ListView } from './ListView';
 const zh = await loadTranslations('zh');
 vi.mock('../../contexts/language-context', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../contexts/language-context')>();
-    const translations = await (await import('@mindwtr/core')).loadTranslations('zh');
+    const translations = await (await import('@tinybubbles/core')).loadTranslations('zh');
     return {
         ...actual,
         useLanguage: () => ({

@@ -6,7 +6,7 @@ import {
   type ContextAutomationPayload,
 } from './context-automation';
 
-export const CONTEXT_AUTOMATION_HEADLESS_TASK_NAME = 'MindwtrContextAutomation';
+export const CONTEXT_AUTOMATION_HEADLESS_TASK_NAME = 'TinyBubblesContextAutomation';
 
 type ContextAutomationHeadlessTaskData = {
   action?: unknown;
@@ -59,7 +59,7 @@ export async function runContextAutomationHeadlessTask(data: ContextAutomationHe
     },
     { mobileStorage, quiesceMobileStorage },
   ] = await Promise.all([
-    import('@mindwtr/core'),
+    import('@tinybubbles/core'),
     import('./context-automation-handler'),
     import('./storage-adapter'),
   ]);

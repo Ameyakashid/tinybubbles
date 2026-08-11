@@ -9,8 +9,8 @@ import {
     buildRRuleString,
     getRecurrenceCountValue,
     getRecurrenceUntilValue,
-} from '@mindwtr/core';
-import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
+} from '@tinybubbles/core';
+import { joinDateTime, splitDateTime } from '@tinybubbles/core/date-draft';
 
 export const DEFAULT_TASK_EDITOR_ORDER: TaskEditorFieldId[] = [
     'status',

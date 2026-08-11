@@ -1,4 +1,4 @@
-export const CLOUDKIT_ATTACHMENT_RECORD_TYPE = 'MindwtrAttachment';
+export const CLOUDKIT_ATTACHMENT_RECORD_TYPE = 'TinyBubblesAttachment';
 export const CLOUDKIT_ATTACHMENT_ASSET_FIELD = 'asset';
 export const CLOUDKIT_ATTACHMENT_KEY_PREFIX = 'cloudkit:';
 

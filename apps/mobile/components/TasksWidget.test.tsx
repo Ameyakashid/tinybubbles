@@ -71,8 +71,8 @@ const basePayload: TasksWidgetPayload = {
     ],
     emptyMessage: 'No tasks',
     captureLabel: 'Quick capture',
-    focusUri: 'mindwtr:///focus',
-    quickCaptureUri: 'mindwtr:///capture-quick?mode=text',
+    focusUri: 'tinybubbles:///focus',
+    quickCaptureUri: 'tinybubbles:///capture-quick?mode=text',
     palette: {
         background: '#F8FAFC',
         card: '#FFFFFF',

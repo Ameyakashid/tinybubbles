@@ -29,7 +29,7 @@ enum CloudKitChangeTracker {
 
         // CloudKit dispatches callbacks on arbitrary queues. Serialize all
         // mutations to shared state through a serial queue to prevent races.
-        let callbackQueue = DispatchQueue(label: "tech.dongdongbh.mindwtr.changetracker")
+        let callbackQueue = DispatchQueue(label: "app.tinybubbles.changetracker")
 
         return try await withCheckedThrowingContinuation { continuation in
             var result = ChangeResult()

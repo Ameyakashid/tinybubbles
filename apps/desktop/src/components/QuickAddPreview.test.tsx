@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { QuickAddPreviewEntry } from '@mindwtr/core';
+import type { QuickAddPreviewEntry } from '@tinybubbles/core';
 
 import { QuickAddPreview } from './QuickAddPreview';
 

@@ -6,8 +6,8 @@ import {
   useTaskFilterSelections,
   type TaskFilterSelections,
   type TaskFilterSelectionsOptions,
-} from '@mindwtr/core/task-filter-selections';
-import type { SavedFilter, Task, TaskMetadataFilterVisibility } from '@mindwtr/core';
+} from '@tinybubbles/core/task-filter-selections';
+import type { SavedFilter, Task, TaskMetadataFilterVisibility } from '@tinybubbles/core';
 
 // The hook only. The predicates it feeds are shared with desktop, so they are
 // covered where they live: packages/core/src/task-filter-selections.test.ts.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_POMODORO_DURATIONS, createPomodoroState } from '@mindwtr/core';
+import { DEFAULT_POMODORO_DURATIONS, createPomodoroState } from '@tinybubbles/core';
 
 import {
   pausePomodoroSession,

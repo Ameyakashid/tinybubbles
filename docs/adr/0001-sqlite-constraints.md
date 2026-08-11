@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr is offline-first and uses soft-delete tombstones so that deletions can be synced safely across devices. The local SQLite schema has relationships between tasks, projects, sections, and areas. We still want SQLite to protect basic referential integrity for live records, but we also need sync-aware repair logic for soft-deletes, tombstones, and legacy payloads.
+Tiny Bubbles is offline-first and uses soft-delete tombstones so that deletions can be synced safely across devices. The local SQLite schema has relationships between tasks, projects, sections, and areas. We still want SQLite to protect basic referential integrity for live records, but we also need sync-aware repair logic for soft-deletes, tombstones, and legacy payloads.
 
 ## Decision
 

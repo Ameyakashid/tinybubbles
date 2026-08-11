@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetForTests, useTaskStore, type Task } from '@mindwtr/core';
+import { resetForTests, useTaskStore, type Task } from '@tinybubbles/core';
 
 import { DailyReviewGuideModal } from './DailyReviewModal';
 
@@ -55,7 +55,7 @@ vi.mock('../InboxProcessor', () => ({
     InboxProcessor: () => <div data-testid="inbox-processor" />,
 }));
 
-const storageKey = 'mindwtr:dailyReview:currentStep';
+const storageKey = 'tinybubbles:dailyReview:currentStep';
 const now = '2026-02-01T00:00:00.000Z';
 const initialTaskState = useTaskStore.getState();
 

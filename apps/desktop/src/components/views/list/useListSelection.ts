@@ -7,13 +7,13 @@ import {
     useCallback,
     type RefObject,
 } from 'react';
-import { collectBulkTaskTokens } from '@mindwtr/core';
+import { collectBulkTaskTokens } from '@tinybubbles/core';
 import type {
     BulkOrganizeTaskUpdateInput,
     Task,
     TaskStatus,
     RangeSelectionOptions,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { TaskListScope } from '../../../contexts/keybinding-context';
 import { focusTaskRowWhenMounted, useRegisteredTaskListScope } from './task-list-scope';

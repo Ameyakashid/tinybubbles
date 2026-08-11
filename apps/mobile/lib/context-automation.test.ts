@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Project, Task } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
 
 import {
   buildContextAutomationNotificationCopy,
@@ -41,23 +41,23 @@ describe('context-automation', () => {
   });
 
   it('parses context automation URLs', () => {
-    expect(parseContextAutomationUrl('mindwtr://contexts?token=%40parents&contextAction=activate')).toEqual({
+    expect(parseContextAutomationUrl('tinybubbles://contexts?token=%40parents&contextAction=activate')).toEqual({
       action: 'activate',
       context: '@parents',
     });
-    expect(parseContextAutomationUrl('mindwtr:///context/deactivate/parents')).toEqual({
+    expect(parseContextAutomationUrl('tinybubbles:///context/deactivate/parents')).toEqual({
       action: 'deactivate',
       context: '@parents',
     });
-    expect(parseContextAutomationUrl('mindwtr:///context/activate/parents/errands')).toEqual({
+    expect(parseContextAutomationUrl('tinybubbles:///context/activate/parents/errands')).toEqual({
       action: 'activate',
       context: '@parents/errands',
     });
-    expect(parseContextAutomationUrl('mindwtr://activate-context?name=parents')).toEqual({
+    expect(parseContextAutomationUrl('tinybubbles://activate-context?name=parents')).toEqual({
       action: 'activate',
       context: '@parents',
     });
-    expect(parseContextAutomationUrl('mindwtr://contexts?token=%40parents')).toBeNull();
+    expect(parseContextAutomationUrl('tinybubbles://contexts?token=%40parents')).toBeNull();
     expect(parseContextAutomationUrl('https://example.com/context?token=parents&action=activate')).toBeNull();
   });
 
@@ -91,7 +91,7 @@ describe('context-automation', () => {
   it('builds compact notification copy', () => {
     expect(buildContextAutomationNotificationCopy('@parents', [])).toEqual({
       title: 'No @parents next actions',
-      message: 'Mindwtr did not find any /next tasks for @parents.',
+      message: 'Tiny Bubbles did not find any /next tasks for @parents.',
     });
     expect(buildContextAutomationNotificationCopy('@parents', [task({ title: 'Call mom' })])).toEqual({
       title: '@parents next action',

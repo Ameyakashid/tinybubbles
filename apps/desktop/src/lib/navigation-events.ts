@@ -21,12 +21,12 @@ export type NavigateEventDetail = {
     view: DesktopViewId;
 };
 
-export const MINDWTR_NAVIGATE_EVENT = 'mindwtr:navigate';
+export const TINYBUBBLES_NAVIGATE_EVENT = 'tinybubbles:navigate';
 
 export function dispatchNavigateEvent(view: DesktopViewId): void {
     if (typeof window === 'undefined') return;
     window.dispatchEvent(
-        new CustomEvent<NavigateEventDetail>(MINDWTR_NAVIGATE_EVENT, {
+        new CustomEvent<NavigateEventDetail>(TINYBUBBLES_NAVIGATE_EVENT, {
             detail: { view },
         })
     );
@@ -45,6 +45,6 @@ export function subscribeNavigateEvent(
         handler(detail);
     };
 
-    window.addEventListener(MINDWTR_NAVIGATE_EVENT, listener);
-    return () => window.removeEventListener(MINDWTR_NAVIGATE_EVENT, listener);
+    window.addEventListener(TINYBUBBLES_NAVIGATE_EVENT, listener);
+    return () => window.removeEventListener(TINYBUBBLES_NAVIGATE_EVENT, listener);
 }

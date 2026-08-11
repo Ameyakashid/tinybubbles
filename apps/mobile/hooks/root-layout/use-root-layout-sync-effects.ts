@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-import { flushPendingSave, getInMemorySyncChangeFingerprint, hasActiveMobileNotificationFeature, nameNotifyListener, resolveSyncFailureCooldownMs, useTaskStore } from '@mindwtr/core';
+import { flushPendingSave, getInMemorySyncChangeFingerprint, hasActiveMobileNotificationFeature, nameNotifyListener, resolveSyncFailureCooldownMs, useTaskStore } from '@tinybubbles/core';
 
 import type { ToastOptions } from '@/contexts/toast-context';
 import { getNotificationPermissionStatus, startMobileNotifications, stopMobileNotifications } from '@/lib/notification-service';
@@ -82,7 +82,7 @@ const buildSyncUiCopy = (resolveText: ResolveText): SyncUiCopy => ({
     syncIssueMisconfiguredMessage: resolveText('settings.syncFailureMisconfigured', 'Finish configuring the selected sync backend in Settings → Sync.'),
     syncIssueConflictMessage: resolveText('settings.syncFailureConflict', 'Another device or backend reported a sync conflict. Retry after both sides finish syncing.'),
     notificationsDisabledTitle: resolveText('settings.notificationsDisabled', 'Notifications disabled'),
-    notificationsDisabledMessage: resolveText('settings.notificationsDisabledMessage', 'Mindwtr can no longer schedule reminders until notification access is restored.'),
+    notificationsDisabledMessage: resolveText('settings.notificationsDisabledMessage', 'Tiny Bubbles can no longer schedule reminders until notification access is restored.'),
     openActionLabel: resolveText('common.open', 'Open'),
 });
 

@@ -62,10 +62,10 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-vi.mock('@mindwtr/core', async () => {
+vi.mock('@tinybubbles/core', async () => {
   // The real cooldown maths, not a stub: leaving it off the mock meant every
   // failed-sync path threw here, so no test could reach the cooldown at all.
-  const { resolveSyncFailureCooldownMs } = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+  const { resolveSyncFailureCooldownMs } = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     flushPendingSave,
     getInMemorySyncChangeFingerprint,

@@ -45,7 +45,7 @@ describe('isAllowedInsecureUrl', () => {
     it('allows clearly local hostnames when enabled', () => {
         const options = { allowLocalHostnames: true };
         expect(isAllowedInsecureUrl('http://nas/data.json', options)).toBe(true);
-        expect(isAllowedInsecureUrl('http://omvnas/webdav/alice/mindwtr', options)).toBe(true);
+        expect(isAllowedInsecureUrl('http://omvnas/webdav/alice/tinybubbles', options)).toBe(true);
         expect(isAllowedInsecureUrl('http://nas.local/data.json', options)).toBe(true);
         expect(isAllowedInsecureUrl('http://router.home.arpa/data.json', options)).toBe(true);
         expect(isAllowedInsecureUrl('http://example.com/data.json', options)).toBe(false);
@@ -68,7 +68,7 @@ describe('isAllowedInsecureUrl', () => {
 describe('isConnectionAllowed', () => {
     it('allows local sync HTTP targets without a manual override', () => {
         expect(isConnectionAllowed('http://192.168.1.50/data.json', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
-        expect(isConnectionAllowed('http://omvnas/webdav/alice/mindwtr', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
+        expect(isConnectionAllowed('http://omvnas/webdav/alice/tinybubbles', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
         expect(isConnectionAllowed('http://nas.local/data.json', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
     });
 
@@ -104,7 +104,7 @@ describe('isConnectionAllowed', () => {
 
         globalThis.URL = ProtocolOnlyURL as unknown as typeof URL;
         try {
-            expect(isConnectionAllowed('http://omvnas/webdav/alice/mindwtr', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
+            expect(isConnectionAllowed('http://omvnas/webdav/alice/tinybubbles', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
             expect(isConnectionAllowed('http://192.168.1.50/data.json', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(true);
             expect(isConnectionAllowed('http://example.com/data.json', SYNC_LOCAL_INSECURE_URL_OPTIONS)).toBe(false);
         } finally {
@@ -257,11 +257,11 @@ describe('fetchWithTimeout', () => {
         const certificateError = new Error('invalid peer certificate: UnknownIssuer');
         const connectError = new Error('client error (Connect)');
         (connectError as Error & { cause?: unknown }).cause = certificateError;
-        const requestError = new Error('error sending request for url (https://files.internal/mindwtr/attachments/)');
+        const requestError = new Error('error sending request for url (https://files.internal/tinybubbles/attachments/)');
         (requestError as Error & { cause?: unknown }).cause = connectError;
 
         await expect(fetchWithTimeout(
-            'https://files.internal/mindwtr/attachments/',
+            'https://files.internal/tinybubbles/attachments/',
             { method: 'MKCOL' },
             1_000,
             async () => {
@@ -269,7 +269,7 @@ describe('fetchWithTimeout', () => {
             },
             'Request timed out',
         )).rejects.toThrow(
-            'error sending request for url (https://files.internal/mindwtr/attachments/) (caused by: client error (Connect) -> invalid peer certificate: UnknownIssuer)',
+            'error sending request for url (https://files.internal/tinybubbles/attachments/) (caused by: client error (Connect) -> invalid peer certificate: UnknownIssuer)',
         );
     });
 });

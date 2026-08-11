@@ -1,19 +1,19 @@
-import { normalizeCloudProvider, type CloudProvider } from '@mindwtr/core';
+import { normalizeCloudProvider, type CloudProvider } from '@tinybubbles/core';
 
 import type { CloudConfig, WebDavConfig } from './sync-attachment-backends';
 import { normalizeSyncBackend, type SyncBackend } from './sync-service-utils';
 
-export const SYNC_BACKEND_KEY = 'mindwtr-sync-backend';
-export const WEBDAV_URL_KEY = 'mindwtr-webdav-url';
-export const WEBDAV_USERNAME_KEY = 'mindwtr-webdav-username';
-export const WEBDAV_PASSWORD_KEY = 'mindwtr-webdav-password';
-export const WEBDAV_ALLOW_INSECURE_HTTP_KEY = 'mindwtr-webdav-allow-insecure-http';
-export const WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY = 'mindwtr-webdav-allow-weak-fingerprint';
-export const CLOUD_URL_KEY = 'mindwtr-cloud-url';
-export const CLOUD_TOKEN_KEY = 'mindwtr-cloud-token';
-export const CLOUD_ALLOW_INSECURE_HTTP_KEY = 'mindwtr-cloud-allow-insecure-http';
-export const CLOUD_REMEMBER_TOKEN_KEY = 'mindwtr-cloud-remember-token';
-export const CLOUD_PROVIDER_KEY = 'mindwtr-cloud-provider';
+export const SYNC_BACKEND_KEY = 'tinybubbles-sync-backend';
+export const WEBDAV_URL_KEY = 'tinybubbles-webdav-url';
+export const WEBDAV_USERNAME_KEY = 'tinybubbles-webdav-username';
+export const WEBDAV_PASSWORD_KEY = 'tinybubbles-webdav-password';
+export const WEBDAV_ALLOW_INSECURE_HTTP_KEY = 'tinybubbles-webdav-allow-insecure-http';
+export const WEBDAV_ALLOW_WEAK_FINGERPRINT_KEY = 'tinybubbles-webdav-allow-weak-fingerprint';
+export const CLOUD_URL_KEY = 'tinybubbles-cloud-url';
+export const CLOUD_TOKEN_KEY = 'tinybubbles-cloud-token';
+export const CLOUD_ALLOW_INSECURE_HTTP_KEY = 'tinybubbles-cloud-allow-insecure-http';
+export const CLOUD_REMEMBER_TOKEN_KEY = 'tinybubbles-cloud-remember-token';
+export const CLOUD_PROVIDER_KEY = 'tinybubbles-cloud-provider';
 const DEFAULT_DROPBOX_APP_KEY = String(import.meta.env.VITE_DROPBOX_APP_KEY || '').trim();
 
 type ConfigDeps = {

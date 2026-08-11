@@ -1,5 +1,5 @@
 import type { Area, Person, Project, Section, Task } from './queries.js';
-import { ensureMindwtrDbPath, type DbOptions } from './db.js';
+import { ensureTinyBubblesDbPath, type DbOptions } from './db.js';
 import { NotFoundError, ValidationError } from './errors.js';
 
 type CoreStore = {
@@ -124,7 +124,7 @@ const createSqliteClient = async (dbPath: string, readonly: boolean) => {
 };
 
 const loadCoreModules = async (): Promise<CoreModule> => {
-  const core = await import('@mindwtr/core');
+  const core = await import('@tinybubbles/core');
   return core as CoreModule;
 };
 
@@ -292,7 +292,7 @@ const isDuplicateColumnError = (error: unknown): boolean => {
 };
 
 const ensureCoreReady = async (options: DbOptions) => {
-  const resolvedPath = await ensureMindwtrDbPath(options);
+  const resolvedPath = await ensureTinyBubblesDbPath(options);
   if (coreReady && coreDbPath === resolvedPath && coreReadonly === Boolean(options.readonly)) {
     return coreReady;
   }

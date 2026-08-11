@@ -5,7 +5,7 @@ import { SYNC_REPAIR_REV_BY } from './sync-types';
 const SQLITE_NEUTRAL_FALSE_FIELDS = new Set([
     'showFutureRecurrence',
     'isFocusedToday',
-    'suppressMindwtrReminders',
+    'suppressTinyBubblesReminders',
     'isSequential',
     'isFocused',
     'isCollapsed',

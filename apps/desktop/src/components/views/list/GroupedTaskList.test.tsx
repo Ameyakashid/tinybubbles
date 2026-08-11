@@ -1,7 +1,7 @@
 import { render, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { Virtualizer } from '@tanstack/react-virtual';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { buildGroupedVirtualRows, GroupedTaskList } from './GroupedTaskSections';
 import type { TaskGroup } from './next-grouping';
 import { buildSectionDomId } from './useTaskGroupCollapse';

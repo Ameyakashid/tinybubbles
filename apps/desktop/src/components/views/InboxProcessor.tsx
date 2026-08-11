@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Lightbulb, Play, X } from 'lucide-react';
-import type { AppData, Area, Project, StoreActionResult, Task } from '@mindwtr/core';
+import type { AppData, Area, Project, StoreActionResult, Task } from '@tinybubbles/core';
 
 import {
     dismissDesktopOnboardingHint,

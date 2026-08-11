@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { parseInlineMarkdown } from '@mindwtr/core';
+import { parseInlineMarkdown } from '@tinybubbles/core';
 import { cn } from '../lib/utils';
 import { InternalMarkdownLink, type InternalMarkdownLinkContext, useInternalMarkdownLinkContext } from './InternalMarkdownLink';
 
@@ -98,7 +98,7 @@ export function Markdown({ markdown, className }: { markdown: string; className?
                 <div
                     key={`blank-${i}`}
                     aria-hidden="true"
-                    className="mindwtr-markdown-blank-line h-4"
+                    className="tinybubbles-markdown-blank-line h-4"
                 />
             );
             i += 1;

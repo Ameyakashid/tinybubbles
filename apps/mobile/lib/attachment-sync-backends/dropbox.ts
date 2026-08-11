@@ -1,5 +1,5 @@
-import type { AppData, Attachment } from '@mindwtr/core';
-import { isAbortError, validateAttachmentForUpload } from '@mindwtr/core';
+import type { AppData, Attachment } from '@tinybubbles/core';
+import { isAbortError, validateAttachmentForUpload } from '@tinybubbles/core';
 import {
   DropboxFileNotFoundError,
   downloadDropboxFile,

@@ -6,7 +6,7 @@ import {
     SyncRemoteWriteConflict,
     type AppData,
     type Attachment,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { DropboxUnauthorizedError } from './dropbox-sync';
 import {
     fallbackHashString,
@@ -106,7 +106,7 @@ const waitForResolutionToRemainBlocked = async (
 const setPendingExternalSyncChangeForTests = () => {
     (SyncService as any).didMigrate = true;
     (SyncService as any).pendingExternalSyncChange = {
-        path: '/tmp/mindwtr-sync.json',
+        path: '/tmp/tinybubbles-sync.json',
         localHash: 'local-hash',
         incomingHash: 'incoming-hash',
     };
@@ -364,20 +364,20 @@ describe('sync-service test utils', () => {
     });
 
     it('extracts base directory for file sync paths', () => {
-        expect(getFileSyncDir('/tmp/mindwtr/data.json', 'data.json', 'mindwtr-sync.json')).toBe('/tmp/mindwtr');
-        expect(getFileSyncDir('/tmp/mindwtr/mindwtr-sync.json', 'data.json', 'mindwtr-sync.json')).toBe('/tmp/mindwtr');
-        expect(getFileSyncDir('/tmp/mindwtr/', 'data.json', 'mindwtr-sync.json')).toBe('/tmp/mindwtr');
-        expect(getFileSyncDir('', 'data.json', 'mindwtr-sync.json')).toBe('');
+        expect(getFileSyncDir('/tmp/tinybubbles/data.json', 'data.json', 'tinybubbles-sync.json')).toBe('/tmp/tinybubbles');
+        expect(getFileSyncDir('/tmp/tinybubbles/tinybubbles-sync.json', 'data.json', 'tinybubbles-sync.json')).toBe('/tmp/tinybubbles');
+        expect(getFileSyncDir('/tmp/tinybubbles/', 'data.json', 'tinybubbles-sync.json')).toBe('/tmp/tinybubbles');
+        expect(getFileSyncDir('', 'data.json', 'tinybubbles-sync.json')).toBe('');
     });
 
     it('hashes sync payloads with sha256 output', async () => {
-        const hash = await hashString('mindwtr');
+        const hash = await hashString('tinybubbles');
         expect(hash).toBe('feb7a7b01b1c68e586e77288a4b2598d146ee3696ec7dbfac0074196b8d68c33');
     });
 
     it('formats fallback hashes as unsigned hex', () => {
-        expect(fallbackHashString('mindwtr')).toMatch(/^[0-9a-f]+$/);
-        expect(fallbackHashString('mindwtr')).not.toContain('-');
+        expect(fallbackHashString('tinybubbles')).toMatch(/^[0-9a-f]+$/);
+        expect(fallbackHashString('tinybubbles')).not.toContain('-');
     });
 
     it('marks attachments unrecoverable when validation failures hit retry cap', () => {
@@ -508,16 +508,16 @@ describe('SyncService testability hooks', () => {
     it('persists the cloud provider natively with exact readback before retiring legacy renderer state', async () => {
         let nativeProvider = 'selfhosted';
         const events: string[] = [];
-        localStorage.setItem('mindwtr-cloud-provider', 'selfhosted');
+        localStorage.setItem('tinybubbles-cloud-provider', 'selfhosted');
         const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {
             if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
             if (command === 'set_sync_cloud_provider') {
-                events.push(`set:${localStorage.getItem('mindwtr-cloud-provider')}`);
+                events.push(`set:${localStorage.getItem('tinybubbles-cloud-provider')}`);
                 nativeProvider = String(args?.provider);
                 return true;
             }
             if (command === 'get_sync_cloud_provider') {
-                events.push(`get:${localStorage.getItem('mindwtr-cloud-provider')}`);
+                events.push(`get:${localStorage.getItem('tinybubbles-cloud-provider')}`);
                 return nativeProvider;
             }
             return undefined;
@@ -536,7 +536,7 @@ describe('SyncService testability hooks', () => {
     });
 
     it('rejects a cloud-provider write whose native readback disagrees and preserves the renderer cache', async () => {
-        localStorage.setItem('mindwtr-cloud-provider', 'selfhosted');
+        localStorage.setItem('tinybubbles-cloud-provider', 'selfhosted');
         const invoke = vi.fn(async (command: string) => {
             if (command === 'recover_dropbox_credentials_before_sync_configuration') return true;
             if (command === 'set_sync_cloud_provider') return true;
@@ -967,7 +967,7 @@ describe('SyncService testability hooks', () => {
         let cloudUrl = '';
         let cloudToken = '';
         const events: string[] = [];
-        localStorage.removeItem('mindwtr-cloud-provider');
+        localStorage.removeItem('tinybubbles-cloud-provider');
         const snapshot = (args?: Record<string, unknown>) => ({
             backend,
             cloudProvider: nativeProvider,
@@ -1248,7 +1248,7 @@ describe('SyncService testability hooks', () => {
         expect(updateSettings).not.toHaveBeenCalled();
         expect(flushPendingSave).not.toHaveBeenCalled();
         expect(invoke).not.toHaveBeenCalled();
-        expect(JSON.parse(localStorage.getItem('mindwtr-local-sync-status-v1') ?? '{}')).toMatchObject({
+        expect(JSON.parse(localStorage.getItem('tinybubbles-local-sync-status-v1') ?? '{}')).toMatchObject({
             lastSyncAt: '2026-06-12T00:00:00.000Z',
             lastSyncStatus: 'success',
         });
@@ -2424,7 +2424,7 @@ describe('SyncService testability hooks', () => {
         });
 
         await SyncService.testWebDavConnection({
-            url: 'https://example.com/remote.php/dav/files/user/mindwtr/',
+            url: 'https://example.com/remote.php/dav/files/user/tinybubbles/',
             username: 'alice',
             password: 'secret',
         });
@@ -2435,7 +2435,7 @@ describe('SyncService testability hooks', () => {
         if (!firstCall) {
             throw new Error('Expected WebDAV fetch call');
         }
-        expect(firstCall[0]).toBe('https://example.com/remote.php/dav/files/user/mindwtr/data.json');
+        expect(firstCall[0]).toBe('https://example.com/remote.php/dav/files/user/tinybubbles/data.json');
         expect(firstCall[1]).toMatchObject({ method: 'GET' });
     });
 
@@ -2455,7 +2455,7 @@ describe('SyncService testability hooks', () => {
         });
 
         await SyncService.testWebDavConnection({
-            url: 'https://example.com/remote.php/dav/files/user/mindwtr',
+            url: 'https://example.com/remote.php/dav/files/user/tinybubbles',
             username: 'alice',
             hasPassword: true,
         });
@@ -2490,7 +2490,7 @@ describe('SyncService testability hooks', () => {
         // The settings form sends password: '' with hasPassword: true after a
         // restart; the empty string must not shadow the keyring secret.
         await SyncService.testWebDavConnection({
-            url: 'https://example.com/remote.php/dav/files/user/mindwtr',
+            url: 'https://example.com/remote.php/dav/files/user/tinybubbles',
             username: 'alice',
             password: '',
             hasPassword: true,
@@ -2555,7 +2555,7 @@ describe('SyncService testability hooks', () => {
         });
         (SyncService as any).didMigrate = true;
         (SyncService as any).pendingExternalSyncChange = {
-            path: '/tmp/mindwtr-sync.json',
+            path: '/tmp/tinybubbles-sync.json',
             localHash: 'local-hash',
             incomingHash: 'incoming-hash',
         };
@@ -2564,7 +2564,7 @@ describe('SyncService testability hooks', () => {
 
         expect(result).toEqual({ success: false, error: 'disk full' });
         expect((SyncService as any).pendingExternalSyncChange).toEqual({
-            path: '/tmp/mindwtr-sync.json',
+            path: '/tmp/tinybubbles-sync.json',
             localHash: 'local-hash',
             incomingHash: 'incoming-hash',
         });
@@ -2641,8 +2641,8 @@ describe('SyncService testability hooks', () => {
             dropboxAppKey: '',
             dropboxCredentialHandle: null,
             cachedDropboxAccessToken: null,
-            syncPath: '/tmp/mindwtr-sync',
-            fileBaseDir: '/tmp/mindwtr-sync',
+            syncPath: '/tmp/tinybubbles-sync',
+            fileBaseDir: '/tmp/tinybubbles-sync',
         });
 
         await expect(io.readRemote()).resolves.toBe(remote);
@@ -3134,7 +3134,7 @@ describe('SyncService orchestration', () => {
                 })),
             },
         }));
-        localStorage.removeItem('mindwtr-fast-sync-state-v1');
+        localStorage.removeItem('tinybubbles-fast-sync-state-v1');
 
         try {
             __syncServiceTestUtils.setDependenciesForTests({
@@ -3164,11 +3164,11 @@ describe('SyncService orchestration', () => {
             const result = await SyncService.performSync();
 
             expect(result.success).toBe(true);
-            expect(localStorage.getItem('mindwtr-fast-sync-state-v1')).toBeNull();
+            expect(localStorage.getItem('tinybubbles-fast-sync-state-v1')).toBeNull();
             expect(readRemoteFingerprint).not.toHaveBeenCalled();
         } finally {
             setupSpy.mockRestore();
-            localStorage.removeItem('mindwtr-fast-sync-state-v1');
+            localStorage.removeItem('tinybubbles-fast-sync-state-v1');
         }
     });
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import type { AIProviderId, AIReasoningEffort } from '@mindwtr/core';
+import type { AIProviderId, AIReasoningEffort } from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText } from '@/components/compact-text';

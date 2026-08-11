@@ -23,9 +23,9 @@
 // MARK: - Constants
 // ---------------------------------------------------------------------------
 
-static NSString *const kContainerID    = @"iCloud.tech.dongdongbh.mindwtr";
-static NSString *const kZoneName       = @"MindwtrZone";
-static NSString *const kSubscriptionID = @"MindwtrZoneSubscription";
+static NSString *const kContainerID    = @"iCloud.app.tinybubbles";
+static NSString *const kZoneName       = @"TinyBubblesZone";
+static NSString *const kSubscriptionID = @"TinyBubblesZoneSubscription";
 static const NSInteger kBatchSize      = 400;
 static const int64_t   kTimeoutSec     = 60;
 
@@ -39,7 +39,7 @@ static CKRecordZoneID *_ckZoneID    = nil;
 
 static _Atomic(int) _pendingRemoteChange = 0;
 
-static void mindwtr_ck_ensure_container(void) {
+static void tinybubbles_ck_ensure_container(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         _ckContainer = [CKContainer containerWithIdentifier:kContainerID];
@@ -171,7 +171,7 @@ static const MWFieldSpec kTaskFields[] = {
     {"timeEstimate",   "timeEstimate",    MWFieldKindString},
     {"timeSpentMinutes", "timeSpentMinutes", MWFieldKindInt},
     {"focusOrder",       "focusOrder",       MWFieldKindInt},
-    {"suppressMindwtrReminders", "suppressMindwtrReminders", MWFieldKindBool},
+    {"suppressTinyBubblesReminders", "suppressTinyBubblesReminders", MWFieldKindBool},
     {"repeatReminderMinutes", "repeatReminderMinutes", MWFieldKindInt},
     {"reviewAt",       "reviewAt",        MWFieldKindDate},
     {"completedAt",    "completedAt",     MWFieldKindDate},
@@ -265,17 +265,17 @@ static const size_t kSettingsFieldsCount = sizeof(kSettingsFields) / sizeof(kSet
 static void ck_get_field_specs(NSString *recordType,
                                const MWFieldSpec **outSpecs,
                                size_t *outCount) {
-    if ([recordType isEqualToString:@"MindwtrTask"]) {
+    if ([recordType isEqualToString:@"TinyBubblesTask"]) {
         *outSpecs = kTaskFields; *outCount = kTaskFieldsCount;
-    } else if ([recordType isEqualToString:@"MindwtrProject"]) {
+    } else if ([recordType isEqualToString:@"TinyBubblesProject"]) {
         *outSpecs = kProjectFields; *outCount = kProjectFieldsCount;
-    } else if ([recordType isEqualToString:@"MindwtrSection"]) {
+    } else if ([recordType isEqualToString:@"TinyBubblesSection"]) {
         *outSpecs = kSectionFields; *outCount = kSectionFieldsCount;
-    } else if ([recordType isEqualToString:@"MindwtrArea"]) {
+    } else if ([recordType isEqualToString:@"TinyBubblesArea"]) {
         *outSpecs = kAreaFields; *outCount = kAreaFieldsCount;
-    } else if ([recordType isEqualToString:@"MindwtrPerson"]) {
+    } else if ([recordType isEqualToString:@"TinyBubblesPerson"]) {
         *outSpecs = kPersonFields; *outCount = kPersonFieldsCount;
-    } else if ([recordType isEqualToString:@"MindwtrSettings"]) {
+    } else if ([recordType isEqualToString:@"TinyBubblesSettings"]) {
         *outSpecs = kSettingsFields; *outCount = kSettingsFieldsCount;
     } else {
         *outSpecs = NULL; *outCount = 0;
@@ -376,10 +376,10 @@ static NSDictionary *ck_json_from_record(CKRecord *record) {
     return result;
 }
 
-#if defined(MINDWTR_NATIVE_MAPPER_FIXTURE_CHECK)
+#if defined(TINYBUBBLES_NATIVE_MAPPER_FIXTURE_CHECK)
 /// Test-only entry point used by scripts/check-synced-field-parity.ts. It keeps
 /// the fixture harness on the same mapping functions used by production sync.
-char *mindwtr_cloudkit_round_trip_task_json(const char *json_utf8) {
+char *tinybubbles_cloudkit_round_trip_task_json(const char *json_utf8) {
     @autoreleasepool {
         if (!json_utf8) return NULL;
 
@@ -392,11 +392,11 @@ char *mindwtr_cloudkit_round_trip_task_json(const char *json_utf8) {
         NSString *taskID = json[@"id"];
         if (![taskID isKindOfClass:[NSString class]] || taskID.length == 0) return NULL;
 
-        CKRecordZoneID *zoneID = [[CKRecordZoneID alloc] initWithZoneName:@"MindwtrFixtureZone"
+        CKRecordZoneID *zoneID = [[CKRecordZoneID alloc] initWithZoneName:@"TinyBubblesFixtureZone"
                                                                 ownerName:CKCurrentUserDefaultName];
         CKRecordID *recordID = [[CKRecordID alloc] initWithRecordName:taskID zoneID:zoneID];
-        CKRecord *record = [[CKRecord alloc] initWithRecordType:@"MindwtrTask" recordID:recordID];
-        ck_apply_fields(json, record, @"MindwtrTask");
+        CKRecord *record = [[CKRecord alloc] initWithRecordType:@"TinyBubblesTask" recordID:recordID];
+        ck_apply_fields(json, record, @"TinyBubblesTask");
         return ck_copy_json(ck_json_from_record(record));
     }
 }
@@ -413,7 +413,7 @@ static NSString *ck_serialize_token(CKServerChangeToken *token) {
                                          requiringSecureCoding:YES
                                                          error:&err];
     if (!data || err) {
-        NSLog(@"[Mindwtr] Failed to serialize change token: %@", err);
+        NSLog(@"[Tiny Bubbles] Failed to serialize change token: %@", err);
         return nil;
     }
     return [data base64EncodedStringWithOptions:0];
@@ -428,7 +428,7 @@ static CKServerChangeToken *ck_deserialize_token(NSString *base64) {
                                                                    fromData:data
                                                                       error:&err];
     if (err) {
-        NSLog(@"[Mindwtr] Failed to deserialize change token: %@", err);
+        NSLog(@"[Tiny Bubbles] Failed to deserialize change token: %@", err);
         return nil;
     }
     return token;
@@ -438,9 +438,9 @@ static CKServerChangeToken *ck_deserialize_token(NSString *base64) {
 // MARK: - Public C API
 // ---------------------------------------------------------------------------
 
-char *mindwtr_cloudkit_account_status(void) {
+char *tinybubbles_cloudkit_account_status(void) {
     @autoreleasepool {
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         __block CKAccountStatus status = CKAccountStatusCouldNotDetermine;
         __block NSError *opError = nil;
@@ -468,9 +468,9 @@ char *mindwtr_cloudkit_account_status(void) {
     }
 }
 
-char *mindwtr_cloudkit_ensure_zone(void) {
+char *tinybubbles_cloudkit_ensure_zone(void) {
     @autoreleasepool {
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         CKRecordZone *zone = [[CKRecordZone alloc] initWithZoneID:_ckZoneID];
         CKModifyRecordZonesOperation *op =
@@ -496,9 +496,9 @@ char *mindwtr_cloudkit_ensure_zone(void) {
     }
 }
 
-char *mindwtr_cloudkit_ensure_subscription(void) {
+char *tinybubbles_cloudkit_ensure_subscription(void) {
     @autoreleasepool {
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         // Check if subscription already exists.
         __block BOOL alreadyExists = NO;
@@ -541,10 +541,10 @@ char *mindwtr_cloudkit_ensure_subscription(void) {
     }
 }
 
-char *mindwtr_cloudkit_fetch_all_records(const char *record_type_cstr) {
+char *tinybubbles_cloudkit_fetch_all_records(const char *record_type_cstr) {
     @autoreleasepool {
         if (!record_type_cstr) return strdup("[]");
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         NSString *recordType = [NSString stringWithUTF8String:record_type_cstr];
         NSMutableArray<NSDictionary *> *allResults = [NSMutableArray array];
@@ -610,9 +610,9 @@ char *mindwtr_cloudkit_fetch_all_records(const char *record_type_cstr) {
     }
 }
 
-char *mindwtr_cloudkit_fetch_changes(const char *change_token_base64_cstr) {
+char *tinybubbles_cloudkit_fetch_changes(const char *change_token_base64_cstr) {
     @autoreleasepool {
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         NSString *tokenB64 = change_token_base64_cstr
             ? [NSString stringWithUTF8String:change_token_base64_cstr]
@@ -630,7 +630,7 @@ char *mindwtr_cloudkit_fetch_changes(const char *change_token_base64_cstr) {
         op.fetchAllChanges = YES;
         op.qualityOfService = NSQualityOfServiceUserInitiated;
 
-        dispatch_queue_t cbQueue = dispatch_queue_create("tech.dongdongbh.mindwtr.ckchanges", DISPATCH_QUEUE_SERIAL);
+        dispatch_queue_t cbQueue = dispatch_queue_create("app.tinybubbles.ckchanges", DISPATCH_QUEUE_SERIAL);
 
         __block NSMutableDictionary<NSString *, NSMutableArray *> *recordsByType = [NSMutableDictionary dictionary];
         __block NSMutableDictionary<NSString *, NSMutableArray *> *deletedByType = [NSMutableDictionary dictionary];
@@ -749,8 +749,8 @@ ck_fetch_records_by_id(NSArray<CKRecordID *> *ids, NSError **outError) {
     return results;
 }
 
-static NSString * const kMindwtrAttachmentRecordType = @"MindwtrAttachment";
-static NSString * const kMindwtrAttachmentAssetField = @"asset";
+static NSString * const kTinyBubblesAttachmentRecordType = @"TinyBubblesAttachment";
+static NSString * const kTinyBubblesAttachmentAssetField = @"asset";
 
 static NSURL *ck_file_url_from_path(NSString *path) {
     if (!path || path.length == 0) return nil;
@@ -822,14 +822,14 @@ static char *ck_save_single_record(CKRecord *record, NSString *timeoutName) {
     return NULL;
 }
 
-char *mindwtr_cloudkit_save_attachment_asset(const char *record_name_cstr,
+char *tinybubbles_cloudkit_save_attachment_asset(const char *record_name_cstr,
                                              const char *file_path_cstr,
                                              const char *metadata_json_cstr) {
     @autoreleasepool {
         if (!record_name_cstr || !file_path_cstr || !metadata_json_cstr) {
             return ck_copy_json(@{@"error": @"invalid-attachment-input"});
         }
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
         NSString *recordName = [NSString stringWithUTF8String:record_name_cstr];
         NSString *filePath = [NSString stringWithUTF8String:file_path_cstr];
         NSData *jsonData = [[NSString stringWithUTF8String:metadata_json_cstr] dataUsingEncoding:NSUTF8StringEncoding];
@@ -847,9 +847,9 @@ char *mindwtr_cloudkit_save_attachment_asset(const char *record_name_cstr,
         if (!fetched && fetchError) {
             return ck_copy_json(@{@"error": fetchError.localizedDescription ?: @"fetch-existing-attachment-failed"});
         }
-        CKRecord *record = fetched[recordID] ?: [[CKRecord alloc] initWithRecordType:kMindwtrAttachmentRecordType recordID:recordID];
+        CKRecord *record = fetched[recordID] ?: [[CKRecord alloc] initWithRecordType:kTinyBubblesAttachmentRecordType recordID:recordID];
         ck_apply_attachment_metadata(metadata, record);
-        record[kMindwtrAttachmentAssetField] = [[CKAsset alloc] initWithFileURL:fileURL];
+        record[kTinyBubblesAttachmentAssetField] = [[CKAsset alloc] initWithFileURL:fileURL];
 
         char *saveError = ck_save_single_record(record, @"attachment-save-timeout");
         if (saveError) return saveError;
@@ -857,13 +857,13 @@ char *mindwtr_cloudkit_save_attachment_asset(const char *record_name_cstr,
     }
 }
 
-char *mindwtr_cloudkit_fetch_attachment_asset(const char *record_name_cstr,
+char *tinybubbles_cloudkit_fetch_attachment_asset(const char *record_name_cstr,
                                               const char *target_path_cstr) {
     @autoreleasepool {
         if (!record_name_cstr || !target_path_cstr) {
             return ck_copy_json(@{@"error": @"invalid-attachment-input"});
         }
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
         NSString *recordName = [NSString stringWithUTF8String:record_name_cstr];
         NSString *targetPath = [NSString stringWithUTF8String:target_path_cstr];
         CKRecordID *recordID = [[CKRecordID alloc] initWithRecordName:recordName zoneID:_ckZoneID];
@@ -874,7 +874,7 @@ char *mindwtr_cloudkit_fetch_attachment_asset(const char *record_name_cstr,
         }
         CKRecord *record = fetched[recordID];
         if (!record) return ck_copy_json(@{@"error": @"attachment-record-not-found"});
-        CKAsset *asset = record[kMindwtrAttachmentAssetField];
+        CKAsset *asset = record[kTinyBubblesAttachmentAssetField];
         if (![asset isKindOfClass:[CKAsset class]] || !asset.fileURL) {
             return ck_copy_json(@{@"error": @"attachment-asset-missing"});
         }
@@ -901,12 +901,12 @@ char *mindwtr_cloudkit_fetch_attachment_asset(const char *record_name_cstr,
     }
 }
 
-char *mindwtr_cloudkit_save_records(const char *record_type_cstr, const char *records_json_cstr) {
+char *tinybubbles_cloudkit_save_records(const char *record_type_cstr, const char *records_json_cstr) {
     @autoreleasepool {
         if (!record_type_cstr || !records_json_cstr) {
             return ck_copy_json(@{@"conflictIDs": @[]});
         }
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         NSString *recordType = [NSString stringWithUTF8String:record_type_cstr];
         NSData *jsonData = [[NSString stringWithUTF8String:records_json_cstr] dataUsingEncoding:NSUTF8StringEncoding];
@@ -1023,11 +1023,11 @@ char *mindwtr_cloudkit_save_records(const char *record_type_cstr, const char *re
     }
 }
 
-char *mindwtr_cloudkit_delete_records(const char *record_type_cstr __unused,
+char *tinybubbles_cloudkit_delete_records(const char *record_type_cstr __unused,
                                       const char *record_ids_json_cstr) {
     @autoreleasepool {
         if (!record_ids_json_cstr) return ck_success_json();
-        mindwtr_ck_ensure_container();
+        tinybubbles_ck_ensure_container();
 
         NSData *jsonData = [[NSString stringWithUTF8String:record_ids_json_cstr] dataUsingEncoding:NSUTF8StringEncoding];
         if (!jsonData) return ck_success_json();
@@ -1087,20 +1087,20 @@ char *mindwtr_cloudkit_delete_records(const char *record_type_cstr __unused,
     }
 }
 
-void mindwtr_cloudkit_register_for_remote_notifications(void) {
+void tinybubbles_cloudkit_register_for_remote_notifications(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         [[NSApplication sharedApplication] registerForRemoteNotifications];
     });
 }
 
-void mindwtr_cloudkit_set_pending_remote_change(void) {
+void tinybubbles_cloudkit_set_pending_remote_change(void) {
     __c11_atomic_store(&_pendingRemoteChange, 1, __ATOMIC_SEQ_CST);
 }
 
-int mindwtr_cloudkit_consume_pending_remote_change(void) {
+int tinybubbles_cloudkit_consume_pending_remote_change(void) {
     return __c11_atomic_exchange(&_pendingRemoteChange, 0, __ATOMIC_SEQ_CST);
 }
 
-void mindwtr_cloudkit_free_string(char *ptr) {
+void tinybubbles_cloudkit_free_string(char *ptr) {
     if (ptr) free(ptr);
 }

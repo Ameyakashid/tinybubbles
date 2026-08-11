@@ -4,7 +4,7 @@ import {
     QUICK_DATE_PRESETS,
     tFallback,
     type QuickDatePreset,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { cn } from '../lib/utils';
 

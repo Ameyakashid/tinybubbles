@@ -44,7 +44,7 @@ import {
   type AppAnnouncementAction,
   type StartupPromptDescriptor,
   type UserPromptState,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { mobileStorage } from '../lib/storage-adapter';
 import { keepPersistentCaptureNotificationArmed } from '../lib/persistent-capture-notification';
 import { markStartupPhase } from '../lib/startup-profiler';
@@ -165,11 +165,11 @@ const UPDATE_REMINDER_STARTUP_DELAY_MS = 1750;
 // fetchMobileUpdateReminderInfo is a plain fetch with no timeout; cap present()
 // so a hung network never holds the single prompt slot for the whole session.
 const UPDATE_REMINDER_FETCH_TIMEOUT_MS = 15000;
-const UPDATE_REMINDER_RELEASES_API = 'https://api.github.com/repos/dongdongbh/Mindwtr/releases/latest';
-const UPDATE_REMINDER_RELEASES_URL = 'https://github.com/dongdongbh/Mindwtr/releases/latest';
-const APP_STORE_APP_ID = '6758597144';
+const UPDATE_REMINDER_RELEASES_API = 'https://api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest';
+const UPDATE_REMINDER_RELEASES_URL = 'https://github.com/tinybubbles-app/tinybubbles/releases/latest';
+const APP_STORE_APP_ID = 'APPLE_APP_STORE_ID_PLACEHOLDER';
 const APP_STORE_REVIEW_URL = `itms-apps://itunes.apple.com/app/id${APP_STORE_APP_ID}?action=write-review`;
-const APP_STORE_LISTING_URL = `https://apps.apple.com/app/mindwtr/id${APP_STORE_APP_ID}`;
+const APP_STORE_LISTING_URL = `https://apps.apple.com/app/tinybubbles/id${APP_STORE_APP_ID}`;
 const UPDATE_NOW_ACTION_LABEL = 'Update now';
 const VIEW_RELEASE_ACTION_LABEL = 'View release';
 
@@ -205,7 +205,7 @@ const fetchMobileUpdateReminderInfo = async (currentVersion: string): Promise<Mo
   const response = await fetch(UPDATE_REMINDER_RELEASES_API, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'Mindwtr-App',
+      'User-Agent': 'TinyBubbles-App',
     },
   });
   if (!response.ok) {
@@ -228,7 +228,7 @@ const fetchMobileUpdateReminderInfo = async (currentVersion: string): Promise<Mo
 const buildUpdateReminderAnnouncement = (info: MobileUpdateReminderInfo): AppAnnouncement => ({
   id: `update-reminder-${info.latestVersion}`,
   title: 'Update available',
-  body: `Mindwtr ${info.latestVersion} is available. You are using ${info.currentVersion}. Update when you have a minute to keep fixes and improvements current.`,
+  body: `Tiny Bubbles ${info.latestVersion} is available. You are using ${info.currentVersion}. Update when you have a minute to keep fixes and improvements current.`,
   action: {
     type: 'url',
     label: info.actionLabel ?? VIEW_RELEASE_ACTION_LABEL,
@@ -237,7 +237,7 @@ const buildUpdateReminderAnnouncement = (info: MobileUpdateReminderInfo): AppAnn
 });
 
 const getAndroidPackageName = (): string => (
-  Constants.expoConfig?.android?.package || Application.applicationId || 'tech.dongdongbh.mindwtr'
+  Constants.expoConfig?.android?.package || Application.applicationId || 'app.tinybubbles'
 );
 
 const getGooglePlayListingUrl = (): string => (
@@ -1068,7 +1068,7 @@ function RootLayoutContentInner() {
             Storage unavailable
           </Text>
           <Text style={{ fontSize: 14, color: isDark ? '#94a3b8' : '#475569', lineHeight: 20 }}>
-            Mindwtr could not initialize local storage, so changes won&apos;t be saved. Please restart the app or reinstall if the problem persists.
+            Tiny Bubbles could not initialize local storage, so changes won&apos;t be saved. Please restart the app or reinstall if the problem persists.
           </Text>
           <Text style={{ fontSize: 12, color: isDark ? '#64748b' : '#94a3b8', marginTop: 16 }}>
             {storageInitError.message}

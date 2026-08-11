@@ -13,7 +13,7 @@ describe('capture-deeplink', () => {
     it('parses capture URLs with title, note, project, and tags', () => {
         expect(
             parseShortcutCaptureUrl(
-                'mindwtr://capture?title=Buy%20groceries&note=From%20store&project=Shopping&tags=errands,%20home'
+                'tinybubbles://capture?title=Buy%20groceries&note=From%20store&project=Shopping&tags=errands,%20home'
             )
         ).toEqual({
             title: 'Buy groceries',
@@ -24,7 +24,7 @@ describe('capture-deeplink', () => {
     });
 
     it('accepts triple-slash form and fallback fields', () => {
-        expect(parseShortcutCaptureUrl('mindwtr:///capture?text=Pay%20bill&description=Utility')).toEqual({
+        expect(parseShortcutCaptureUrl('tinybubbles:///capture?text=Pay%20bill&description=Utility')).toEqual({
             title: 'Pay bill',
             note: 'Utility',
             tags: [],
@@ -32,20 +32,20 @@ describe('capture-deeplink', () => {
     });
 
     it('returns null for unsupported URLs', () => {
-        expect(parseShortcutCaptureUrl('https://mindwtr.app/capture?title=Test')).toBeNull();
-        expect(parseShortcutCaptureUrl('mindwtr://focus')).toBeNull();
-        expect(parseShortcutCaptureUrl('mindwtr://capture?title=')).toBeNull();
+        expect(parseShortcutCaptureUrl('https://example.com/capture?title=Test')).toBeNull();
+        expect(parseShortcutCaptureUrl('tinybubbles://focus')).toBeNull();
+        expect(parseShortcutCaptureUrl('tinybubbles://capture?title=')).toBeNull();
     });
 
     it('trims values and drops empty tags', () => {
-        expect(parseShortcutCaptureUrl('mindwtr://capture?title=%20Task%20&tags=%20alpha%20,%20,%20beta%20')).toEqual({
+        expect(parseShortcutCaptureUrl('tinybubbles://capture?title=%20Task%20&tags=%20alpha%20,%20,%20beta%20')).toEqual({
             title: 'Task',
             tags: ['alpha', 'beta'],
         });
     });
 
     it('accepts App Actions create-thing parameter names', () => {
-        expect(parseShortcutCaptureUrl('mindwtr:///capture?name=Call%20dentist&description=Tomorrow')).toEqual({
+        expect(parseShortcutCaptureUrl('tinybubbles:///capture?name=Call%20dentist&description=Tomorrow')).toEqual({
             title: 'Call dentist',
             note: 'Tomorrow',
             tags: [],
@@ -53,35 +53,35 @@ describe('capture-deeplink', () => {
     });
 
     it('detects capture routes even when the payload is invalid', () => {
-        expect(isShortcutCaptureUrl('mindwtr://capture?title=')).toBe(true);
-        expect(isShortcutCaptureUrl('mindwtr:///capture?note=Missing%20title')).toBe(true);
-        expect(isShortcutCaptureUrl('mindwtr://focus')).toBe(false);
-        expect(isShortcutCaptureUrl('https://mindwtr.app/capture?title=Test')).toBe(false);
+        expect(isShortcutCaptureUrl('tinybubbles://capture?title=')).toBe(true);
+        expect(isShortcutCaptureUrl('tinybubbles:///capture?note=Missing%20title')).toBe(true);
+        expect(isShortcutCaptureUrl('tinybubbles://focus')).toBe(false);
+        expect(isShortcutCaptureUrl('https://example.com/capture?title=Test')).toBe(false);
     });
 
     it('parses and resolves App Actions open-feature URLs', () => {
-        expect(isOpenFeatureUrl('mindwtr:///open-feature?feature=focus')).toBe(true);
-        expect(parseOpenFeatureUrl('mindwtr:///open-feature?feature=waiting')).toEqual({ feature: 'waiting' });
+        expect(isOpenFeatureUrl('tinybubbles:///open-feature?feature=focus')).toBe(true);
+        expect(parseOpenFeatureUrl('tinybubbles:///open-feature?feature=waiting')).toEqual({ feature: 'waiting' });
         expect(resolveOpenFeaturePath('today')).toBe('/focus');
         expect(resolveOpenFeaturePath('someday')).toBe('/someday');
         expect(resolveOpenFeaturePath('unknown')).toBe('/inbox');
     });
 
     it('parses entity-open URLs for task, project, and area (#1017)', () => {
-        expect(isEntityOpenUrl('mindwtr://open?task=abc-123')).toBe(true);
-        expect(isEntityOpenUrl('mindwtr:///open?project=abc-123')).toBe(true);
-        expect(isEntityOpenUrl('mindwtr://open-feature?feature=focus')).toBe(false);
-        expect(isEntityOpenUrl('mindwtr://capture?title=x')).toBe(false);
+        expect(isEntityOpenUrl('tinybubbles://open?task=abc-123')).toBe(true);
+        expect(isEntityOpenUrl('tinybubbles:///open?project=abc-123')).toBe(true);
+        expect(isEntityOpenUrl('tinybubbles://open-feature?feature=focus')).toBe(false);
+        expect(isEntityOpenUrl('tinybubbles://capture?title=x')).toBe(false);
 
-        expect(parseEntityOpenUrl('mindwtr://open?task=abc-123')).toEqual({ kind: 'task', id: 'abc-123' });
-        expect(parseEntityOpenUrl('mindwtr:///open?project=proj-1')).toEqual({ kind: 'project', id: 'proj-1' });
-        expect(parseEntityOpenUrl('mindwtr://open?area=area-1')).toEqual({ kind: 'area', id: 'area-1' });
+        expect(parseEntityOpenUrl('tinybubbles://open?task=abc-123')).toEqual({ kind: 'task', id: 'abc-123' });
+        expect(parseEntityOpenUrl('tinybubbles:///open?project=proj-1')).toEqual({ kind: 'project', id: 'proj-1' });
+        expect(parseEntityOpenUrl('tinybubbles://open?area=area-1')).toEqual({ kind: 'area', id: 'area-1' });
     });
 
     it('returns null for a malformed or empty entity-open URL', () => {
-        expect(parseEntityOpenUrl('mindwtr://open')).toBeNull();
-        expect(parseEntityOpenUrl('mindwtr://open?task=')).toBeNull();
-        expect(parseEntityOpenUrl('https://mindwtr.app/open?task=abc-123')).toBeNull();
-        expect(parseEntityOpenUrl('mindwtr://focus')).toBeNull();
+        expect(parseEntityOpenUrl('tinybubbles://open')).toBeNull();
+        expect(parseEntityOpenUrl('tinybubbles://open?task=')).toBeNull();
+        expect(parseEntityOpenUrl('https://example.com/open?task=abc-123')).toBeNull();
+        expect(parseEntityOpenUrl('tinybubbles://focus')).toBeNull();
     });
 });

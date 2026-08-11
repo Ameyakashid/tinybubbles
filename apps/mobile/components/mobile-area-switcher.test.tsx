@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AREA_FILTER_NONE, type Area, type AreaFilterSelection } from '@mindwtr/core';
+import { AREA_FILTER_NONE, type Area, type AreaFilterSelection } from '@tinybubbles/core';
 
 const homeArea = { id: 'area-home', name: 'Home', order: 0 } as Area;
 const workArea = { id: 'area-work', name: 'Work', order: 1 } as Area;

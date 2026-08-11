@@ -11,7 +11,7 @@ import {
     type MarkdownReferenceSearchResult,
     type MarkdownSelection,
     type MarkdownToolbarResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';

@@ -98,7 +98,7 @@ describe('schedule-utils', () => {
         const task = buildTask({
             startTime: '2026-03-17T14:30:00.000Z',
             dueDate: '2026-03-18T09:00:00.000Z',
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         });
         const now = new Date('2026-03-16T12:00:00.000Z');
 
@@ -112,7 +112,7 @@ describe('schedule-utils', () => {
             startTime: '2026-03-17T14:30:00.000Z',
             dueDate: '2026-03-18T09:00:00.000Z',
             reviewAt: '2026-03-19T10:00:00.000Z',
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
         });
         const now = new Date('2026-03-16T12:00:00.000Z');
 
@@ -155,7 +155,7 @@ describe('getDueReminderRepeatTimes', () => {
     });
 
     it('returns [] when reminders are suppressed', () => {
-        expect(getDueReminderRepeatTimes(dueTask({ suppressMindwtrReminders: true }))).toEqual([]);
+        expect(getDueReminderRepeatTimes(dueTask({ suppressTinyBubblesReminders: true }))).toEqual([]);
     });
 
     it('returns [] when due-date notifications are disabled via options', () => {

@@ -1,4 +1,4 @@
-import { getLocalizedWeekdayLabels, resolveDateLocaleTag, type RecurrenceWeekday } from '@mindwtr/core';
+import { getLocalizedWeekdayLabels, resolveDateLocaleTag, type RecurrenceWeekday } from '@tinybubbles/core';
 
 const WEEKDAY_ORDER: RecurrenceWeekday[] = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
 const MONTH_REFERENCE_DATES = Array.from({ length: 12 }, (_, index) => new Date(2024, index, 1, 12, 0, 0));

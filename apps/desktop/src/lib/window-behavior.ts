@@ -1,4 +1,4 @@
-import type { WindowSettings } from '@mindwtr/core';
+import type { WindowSettings } from '@tinybubbles/core';
 
 export type DesktopCloseBehavior = NonNullable<WindowSettings['closeBehavior']>;
 

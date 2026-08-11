@@ -17,8 +17,8 @@ const coreMocks = vi.hoisted(() => ({
     getInMemoryAppDataSnapshot: vi.fn(),
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => ({
-    ...await importOriginal<typeof import('@mindwtr/core')>(),
+vi.mock('@tinybubbles/core', async (importOriginal) => ({
+    ...await importOriginal<typeof import('@tinybubbles/core')>(),
     getInMemoryAppDataSnapshot: coreMocks.getInMemoryAppDataSnapshot,
 }));
 
@@ -41,20 +41,20 @@ vi.mock('@/lib/settings-utils', () => ({
 vi.mock('@/lib/data-transfer', () => ({
     exportCurrentDataBackup: vi.fn(),
     importDgtData: vi.fn(),
-    importMindwtrCsvData: vi.fn(),
+    importTinyBubblesCsvData: vi.fn(),
     importOmniFocusData: vi.fn(),
     importTickTickData: vi.fn(),
     importTodoistData: vi.fn(),
     inspectBackupDocument: vi.fn(),
     inspectDgtDocument: vi.fn(),
-    inspectMindwtrCsvDocument: vi.fn(),
+    inspectTinyBubblesCsvDocument: vi.fn(),
     inspectOmniFocusDocument: vi.fn(),
     inspectTickTickDocument: vi.fn(),
     inspectTodoistDocument: vi.fn(),
     mergeDataFromBackup: vi.fn(),
     pickBackupDocument: vi.fn(),
     pickDgtDocument: vi.fn(),
-    pickMindwtrCsvDocument: vi.fn(),
+    pickTinyBubblesCsvDocument: vi.fn(),
     pickOmniFocusDocument: vi.fn(),
     pickTickTickDocument: vi.fn(),
     pickTodoistDocument: vi.fn(),
@@ -63,7 +63,7 @@ vi.mock('@/lib/data-transfer', () => ({
 }));
 
 import { Alert } from 'react-native';
-import { BackupSourceFileError } from '@mindwtr/core';
+import { BackupSourceFileError } from '@tinybubbles/core';
 
 import * as dataTransfer from '@/lib/data-transfer';
 import { useSyncSettingsBackupActions } from './use-sync-settings-backup-actions';
@@ -95,7 +95,7 @@ describe('useSyncSettingsBackupActions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         latest = null;
-        appLogMocks.ensureLogFilePath.mockResolvedValue('file://logs/mindwtr.log');
+        appLogMocks.ensureLogFilePath.mockResolvedValue('file://logs/tinybubbles.log');
         sharingMocks.isAvailableAsync.mockResolvedValue(true);
         sharingMocks.shareAsync.mockResolvedValue(undefined);
         coreMocks.getInMemoryAppDataSnapshot.mockReturnValue({
@@ -108,7 +108,7 @@ describe('useSyncSettingsBackupActions', () => {
         ['handleImportTickTick', 'import:ticktick'],
         ['handleImportDgt', 'import:dgt'],
         ['handleImportOmniFocus', 'import:omnifocus'],
-        ['handleImportMindwtrCsv', 'import:mindwtr-csv'],
+        ['handleImportTinyBubblesCsv', 'import:tinybubbles-csv'],
     ] as const)('tracks and clears the exact operation for %s cancellation', async (handlerName, action) => {
         await act(async () => {
             create(<Harness />);
@@ -190,7 +190,7 @@ describe('useSyncSettingsBackupActions', () => {
 
         await latest?.handleShareLog();
 
-        expect(sharingMocks.shareAsync).toHaveBeenCalledWith('file://logs/mindwtr.log', { mimeType: 'text/plain' });
+        expect(sharingMocks.shareAsync).toHaveBeenCalledWith('file://logs/tinybubbles.log', { mimeType: 'text/plain' });
         expect(showToast).not.toHaveBeenCalled();
     });
 

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { normalizeTimeSpentMinutes, tFallback } from '@mindwtr/core';
+import { normalizeTimeSpentMinutes, tFallback } from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import { useNativeDateInputLocale } from '../hooks/use-native-date-input-locale';
 import {

@@ -92,22 +92,22 @@ try {
   await sendRequest("initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
-    clientInfo: { name: "mindwtr-mcp-smoke", version: "0.0.0" },
+    clientInfo: { name: "tinybubbles-mcp-smoke", version: "0.0.0" },
   });
   initialized = true;
   sendNotification("notifications/initialized");
   const tools = await sendRequest("tools/list");
-  if (!Array.isArray(tools?.tools) || !tools.tools.some((tool) => tool.name === "mindwtr_list_tasks")) {
-    throw new Error("mindwtr_list_tasks was not advertised");
+  if (!Array.isArray(tools?.tools) || !tools.tools.some((tool) => tool.name === "tinybubbles_list_tasks")) {
+    throw new Error("tinybubbles_list_tasks was not advertised");
   }
   const result = await sendRequest("tools/call", {
-    name: "mindwtr_list_tasks",
+    name: "tinybubbles_list_tasks",
     arguments: { limit: 5 },
   });
   const text = result?.content?.[0]?.text;
   const payload = JSON.parse(text);
   if (!Array.isArray(payload.tasks)) {
-    throw new Error("mindwtr_list_tasks did not return a tasks array");
+    throw new Error("tinybubbles_list_tasks did not return a tasks array");
   }
   clearTimeout(timeout);
   child.stdin.end();

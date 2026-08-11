@@ -61,7 +61,7 @@ const createData = (attachments: Attachment[]): AppData => ({
 describe('sync-helpers normalizeCloudUrl', () => {
     it('appends /v1/data to a bare self-hosted base URL', () => {
         expect(normalizeCloudUrl('https://example.com')).toBe('https://example.com/v1/data');
-        expect(normalizeCloudUrl('https://example.com/mindwtr/')).toBe('https://example.com/mindwtr/v1/data');
+        expect(normalizeCloudUrl('https://example.com/tinybubbles/')).toBe('https://example.com/tinybubbles/v1/data');
     });
 
     it('appends /data when the versioned API base is already provided', () => {
@@ -77,17 +77,17 @@ describe('sync-helpers normalizeCloudUrl', () => {
 
 describe('sync-helpers normalizeWebdavUrl', () => {
     it('strips cache-busting query strings before appending data.json', () => {
-        expect(normalizeWebdavUrl('https://dav.example.com/mindwtr?_=1782668355219')).toBe(
-            'https://dav.example.com/mindwtr/data.json'
+        expect(normalizeWebdavUrl('https://dav.example.com/tinybubbles?_=1782668355219')).toBe(
+            'https://dav.example.com/tinybubbles/data.json'
         );
-        expect(normalizeWebdavUrl('https://dav.example.com/mindwtr/#sync')).toBe(
-            'https://dav.example.com/mindwtr/data.json#sync'
+        expect(normalizeWebdavUrl('https://dav.example.com/tinybubbles/#sync')).toBe(
+            'https://dav.example.com/tinybubbles/data.json#sync'
         );
     });
 
     it('strips cache-busting query strings from existing WebDAV data file URLs', () => {
-        expect(normalizeWebdavUrl('https://dav.example.com/mindwtr/data.json?_=1782668355219')).toBe(
-            'https://dav.example.com/mindwtr/data.json'
+        expect(normalizeWebdavUrl('https://dav.example.com/tinybubbles/data.json?_=1782668355219')).toBe(
+            'https://dav.example.com/tinybubbles/data.json'
         );
     });
 });

@@ -3,12 +3,12 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { closeDb, ensureMindwtrDbPath, openMindwtrDb } from './db.js';
+import { closeDb, ensureTinyBubblesDbPath, openTinyBubblesDb } from './db.js';
 
 const tempDirs: string[] = [];
 
 const createTempDir = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'mindwtr-mcp-db-'));
+  const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-mcp-db-'));
   tempDirs.push(dir);
   return dir;
 };
@@ -25,7 +25,7 @@ afterEach(() => {
 describe('mcp db bootstrap', () => {
   test('bootstraps a missing sqlite database from sibling data.json', async () => {
     const dir = createTempDir();
-    const dbPath = join(dir, 'mindwtr.db');
+    const dbPath = join(dir, 'tinybubbles.db');
     const dataPath = join(dir, 'data.json');
     const warnSpy = spyOn(console, 'warn').mockImplementation(() => undefined);
 
@@ -63,7 +63,7 @@ describe('mcp db bootstrap', () => {
         )
       );
 
-      const { db, path } = await openMindwtrDb({ dbPath, readonly: true });
+      const { db, path } = await openTinyBubblesDb({ dbPath, readonly: true });
       try {
         expect(path).toBe(dbPath);
         expect(existsSync(dbPath)).toBe(true);
@@ -83,8 +83,8 @@ describe('mcp db bootstrap', () => {
       } finally {
         closeDb(db);
       }
-      expect(warnSpy).toHaveBeenCalledWith(`[mindwtr-mcp] Bootstrapping SQLite database from fallback data.json: ${dataPath}`);
-      expect(warnSpy).toHaveBeenCalledWith(`[mindwtr-mcp] Bootstrapped SQLite database at: ${dbPath}`);
+      expect(warnSpy).toHaveBeenCalledWith(`[tinybubbles-mcp] Bootstrapping SQLite database from fallback data.json: ${dataPath}`);
+      expect(warnSpy).toHaveBeenCalledWith(`[tinybubbles-mcp] Bootstrapped SQLite database at: ${dbPath}`);
     } finally {
       warnSpy.mockRestore();
     }
@@ -92,10 +92,10 @@ describe('mcp db bootstrap', () => {
 
   test('keeps the original error when no db or fallback data exists', async () => {
     const dir = createTempDir();
-    const dbPath = join(dir, 'mindwtr.db');
+    const dbPath = join(dir, 'tinybubbles.db');
 
-    await expect(ensureMindwtrDbPath({ dbPath })).rejects.toThrow(
-      `Mindwtr database not found at: ${dbPath}`
+    await expect(ensureTinyBubblesDbPath({ dbPath })).rejects.toThrow(
+      `Tiny Bubbles database not found at: ${dbPath}`
     );
   });
 });

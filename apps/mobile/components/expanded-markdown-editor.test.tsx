@@ -5,8 +5,8 @@ import renderer, { act } from 'react-test-renderer';
 
 import { ExpandedMarkdownEditor } from './expanded-markdown-editor';
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   const storeState = {
     _allTasks: [],
     tasks: [],

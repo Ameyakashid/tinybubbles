@@ -17,11 +17,11 @@ import { addBreadcrumb } from './log-breadcrumbs';
 import { createImportDiagnostics, type ImportDiagnostic } from './import-diagnostics';
 import type { ImportSourceInput } from './import-source-reader';
 import {
-    applyMindwtrCsvImport,
-    parseMindwtrCsvImportSource,
-    type MindwtrCsvImportParseResult,
-    type ParsedMindwtrCsvImportData,
-} from './mindwtr-csv-import';
+    applyTinyBubblesCsvImport,
+    parseTinyBubblesCsvImportSource,
+    type TinyBubblesCsvImportParseResult,
+    type ParsedTinyBubblesCsvImportData,
+} from './tinybubbles-csv-import';
 import {
     applyOmniFocusImport,
     parseOmniFocusImportSource,
@@ -44,7 +44,7 @@ import {
 } from './todoist-import';
 import type { AppData, Attachment } from './types';
 
-export type ImportSourceId = 'backup' | 'backup-merge' | 'dgt' | 'mindwtr-csv' | 'omnifocus' | 'ticktick' | 'todoist';
+export type ImportSourceId = 'backup' | 'backup-merge' | 'dgt' | 'tinybubbles-csv' | 'omnifocus' | 'ticktick' | 'todoist';
 export type ImportPickerSourceId = Exclude<ImportSourceId, 'backup' | 'backup-merge'>;
 
 export type ImportDescriptorInput = ImportSourceInput & {
@@ -56,7 +56,7 @@ type RawImportSourceParseResultMap = {
     backup: BackupValidation;
     'backup-merge': BackupValidation;
     dgt: DgtImportParseResult;
-    'mindwtr-csv': MindwtrCsvImportParseResult;
+    'tinybubbles-csv': TinyBubblesCsvImportParseResult;
     omnifocus: OmniFocusImportParseResult;
     ticktick: TickTickImportParseResult;
     todoist: TodoistImportParseResult;
@@ -101,7 +101,7 @@ type ImportTypeMap = {
     todoist: { parsed: ParsedTodoistProject[]; result: ReturnType<typeof applyTodoistImport> };
     ticktick: { parsed: ParsedTickTickImportData; result: ReturnType<typeof applyTickTickImport> };
     dgt: { parsed: ParsedDgtImportData; result: ReturnType<typeof applyDgtImport> };
-    'mindwtr-csv': { parsed: ParsedMindwtrCsvImportData; result: ReturnType<typeof applyMindwtrCsvImport> };
+    'tinybubbles-csv': { parsed: ParsedTinyBubblesCsvImportData; result: ReturnType<typeof applyTinyBubblesCsvImport> };
     omnifocus: { parsed: ParsedOmniFocusImportData; result: ReturnType<typeof applyOmniFocusImport> };
 };
 
@@ -297,14 +297,14 @@ const IMPORT_DESCRIPTORS: { [S in ImportSourceId]: ImportDescriptor<S> } = {
             standaloneTasks: String(result.importedStandaloneTaskCount),
         }),
     },
-    'mindwtr-csv': {
-        operation: 'importMindwtrCsv',
-        source: 'mindwtr-csv',
-        startLabel: 'Mindwtr CSV import started',
-        completeLabel: 'Mindwtr CSV import complete',
-        parse: parseMindwtrCsvImportSource,
+    'tinybubbles-csv': {
+        operation: 'importTinyBubblesCsv',
+        source: 'tinybubbles-csv',
+        startLabel: 'Tiny Bubbles CSV import started',
+        completeLabel: 'Tiny Bubbles CSV import complete',
+        parse: parseTinyBubblesCsvImportSource,
         apply: (data, parsed) => {
-            const result = applyMindwtrCsvImport(data, parsed);
+            const result = applyTinyBubblesCsvImport(data, parsed);
             return { data: result.data, result };
         },
         countExtra: (result) => ({

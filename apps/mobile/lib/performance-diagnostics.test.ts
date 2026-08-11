@@ -16,8 +16,8 @@ const storeState = {
   sections: [{ id: 'section-1', title: 'Secret section' }],
 };
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     ...actual,
     useTaskStore: {
@@ -30,7 +30,7 @@ vi.mock('./app-log', () => ({
   logInfo: vi.fn(async () => 'file://test.log'),
 }));
 
-import { PERFORMANCE_LOG_MESSAGE, PERFORMANCE_LOG_SCOPE } from '@mindwtr/core';
+import { PERFORMANCE_LOG_MESSAGE, PERFORMANCE_LOG_SCOPE } from '@tinybubbles/core';
 import { logInfo } from './app-log';
 import {
   beginMobilePerformanceDiagnostic,

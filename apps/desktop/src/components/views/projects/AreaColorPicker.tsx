@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AREA_PRESET_COLORS, DEFAULT_AREA_COLOR } from '@mindwtr/core';
+import { AREA_PRESET_COLORS, DEFAULT_AREA_COLOR } from '@tinybubbles/core';
 import { Ban, Check } from 'lucide-react';
 
 type AreaColorPickerProps = {

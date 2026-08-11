@@ -1,5 +1,5 @@
-import type { AppData } from '@mindwtr/core';
-import { cloudDeleteFile, cloudPutFile, isAbortError, validateAttachmentForUpload, type Attachment } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
+import { cloudDeleteFile, cloudPutFile, isAbortError, validateAttachmentForUpload, type Attachment } from '@tinybubbles/core';
 import { logAttachmentWarn } from '../attachment-sync-utils';
 import {
   buildCloudKey,

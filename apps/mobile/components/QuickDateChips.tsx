@@ -6,7 +6,7 @@ import {
   QUICK_DATE_PRESETS,
   tFallback,
   type QuickDatePreset,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText } from '@/components/compact-text';

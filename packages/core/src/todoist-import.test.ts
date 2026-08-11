@@ -111,7 +111,7 @@ describe('todoist import', () => {
         expect(result.warnings).toContain('1 Todoist CSV file ended with an unclosed quoted field and was imported best-effort.');
     });
 
-    it('imports parsed Todoist projects into new Mindwtr projects and preserves a recovery-friendly warning trail', () => {
+    it('imports parsed Todoist projects into new Tiny Bubbles projects and preserves a recovery-friendly warning trail', () => {
         const existingProject: Project = {
             id: 'project-existing',
             title: 'Launch',

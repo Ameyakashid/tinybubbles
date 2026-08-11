@@ -7,7 +7,7 @@ import {
     Task,
     translateWithFallback,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { Play, Pause, RotateCcw, TimerReset, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/language-context';

@@ -201,8 +201,8 @@ vi.mock('./app-log', () => ({
   sanitizeLogMessage: (value: string) => value,
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     ...actual,
     webdavGetJson: coreMocks.webdavGetJson,
@@ -239,8 +239,8 @@ describe('mobile Dropbox sync transient retry', () => {
 
     asyncStorageMocks.getItem.mockImplementation(async (key: string) => {
       const values: Record<string, string | null> = {
-        '@mindwtr_sync_backend': 'cloud',
-        '@mindwtr_cloud_provider': 'dropbox',
+        '@tinybubbles_sync_backend': 'cloud',
+        '@tinybubbles_cloud_provider': 'dropbox',
       };
       return values[key] ?? null;
     });

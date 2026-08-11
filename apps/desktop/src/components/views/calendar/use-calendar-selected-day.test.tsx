@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { type ExternalCalendarEvent, type Task } from '@mindwtr/core';
+import { type ExternalCalendarEvent, type Task } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {

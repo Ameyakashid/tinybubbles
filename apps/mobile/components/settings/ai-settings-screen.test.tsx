@@ -1,7 +1,7 @@
 import React from 'react';
 import renderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getModelOptions, type AppData } from '@mindwtr/core';
+import { getModelOptions, type AppData } from '@tinybubbles/core';
 
 import { AISettingsScreen } from './ai-settings-screen';
 
@@ -14,7 +14,7 @@ const coreMocks = vi.hoisted(() => ({ fetchProviderModelsCached: vi.fn() }));
 const aiConfigMocks = vi.hoisted(() => ({ loadAIKey: vi.fn(), saveAIKey: vi.fn() }));
 const captured = vi.hoisted(() => ({ assistant: [] as Record<string, any>[] }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
     const { mockCore } = await import('../../test-support/mock-core');
     return mockCore(importOriginal, () => storeState, {
         fetchProviderModelsCached: coreMocks.fetchProviderModelsCached,

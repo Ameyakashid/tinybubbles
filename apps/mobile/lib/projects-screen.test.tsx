@@ -2,7 +2,7 @@ import React from 'react';
 import { FlatList, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Area, AppSettings, Project, Task } from '@mindwtr/core';
+import type { Area, AppSettings, Project, Task } from '@tinybubbles/core';
 
 import ProjectsScreen from '../app/(drawer)/projects-screen';
 
@@ -106,8 +106,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: asyncStorageMock,
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   const useTaskStore = Object.assign((selector?: (state: typeof storeState) => unknown) => (
     typeof selector === 'function' ? selector(storeState) : storeState
   ), {
@@ -350,7 +350,7 @@ describe('ProjectsScreen view state hydration', () => {
       await Promise.resolve();
     });
 
-    expect(asyncStorageMock.getItem).toHaveBeenCalledWith('mindwtr:view:projects:v1');
+    expect(asyncStorageMock.getItem).toHaveBeenCalledWith('tinybubbles:view:projects:v1');
     const hydratedList = tree.root.findByType(FlatList);
     expect(hydratedList.props.data.some((row: { type: string }) => row.type === 'project')).toBe(false);
   });

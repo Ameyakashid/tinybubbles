@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AppData } from '@mindwtr/core';
-import { createAIProvider, type AIProviderId } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
+import { createAIProvider, type AIProviderId } from '@tinybubbles/core';
 import { buildCopilotConfig, isAIKeyRequired, loadAIKey } from '../../../lib/ai-config';
 
 type CopilotSuggestion = { context?: string; tags?: string[] };

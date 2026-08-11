@@ -2,7 +2,7 @@ import React from 'react';
 import { TouchableOpacity } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Area, Project, Task } from '@mindwtr/core';
+import type { Area, Project, Task } from '@tinybubbles/core';
 
 const mocks = vi.hoisted(() => {
   const batchUpdateTasks = vi.fn(async () => undefined);
@@ -39,8 +39,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   return {
     ...actual,
     shallow: Object.is,

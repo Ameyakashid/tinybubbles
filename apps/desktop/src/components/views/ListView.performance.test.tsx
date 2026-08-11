@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
 import { render } from '@testing-library/react';
-import { useTaskStore, type Task } from '@mindwtr/core';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { LanguageProvider } from '../../contexts/language-context';

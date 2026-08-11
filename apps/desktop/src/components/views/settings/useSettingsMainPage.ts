@@ -11,7 +11,7 @@ import {
     type AppData,
     type NotificationSettings,
     type WindowSettings,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import type { Language } from '../../../contexts/language-context';
 import type { GlobalQuickAddShortcutSetting } from '../../../lib/global-quick-add-shortcut';

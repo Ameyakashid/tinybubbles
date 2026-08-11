@@ -1,5 +1,5 @@
 // Consolidation-law guard: TASK_RECURRENCE_INPUT_FIELD_KEYS (the key set of
-// recurrenceObjectSchema, the zod object mindwtr_add_task/mindwtr_update_task's recurrence
+// recurrenceObjectSchema, the zod object tinybubbles_add_task/tinybubbles_update_task's recurrence
 // input actually validates against) must still equal the 14-key list
 // packages/core/src/task-recurrence-fields.ts now shares with
 // apps/cloud/src/server-validation.ts's CLOUD_RECURRENCE_ALLOWED_KEYS (the same list, verbatim
@@ -8,7 +8,7 @@
 // second assertion ties the shared core list to the same pin.
 import { describe, expect, test } from 'bun:test';
 
-import { TASK_RECURRENCE_FIELD_KEYS } from '@mindwtr/core';
+import { TASK_RECURRENCE_FIELD_KEYS } from '@tinybubbles/core';
 
 import {
   normalizeNullableTaskTimeSpentMinutes,
@@ -26,7 +26,7 @@ const PINNED_RECURRENCE_FIELD_KEYS = [
 ];
 
 describe('recurrence field-key consolidation (single shared list, two consumers)', () => {
-  test("mindwtr_add_task/mindwtr_update_task's recurrence object schema exposes exactly the shared 14-key set", () => {
+  test("tinybubbles_add_task/tinybubbles_update_task's recurrence object schema exposes exactly the shared 14-key set", () => {
     expect([...TASK_RECURRENCE_INPUT_FIELD_KEYS].sort()).toEqual([...PINNED_RECURRENCE_FIELD_KEYS].sort());
   });
 

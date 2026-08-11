@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { CALENDAR_TIME_ESTIMATE_OPTIONS, getCalendarDayOfMonth, getShortWeekdayLabels, getTaskCalendarOccurrenceDate, isProjectedRecurringTask, isTaskFinished, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
+import { CALENDAR_TIME_ESTIMATE_OPTIONS, getCalendarDayOfMonth, getShortWeekdayLabels, getTaskCalendarOccurrenceDate, isProjectedRecurringTask, isTaskFinished, safeFormatDate, safeParseDate, type Task } from '@tinybubbles/core';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,7 +29,7 @@ import {
   buildTimedCalendarLayouts,
   type CalendarTimedLayout,
   type CalendarTimedLayoutInput,
-} from '@mindwtr/core/calendar-day-items';
+} from '@tinybubbles/core/calendar-day-items';
 import { styles } from './calendar/calendar-view.styles';
 import {
   isAllDayScheduledTask,

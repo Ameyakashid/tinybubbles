@@ -1,5 +1,5 @@
-import { normalizeClockTimeInput, type Area, type Project, type TimeEstimate } from '@mindwtr/core';
-import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
+import { normalizeClockTimeInput, type Area, type Project, type TimeEstimate } from '@tinybubbles/core';
+import { joinDateTime, splitDateTime } from '@tinybubbles/core/date-draft';
 
 export const parseTokenListInput = (value: string, prefix: '@' | '#'): string[] => Array.from(
     new Set(

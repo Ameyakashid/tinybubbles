@@ -1,7 +1,7 @@
-import { StorageAdapter, AppData } from '@mindwtr/core';
+import { StorageAdapter, AppData } from '@tinybubbles/core';
 import { logError } from './app-log';
 
-const DATA_KEY = 'mindwtr-data';
+const DATA_KEY = 'tinybubbles-data';
 const LEGACY_DATA_KEYS = ['focus-gtd-data', 'gtd-todo-data', 'gtd-data'];
 
 // Web version using localStorage

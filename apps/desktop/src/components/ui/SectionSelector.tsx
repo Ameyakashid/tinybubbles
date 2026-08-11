@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { Section } from '@mindwtr/core';
+import type { Section } from '@tinybubbles/core';
 import { ChevronDown, Plus } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useDropdownPosition } from './use-dropdown-position';

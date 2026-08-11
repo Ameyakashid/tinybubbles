@@ -10,7 +10,7 @@ import {
   type ParsedDgtImportData,
 } from './shared';
 
-const DGT_IMPORT_ID_NAMESPACE = 'mindwtr:dgt-import:v1';
+const DGT_IMPORT_ID_NAMESPACE = 'tinybubbles:dgt-import:v1';
 
 // New for this refactor: DGT previously minted a fresh uuid per entity on every apply, so
 // re-importing the same export duplicated everything. Deriving ids from source ids (like

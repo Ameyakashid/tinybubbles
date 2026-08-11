@@ -162,15 +162,15 @@ describe('recurrence', () => {
         expect(normalizeRecurrenceForLoad({ rule: 'daily', seriesId: ' series-1 ' })).toEqual({
             rule: 'daily',
             seriesId: 'series-1',
-            rrule: 'FREQ=DAILY;X-MINDWTR-SERIES-ID=series-1',
+            rrule: 'FREQ=DAILY;X-TINYBUBBLES-SERIES-ID=series-1',
         });
         expect(normalizeRecurrenceForLoad({
-            rrule: 'FREQ=WEEKLY;BYDAY=MO;X-MINDWTR-SERIES-ID=series%20two',
+            rrule: 'FREQ=WEEKLY;BYDAY=MO;X-TINYBUBBLES-SERIES-ID=series%20two',
         })).toEqual({
             rule: 'weekly',
             seriesId: 'series two',
             byDay: ['MO'],
-            rrule: 'FREQ=WEEKLY;BYDAY=MO;X-MINDWTR-SERIES-ID=series%20two',
+            rrule: 'FREQ=WEEKLY;BYDAY=MO;X-TINYBUBBLES-SERIES-ID=series%20two',
         });
     });
 

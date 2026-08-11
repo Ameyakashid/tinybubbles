@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { translateWithFallback } from '@mindwtr/core';
+import { translateWithFallback } from '@tinybubbles/core';
 
 import { TaskList, type TaskListGroupBy } from '../../components/task-list';
 import { useThemeColors } from '@/hooks/use-theme-colors';

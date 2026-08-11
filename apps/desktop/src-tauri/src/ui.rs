@@ -34,7 +34,7 @@ fn current_quick_add_focus_policy() -> QuickAddFocusPolicy {
 
 #[cfg(target_os = "macos")]
 fn capture_macos_previous_application_pid() -> Option<i32> {
-    let pid = unsafe { mindwtr_macos_frontmost_application_pid() };
+    let pid = unsafe { tinybubbles_macos_frontmost_application_pid() };
     (pid > 0).then_some(pid as i32)
 }
 
@@ -97,7 +97,7 @@ fn take_quick_add_focus_snapshot(app: &tauri::AppHandle) -> QuickAddFocusSnapsho
 #[cfg(target_os = "macos")]
 fn restore_macos_application(pid: i32) {
     if pid > 0 {
-        unsafe { mindwtr_macos_activate_application(pid as _) };
+        unsafe { tinybubbles_macos_activate_application(pid as _) };
     }
 }
 
@@ -324,7 +324,7 @@ pub(crate) fn set_global_quick_add_shortcut(
             None
         } else {
             Some(
-                "Flatpak/Wayland requires a desktop custom shortcut. Use: flatpak run tech.dongdongbh.mindwtr --quick-add"
+                "Flatpak/Wayland requires a desktop custom shortcut. Use: flatpak run app.tinybubbles --quick-add"
                     .to_string(),
             )
         };

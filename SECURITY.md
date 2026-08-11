@@ -2,7 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately via [GitHub security advisories](https://github.com/dongdongbh/Mindwtr/security/advisories/new). Do not open a public issue for anything exploitable.
+Please report vulnerabilities privately via [GitHub security advisories](https://github.com/tinybubbles-app/tinybubbles/security/advisories/new). Do not open a public issue for anything exploitable.
+
+If the vulnerability is inherited from upstream Mindwtr rather than specific to Tiny Bubbles, please also report it to [the upstream project](https://github.com/dongdongbh/Mindwtr/security/advisories/new) so its users are protected too.
 
 You can expect an initial response within a few days. There is no bug bounty; fixes are credited in the release notes unless you prefer otherwise.
 
@@ -19,4 +21,4 @@ Only the latest release receives security fixes. Older tags are immutable and ar
 
 ## Scope notes
 
-Mindwtr is local-first. The optional self-hosted cloud server authenticates with bearer tokens (hashed at rest, constant-time comparison) and is the main network-exposed surface; reports about it are especially welcome.
+Tiny Bubbles is local-first. The optional self-hosted cloud server authenticates with bearer tokens (hashed at rest, constant-time comparison) and is the main network-exposed surface; reports about it are especially welcome.

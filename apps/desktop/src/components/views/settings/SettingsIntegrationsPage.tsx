@@ -1,4 +1,4 @@
-import type { ExternalCalendarSubscription } from '@mindwtr/core';
+import type { ExternalCalendarSubscription } from '@tinybubbles/core';
 import type { SystemCalendarPermissionStatus, SystemCalendarPushTarget } from '../../../lib/system-calendar';
 
 import { SettingsCalendarPage } from './SettingsCalendarPage';

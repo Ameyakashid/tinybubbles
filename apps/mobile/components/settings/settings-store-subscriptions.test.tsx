@@ -12,7 +12,7 @@ const storeHarness = vi.hoisted(() => ({
     state: {} as Record<string, unknown>,
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     const ReactModule = await import('react');
     const identity = (state: unknown) => state;

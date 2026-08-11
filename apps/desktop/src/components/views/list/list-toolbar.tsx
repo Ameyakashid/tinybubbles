@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { ArrowUpDown } from 'lucide-react';
-import { tFallback, type TaskSortBy } from '@mindwtr/core';
+import { tFallback, type TaskSortBy } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { DONE_SORT_OPTIONS, SORT_OPTIONS } from '../../../lib/task-list-sort';
 import { ToolbarSelect } from './ToolbarSelect';

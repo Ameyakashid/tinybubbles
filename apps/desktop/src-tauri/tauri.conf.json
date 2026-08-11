@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Mindwtr",
+  "productName": "Tiny Bubbles",
   "version": "1.2.0",
-  "identifier": "tech.dongdongbh.mindwtr",
+  "identifier": "app.tinybubbles",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -14,7 +14,7 @@
       {
         "label": "main",
         "create": false,
-        "title": "Mindwtr",
+        "title": "Tiny Bubbles",
         "width": 1200,
         "height": 800,
         "resizable": true,
@@ -30,16 +30,16 @@
   },
   "bundle": {
     "active": true,
-    "homepage": "https://mindwtr.app",
+    "homepage": "https://github.com/tinybubbles-app/tinybubbles",
     "linux": {
       "deb": {
         "files": {
-          "/usr/share/applications/mindwtr.desktop": "./linux/mindwtr-window-matcher.desktop"
+          "/usr/share/applications/tinybubbles.desktop": "./linux/tinybubbles-window-matcher.desktop"
         }
       },
       "rpm": {
         "files": {
-          "/usr/share/applications/mindwtr.desktop": "./linux/mindwtr-window-matcher.desktop"
+          "/usr/share/applications/tinybubbles.desktop": "./linux/tinybubbles-window-matcher.desktop"
         }
       }
     },

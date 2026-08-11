@@ -340,7 +340,7 @@ class AlarmUtil {
     expect(openIntent).toContain('import android.net.Uri;');
     expect(openIntent).toContain('String taskId = bundle.getString("taskId")');
     expect(openIntent).toContain('intent.setAction(Intent.ACTION_VIEW)');
-    expect(openIntent).toContain('Uri.parse("mindwtr:///focus")');
+    expect(openIntent).toContain('Uri.parse("tinybubbles:///focus")');
     expect(openIntent).toContain('.appendQueryParameter("taskId", taskId)');
     expect(openIntent).toContain('.appendQueryParameter("taskTab", "view")');
 
@@ -511,11 +511,11 @@ static id _sharedInstance = nil;
 
     const output = applyAlarmIosUniqueIdentifierPatchToSource(input);
 
-    expect(output).toContain('static int64_t mindwtrAlarmIdCounter = 0;');
+    expect(output).toContain('static int64_t tinybubblesAlarmIdCounter = 0;');
     expect(output).not.toContain('@"%ld", (long) NSDate.date.timeIntervalSince1970');
-    const rewrittenSites = output.match(/mindwtrAlarmIdCounter = \(mindwtrAlarmIdCounter \+ 1\) % 1000;/g) ?? [];
+    const rewrittenSites = output.match(/tinybubblesAlarmIdCounter = \(tinybubblesAlarmIdCounter \+ 1\) % 1000;/g) ?? [];
     expect(rewrittenSites).toHaveLength(3);
-    expect(output).toContain('((int64_t)(NSDate.date.timeIntervalSince1970 * 1000.0)) * 1000 + mindwtrAlarmIdCounter');
+    expect(output).toContain('((int64_t)(NSDate.date.timeIntervalSince1970 * 1000.0)) * 1000 + tinybubblesAlarmIdCounter');
     // Idempotent: a second pass leaves the patched source untouched.
     expect(applyAlarmIosUniqueIdentifierPatchToSource(output)).toBe(output);
   });

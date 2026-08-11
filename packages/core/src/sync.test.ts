@@ -59,7 +59,7 @@ describe('Sync Logic', () => {
                 recurrence: {
                     rule: 'daily',
                     seriesId: 'series-a',
-                    rrule: 'FREQ=DAILY;X-MINDWTR-SERIES-ID=series-a',
+                    rrule: 'FREQ=DAILY;X-TINYBUBBLES-SERIES-ID=series-a',
                 },
             });
 
@@ -99,7 +99,7 @@ describe('Sync Logic', () => {
                 recurrence: {
                     rule: 'weekly',
                     seriesId: 'series-a',
-                    rrule: 'FREQ=WEEKLY;X-MINDWTR-SERIES-ID=series-a',
+                    rrule: 'FREQ=WEEKLY;X-TINYBUBBLES-SERIES-ID=series-a',
                 },
             });
 

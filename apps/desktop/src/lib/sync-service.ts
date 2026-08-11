@@ -60,7 +60,7 @@ import {
     type SyncRunCycleSetup,
     type SyncRunResult,
     type SyncTransport,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { getTauriHttpFetch } from './tauri-http';
 import { invokeNative } from './tauri-invoke';
@@ -2450,7 +2450,7 @@ export class SyncService {
                             {
                                 scope: 'sync',
                                 extra: mergeLog.extra,
-                                // Resolved conflicts must stay auditable in mindwtr.log even when
+                                // Resolved conflicts must stay auditable in tinybubbles.log even when
                                 // diagnostics logging is off; the extra carries ids and field names
                                 // only, never task content (#854).
                                 force: mergeLog.summary.conflicts > 0,

@@ -8,7 +8,7 @@ import { createService } from './service.js';
 const tempDirs: string[] = [];
 
 const createTempDir = (): string => {
-  const dir = mkdtempSync(join(tmpdir(), 'mindwtr-mcp-service-'));
+  const dir = mkdtempSync(join(tmpdir(), 'tinybubbles-mcp-service-'));
   tempDirs.push(dir);
   return dir;
 };
@@ -26,7 +26,7 @@ describe('mcp service', () => {
   test('delegates read operations through query deps', async () => {
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [{ id: 't1', title: 'Task', status: 'inbox', createdAt: '2026-01-01', updatedAt: '2026-01-01' }],
       listProjects: () => [{ id: 'p1', title: 'Project' }],
@@ -79,7 +79,7 @@ describe('mcp service', () => {
     let quickAddCalls = 0;
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [{ id: 'p1', title: 'Home' }],
@@ -149,7 +149,7 @@ describe('mcp service', () => {
     let receivedAddTaskInput: any = null;
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listProjects: () => [],
       parseQuickAdd: () => ({
@@ -199,7 +199,7 @@ describe('mcp service', () => {
     let addTaskCalls = 0;
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -253,7 +253,7 @@ describe('mcp service', () => {
     let receivedAddTaskInput: any = null;
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -314,7 +314,7 @@ describe('mcp service', () => {
     let receivedUpdateInput: any = null;
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => {
         closedDbCount += 1;
       },
@@ -381,7 +381,7 @@ describe('mcp service', () => {
   test('rejects addTask when token values are blank', async () => {
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -414,7 +414,7 @@ describe('mcp service', () => {
   test('rejects updateTask when token values exceed max length', async () => {
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -448,7 +448,7 @@ describe('mcp service', () => {
   test('rejects addTask input when both title and quickAdd are provided', async () => {
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -481,7 +481,7 @@ describe('mcp service', () => {
   test('rejects addTask title when length exceeds max bound', async () => {
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -515,7 +515,7 @@ describe('mcp service', () => {
   test('rejects addTask quickAdd when length exceeds max bound', async () => {
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -552,7 +552,7 @@ describe('mcp service', () => {
     let receivedAreaUpdate: any = null;
     const fakeDb = {} as any;
     const deps = {
-      openMindwtrDb: async () => ({ db: fakeDb }),
+      openTinyBubblesDb: async () => ({ db: fakeDb }),
       closeDb: () => undefined,
       listTasks: () => [],
       listProjects: () => [],
@@ -613,7 +613,7 @@ describe('mcp service', () => {
 
   test('persists write operations to a real sqlite database', async () => {
     const dir = createTempDir();
-    const dbPath = join(dir, 'mindwtr.db');
+    const dbPath = join(dir, 'tinybubbles.db');
     const dataPath = join(dir, 'data.json');
 
     writeFileSync(
@@ -734,7 +734,7 @@ describe('mcp service', () => {
         typeof persistedUpdatedTask.recurrence === 'object'
           ? persistedUpdatedTask.recurrence.rrule
           : undefined
-      ).toContain(`X-MINDWTR-SERIES-ID=${task.id}`);
+      ).toContain(`X-TINYBUBBLES-SERIES-ID=${task.id}`);
       await service.updateTask({ id: task.id, recurrence: null });
       expect((await service.getTask({ id: task.id })).recurrence).toBeUndefined();
       expect(persistedWaitingTask.assignedTo).toBe('Alexandra');
@@ -774,7 +774,7 @@ describe('mcp service error taxonomy (local core adapter)', () => {
         settings: {},
       }),
     );
-    return createService({ dbPath: join(dir, 'mindwtr.db'), readonly: false });
+    return createService({ dbPath: join(dir, 'tinybubbles.db'), readonly: false });
   };
 
   test('addTask with a bogus areaId is a validation error, not not_found', async () => {

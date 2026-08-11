@@ -1,4 +1,4 @@
-import type { MobileQuickAccessView } from '@mindwtr/core';
+import type { MobileQuickAccessView } from '@tinybubbles/core';
 
 export const DEFAULT_MOBILE_QUICK_ACCESS_VIEW: MobileQuickAccessView = 'review';
 

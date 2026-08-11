@@ -301,7 +301,7 @@ export const parseCsvRows = (
 };
 
 // Local-time formatting shared by importers that preserve an offset-less datetime as-is instead
-// of normalizing it through UTC (OmniFocus, Mindwtr CSV) — pure format mechanics, which is what
+// of normalizing it through UTC (OmniFocus, Tiny Bubbles CSV) — pure format mechanics, which is what
 // this module exists to own (see header comment).
 export const pad = (value: number, width = 2): string => String(value).padStart(width, '0');
 
@@ -331,7 +331,7 @@ export const getCell = (row: string[], headerIndex: Map<string, number>, key: st
     return String(row[index] ?? '').trim();
 };
 
-// Same concept in OmniFocus and DGT: normalize a free-text context name to Mindwtr's `@name`
+// Same concept in OmniFocus and DGT: normalize a free-text context name to Tiny Bubbles's `@name`
 // convention. (Not the same as OmniFocus's/DGT's *own* `normalizeContexts`/`normalizeTags`
 // functions, which parse an entire CSV token list or a whole JSON array respectively — those
 // happen to share a name across formats but do genuinely different things, so they stay local.)

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { RecurrenceByDay, RecurrenceWeekday, Task, TaskDraft, TaskDraftSetter } from '@mindwtr/core';
-import { buildRRuleString, parseRRuleString, safeParseDate } from '@mindwtr/core';
+import type { RecurrenceByDay, RecurrenceWeekday, Task, TaskDraft, TaskDraftSetter } from '@tinybubbles/core';
+import { buildRRuleString, parseRRuleString, safeParseDate } from '@tinybubbles/core';
 import { WEEKDAY_ORDER } from './recurrence-constants';
 
 type UseTaskItemRecurrenceProps = {

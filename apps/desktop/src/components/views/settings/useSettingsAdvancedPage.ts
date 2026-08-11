@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useTaskStore, type AppData } from '@mindwtr/core';
+import { useTaskStore, type AppData } from '@tinybubbles/core';
 
 import { reportError } from '../../../lib/report-error';
 import {

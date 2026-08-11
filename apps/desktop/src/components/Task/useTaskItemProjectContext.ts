@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Project, Section, Task, TaskDraftSetter, Area } from '@mindwtr/core';
-import { getFrequentTaskTokens, getPersonOptionNames, getUsedTaskTokens, useTaskStore } from '@mindwtr/core';
+import type { Project, Section, Task, TaskDraftSetter, Area } from '@tinybubbles/core';
+import { getFrequentTaskTokens, getPersonOptionNames, getUsedTaskTokens, useTaskStore } from '@tinybubbles/core';
 
 type UseTaskItemProjectContextParams = {
     task: Task;

@@ -1,4 +1,4 @@
-import { computeStableValueFingerprint, type AppData } from '@mindwtr/core';
+import { computeStableValueFingerprint, type AppData } from '@tinybubbles/core';
 
 const ENTITY_COLLECTION_KEYS = ['tasks', 'projects', 'sections', 'areas', 'people'] as const;
 type EntityCollectionKey = typeof ENTITY_COLLECTION_KEYS[number];
@@ -15,7 +15,7 @@ const sameEntitySnapshot = (left: unknown, right: unknown): boolean => (
 );
 
 const STORAGE_FALSE_DEFAULT_FIELDS: Partial<Record<EntityCollectionKey, readonly string[]>> = {
-    tasks: ['showFutureRecurrence', 'isFocusedToday', 'suppressMindwtrReminders'],
+    tasks: ['showFutureRecurrence', 'isFocusedToday', 'suppressTinyBubblesReminders'],
     projects: ['isSequential', 'isFocused'],
     sections: ['isCollapsed'],
 };

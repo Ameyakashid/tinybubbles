@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { resolveAndroidSystemBarStyle } from './android-system-bars';
 
 describe('android-system-bars', () => {
-  it('uses dark navigation buttons on light Mindwtr themes', () => {
+  it('uses dark navigation buttons on light Tiny Bubbles themes', () => {
     expect(resolveAndroidSystemBarStyle({ bg: '#F6F7FB' }, false)).toEqual({
       navigationBarColor: '#F6F7FB',
       darkNavigationButtons: true,
     });
   });
 
-  it('uses light navigation buttons on dark Mindwtr themes', () => {
+  it('uses light navigation buttons on dark Tiny Bubbles themes', () => {
     expect(resolveAndroidSystemBarStyle({ bg: '#151718' }, true)).toEqual({
       navigationBarColor: '#151718',
       darkNavigationButtons: false,

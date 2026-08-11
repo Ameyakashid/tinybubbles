@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 90
     env:
       VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY || secrets.VITE_DROPBOX_APP_KEY }}
-      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       VITE_DONATION_PROMPT_ENABLED: "true"
 
     steps:
@@ -103,7 +103,7 @@ jobs:
 
           TOOL_URL="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
           TOOL_WORKDIR="$(mktemp -d)"
-          METAINFO_SOURCE="$GITHUB_WORKSPACE/apps/desktop/src-tauri/linux/Mindwtr.metainfo.xml"
+          METAINFO_SOURCE="$GITHUB_WORKSPACE/apps/desktop/src-tauri/linux/TinyBubbles.metainfo.xml"
           curl -fsSL "$TOOL_URL" -o "$TOOL_WORKDIR/appimagetool.AppImage"
           chmod +x "$TOOL_WORKDIR/appimagetool.AppImage"
           (
@@ -146,9 +146,9 @@ jobs:
               if [ -f "$METAINFO_SOURCE" ]; then
                 mkdir -p appdir/usr/share/metainfo
                 rm -f appdir/usr/share/metainfo/*.xml
-                cp "$METAINFO_SOURCE" appdir/usr/share/metainfo/tech.dongdongbh.mindwtr.metainfo.xml
+                cp "$METAINFO_SOURCE" appdir/usr/share/metainfo/app.tinybubbles.metainfo.xml
                 # appdir-lint in AppImageHub looks for *.appdata.xml specifically.
-                cp "$METAINFO_SOURCE" appdir/usr/share/metainfo/tech.dongdongbh.mindwtr.appdata.xml
+                cp "$METAINFO_SOURCE" appdir/usr/share/metainfo/app.tinybubbles.appdata.xml
                 rm -f appdir/*.metainfo.xml appdir/*.appdata.xml || true
                 echo "Injected AppStream metainfo/appdata in usr/share/metainfo"
               fi
@@ -241,7 +241,7 @@ jobs:
               arm64) ARCH="aarch64" ;;
             esac
 
-            cp "$APPIMAGE_PATH" "release-artifacts/Mindwtr-${VERSION}-${ARCH}.AppImage"
+            cp "$APPIMAGE_PATH" "release-artifacts/TinyBubbles-${VERSION}-${ARCH}.AppImage"
           fi
 
           find apps/desktop/src-tauri/target -type f \( -name "*.deb" -o -name "*.rpm" \) -print0 | while IFS= read -r -d '' f; do

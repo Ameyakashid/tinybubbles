@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import type { AIReasoningEffort } from '@mindwtr/core';
+import type { AIReasoningEffort } from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CompactText } from '@/components/compact-text';

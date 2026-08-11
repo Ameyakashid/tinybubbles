@@ -24,7 +24,7 @@ import {
     type Task,
     type TaskStatus,
     type AIProviderId,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { Archive, ArrowRight, Calendar, Check, CheckSquare, ChevronDown, ChevronLeft, ChevronRight, History, Layers, MapPin, RefreshCw, X, type LucideIcon } from 'lucide-react';
 
 import { TaskItem } from '../../TaskItem';
@@ -387,7 +387,7 @@ export function WeeklyReviewGuideModal({ onClose }: WeeklyReviewGuideModalProps)
     };
 
     const openQuickAdd = (initialProps?: Partial<Task>) => {
-        window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+        window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
             detail: { initialProps: initialProps ?? {} },
         }));
     };

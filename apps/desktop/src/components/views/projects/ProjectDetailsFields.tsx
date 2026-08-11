@@ -1,4 +1,4 @@
-import { safeParseDate, type Project } from '@mindwtr/core';
+import { safeParseDate, type Project } from '@tinybubbles/core';
 import { Calendar, CalendarClock, FolderOpenDot, ListOrdered, Plus, Settings2, Signal, Tags } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { useNativeDateInputLocale } from '../../../hooks/use-native-date-input-locale';

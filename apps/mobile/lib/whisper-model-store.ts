@@ -20,7 +20,7 @@
 // native-aware resolver, not only synchronous Expo metadata).
 import { Directory, File, Paths } from 'expo-file-system';
 import { NativeModules } from 'react-native';
-import { WHISPER_MODEL_BASE_URL, WHISPER_MODELS } from '@mindwtr/core/whisper-models';
+import { WHISPER_MODEL_BASE_URL, WHISPER_MODELS } from '@tinybubbles/core/whisper-models';
 
 import { logWarn } from './app-log';
 import {

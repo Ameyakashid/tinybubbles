@@ -14,7 +14,7 @@ const ACCESS_SCOPES = [
 ];
 
 const DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS = 4 * 60 * 60;
-const DROPBOX_NATIVE_REDIRECT_URI = 'mindwtr://redirect';
+const DROPBOX_NATIVE_REDIRECT_URI = 'tinybubbles://redirect';
 
 const ensureDropboxClientId = (clientId: string): string => {
     const trimmed = clientId.trim();
@@ -25,7 +25,7 @@ const ensureDropboxClientId = (clientId: string): string => {
 };
 
 export const getDropboxRedirectUri = (): string => AuthSession.makeRedirectUri({
-    scheme: 'mindwtr',
+    scheme: 'tinybubbles',
     path: 'redirect',
     native: DROPBOX_NATIVE_REDIRECT_URI,
 });

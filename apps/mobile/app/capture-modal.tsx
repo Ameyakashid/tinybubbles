@@ -34,7 +34,7 @@ import {
   type Task,
   type TimeEstimate,
   useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { getAttachmentsDir } from '@/lib/attachment-sync-utils';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useToast } from '@/contexts/toast-context';

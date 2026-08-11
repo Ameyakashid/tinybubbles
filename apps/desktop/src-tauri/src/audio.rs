@@ -147,7 +147,7 @@ fn validate_managed_audio_path(data_dir: &Path, audio_path: &Path) -> Result<Pat
         canonicalize_existing_dir(&data_dir.join("audio-captures"), "audio capture directory")?;
     let audio_file = canonicalize_existing_file(audio_path, "audio file")?;
     if !audio_file.starts_with(&capture_dir) {
-        return Err("Audio file must be a managed Mindwtr capture".into());
+        return Err("Audio file must be a managed Tiny Bubbles capture".into());
     }
     Ok(audio_file)
 }
@@ -166,7 +166,7 @@ fn validate_managed_whisper_model_path(
             }
         }
     }
-    Err("Whisper model must be installed by Mindwtr".into())
+    Err("Whisper model must be installed by Tiny Bubbles".into())
 }
 
 fn validate_managed_parakeet_model_dir(
@@ -177,7 +177,7 @@ fn validate_managed_parakeet_model_dir(
     let expected_dir = fs::canonicalize(parakeet_model_dir(data_dir))
         .map_err(|error| format!("Invalid Parakeet model directory: {error}"))?;
     if model_dir != expected_dir {
-        return Err("Parakeet model must be installed by Mindwtr".into());
+        return Err("Parakeet model must be installed by Tiny Bubbles".into());
     }
     Ok(model_dir)
 }
@@ -357,7 +357,7 @@ fn audio_capture_file_name(now: SystemTime) -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_nanos();
-    Ok(format!("mindwtr-audio-{timestamp}.wav"))
+    Ok(format!("tinybubbles-audio-{timestamp}.wav"))
 }
 
 fn max_audio_sample_count(sample_rate: u32, channels: u16) -> usize {
@@ -1122,11 +1122,11 @@ mod tests {
 
     #[test]
     fn parakeet_model_dir_uses_app_data_install_folder() {
-        let data_dir = Path::new("/home/dd/.local/share/mindwtr");
+        let data_dir = Path::new("/home/dd/.local/share/tinybubbles");
 
         assert_eq!(
             parakeet_model_dir(data_dir),
-            PathBuf::from("/home/dd/.local/share/mindwtr/parakeet-model")
+            PathBuf::from("/home/dd/.local/share/tinybubbles/parakeet-model")
         );
     }
 
@@ -1238,8 +1238,8 @@ mod tests {
                 .expect("should format second capture name");
 
         assert_ne!(first, second);
-        assert_eq!(first, "mindwtr-audio-1000000000.wav");
-        assert_eq!(second, "mindwtr-audio-1000001000.wav");
+        assert_eq!(first, "tinybubbles-audio-1000000000.wav");
+        assert_eq!(second, "tinybubbles-audio-1000001000.wav");
     }
 
     #[test]
@@ -1277,7 +1277,7 @@ mod tests {
         );
         let error = validate_managed_audio_path(&data_dir, &outside)
             .expect_err("outside capture should be rejected");
-        assert!(error.contains("managed Mindwtr capture"));
+        assert!(error.contains("managed Tiny Bubbles capture"));
     }
 
     #[test]
@@ -1298,7 +1298,7 @@ mod tests {
         );
         let whisper_error = validate_managed_whisper_model_path(&data_dir, &outside_whisper)
             .expect_err("outside whisper model should be rejected");
-        assert!(whisper_error.contains("installed by Mindwtr"));
+        assert!(whisper_error.contains("installed by Tiny Bubbles"));
 
         let parakeet_dir = data_dir.join(PARAKEET_INSTALL_DIR_NAME);
         let outside_parakeet_dir = temp_dir.path().join(PARAKEET_INSTALL_DIR_NAME);
@@ -1312,7 +1312,7 @@ mod tests {
         );
         let parakeet_error = validate_managed_parakeet_model_dir(&data_dir, &outside_parakeet_dir)
             .expect_err("outside parakeet model should be rejected");
-        assert!(parakeet_error.contains("installed by Mindwtr"));
+        assert!(parakeet_error.contains("installed by Tiny Bubbles"));
     }
 
     #[test]

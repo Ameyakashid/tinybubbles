@@ -6,7 +6,7 @@ const path = require('path');
 const repoRoot = path.resolve(__dirname, '..', '..');
 const sourcePath = path.join(
   repoRoot,
-  'apps/mobile/ios-app-intents/MindwtrSiriCaptureIntents.swift'
+  'apps/mobile/ios-app-intents/TinyBubblesSiriCaptureIntents.swift'
 );
 const source = fs.readFileSync(sourcePath, 'utf8');
 
@@ -30,7 +30,7 @@ if (guardedSupportedModesMatches.length !== supportedModesMatches.length) {
 
 const appShortcutPhrases = source.match(/phrases:\s*\[[\s\S]*?\]/g) || [];
 if (appShortcutPhrases.length === 0) {
-  console.error('Expected Mindwtr AppShortcut phrases.');
+  console.error('Expected Tiny Bubbles AppShortcut phrases.');
   process.exit(1);
 }
 
@@ -51,7 +51,7 @@ if (parameterWrappedValueDefaults.length > 0) {
 const stringParameterInterpolation = /\\\(\\\.\$(task|note|tags|project)\)/;
 if (appShortcutPhrases.some((phraseBlock) => stringParameterInterpolation.test(phraseBlock))) {
   console.error(
-    'Mindwtr AppShortcut phrases must not interpolate String parameters.'
+    'Tiny Bubbles AppShortcut phrases must not interpolate String parameters.'
   );
   console.error(
     'The iOS 26 AppIntents metadata processor only accepts AppEntity/AppEnum values in shortcut phrases.'

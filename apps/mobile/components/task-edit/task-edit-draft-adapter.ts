@@ -1,4 +1,4 @@
-import type { Attachment, Task } from '@mindwtr/core';
+import type { Attachment, Task } from '@tinybubbles/core';
 import {
     areDraftAttachmentsDirty,
     createTaskDraft,
@@ -6,7 +6,7 @@ import {
     setTaskDraftField,
     taskDraftToUpdatePatch,
     type TaskDraft,
-} from '@mindwtr/core/task-draft';
+} from '@tinybubbles/core/task-draft';
 import { areTaskFieldValuesEqual } from './task-edit-modal.helpers';
 
 /**

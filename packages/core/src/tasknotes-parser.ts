@@ -52,13 +52,13 @@ const normalizeTaskNotesPriority = (value: unknown): TaskPriority | null => {
 
 const mapTaskNotesStatus = (value: string | boolean): {
     completed: boolean;
-    mindwtrStatus: ObsidianTaskNotesStatus;
+    tinybubblesStatus: ObsidianTaskNotesStatus;
     rawStatus: string;
 } => {
     if (typeof value === 'boolean') {
         return {
             completed: value,
-            mindwtrStatus: value ? 'done' : 'inbox',
+            tinybubblesStatus: value ? 'done' : 'inbox',
             rawStatus: value ? 'true' : 'false',
         };
     }
@@ -67,23 +67,23 @@ const mapTaskNotesStatus = (value: string | boolean): {
     switch (normalized) {
         case 'done':
         case 'completed':
-            return { completed: true, mindwtrStatus: 'done', rawStatus: normalized };
+            return { completed: true, tinybubblesStatus: 'done', rawStatus: normalized };
         case 'cancelled':
         case 'canceled':
-            return { completed: true, mindwtrStatus: 'archived', rawStatus: normalized };
+            return { completed: true, tinybubblesStatus: 'archived', rawStatus: normalized };
         case 'waiting':
-            return { completed: false, mindwtrStatus: 'waiting', rawStatus: normalized };
+            return { completed: false, tinybubblesStatus: 'waiting', rawStatus: normalized };
         case 'someday':
         case 'someday/maybe':
-            return { completed: false, mindwtrStatus: 'someday', rawStatus: normalized };
+            return { completed: false, tinybubblesStatus: 'someday', rawStatus: normalized };
         case 'in-progress':
         case 'active':
-            return { completed: false, mindwtrStatus: 'next', rawStatus: normalized };
+            return { completed: false, tinybubblesStatus: 'next', rawStatus: normalized };
         case 'none':
         case 'open':
         case 'todo':
         default:
-            return { completed: false, mindwtrStatus: 'inbox', rawStatus: normalized || 'open' };
+            return { completed: false, tinybubblesStatus: 'inbox', rawStatus: normalized || 'open' };
     }
 };
 
@@ -226,7 +226,7 @@ export const parseTaskNotesFile = (
             format: 'tasknotes',
             taskNotesData: {
                 rawStatus: mappedStatus.rawStatus,
-                mindwtrStatus: mappedStatus.mindwtrStatus,
+                tinybubblesStatus: mappedStatus.tinybubblesStatus,
                 priority: normalizeTaskNotesPriority(split.properties.priority),
                 dueDate: parseTaskNotesDate(split.properties.due),
                 scheduledDate: parseTaskNotesDate(split.properties.scheduled),

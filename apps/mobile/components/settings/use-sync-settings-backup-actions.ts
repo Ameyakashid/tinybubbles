@@ -10,38 +10,38 @@ import {
     summarizeBackupMerge,
     type ImportDiagnostic,
     type ImportDiagnosticSeverity,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import type {
     BackupValidation,
     DgtImportParseResult,
-    MindwtrCsvImportParseResult,
+    TinyBubblesCsvImportParseResult,
     OmniFocusImportParseResult,
     ParsedOmniFocusImportData,
     ParsedDgtImportData,
-    ParsedMindwtrCsvImportData,
+    ParsedTinyBubblesCsvImportData,
     ParsedTodoistProject,
     ParsedTickTickImportData,
     TickTickImportParseResult,
     TodoistImportParseResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import {
     exportCurrentDataBackup,
     importDgtData,
-    importMindwtrCsvData,
+    importTinyBubblesCsvData,
     importOmniFocusData,
     importTickTickData,
     importTodoistData,
     inspectBackupDocument,
     inspectDgtDocument,
-    inspectMindwtrCsvDocument,
+    inspectTinyBubblesCsvDocument,
     inspectOmniFocusDocument,
     inspectTickTickDocument,
     inspectTodoistDocument,
     mergeDataFromBackup,
     pickBackupDocument,
     pickDgtDocument,
-    pickMindwtrCsvDocument,
+    pickTinyBubblesCsvDocument,
     pickOmniFocusDocument,
     pickTickTickDocument,
     pickTodoistDocument,
@@ -60,7 +60,7 @@ export type BackupAction =
     | 'import:ticktick'
     | 'import:dgt'
     | 'import:omnifocus'
-    | 'import:mindwtr-csv'
+    | 'import:tinybubbles-csv'
     | `snapshot:${string}`;
 
 type UseSyncSettingsBackupActionsParams = {
@@ -252,7 +252,7 @@ export function useSyncSettingsBackupActions({
         return details.join('\n');
     }, [formatImportMessages, tr]);
 
-    const buildMindwtrCsvSummary = useCallback((preview: NonNullable<MindwtrCsvImportParseResult['preview']>) => {
+    const buildTinyBubblesCsvSummary = useCallback((preview: NonNullable<TinyBubblesCsvImportParseResult['preview']>) => {
         const projectLines = preview.projects
             .slice(0, 4)
             .map((project) => `• ${project.areaName ? `${project.areaName} / ` : ''}${project.name}: ${project.taskCount}`);
@@ -262,13 +262,13 @@ export function useSyncSettingsBackupActions({
         const details = [
             tr('settings.backupMobile.importTasksFromFile', { taskCount: preview.taskCount, fileName: preview.fileName }),
             preview.areaCount > 0
-                ? tr('settings.backupMobile.mindwtrCsvAreasWillBeCreated', { areaCount: preview.areaCount })
+                ? tr('settings.backupMobile.tinybubblesCsvAreasWillBeCreated', { areaCount: preview.areaCount })
                 : null,
             preview.projectCount > 0
                 ? tr('settings.backupMobile.projectsWillBeCreatedWhenNeeded', { projectCount: preview.projectCount })
                 : null,
             preview.sectionCount > 0
-                ? tr('settings.backupMobile.mindwtrCsvSectionsWillBeCreated', { sectionCount: preview.sectionCount })
+                ? tr('settings.backupMobile.tinybubblesCsvSectionsWillBeCreated', { sectionCount: preview.sectionCount })
                 : null,
             preview.checklistItemCount > 0
                 ? tr('settings.backupMobile.checklistItemsWillBePreserved', { checklistItemCount: preview.checklistItemCount })
@@ -327,7 +327,7 @@ export function useSyncSettingsBackupActions({
                     tr('settings.backupMobile.invalidBackup'),
                     formatImportError(
                         validation.diagnostics ?? createImportDiagnostics(validation.errors, 'error'),
-                        tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup'),
+                        tr('settings.backupMobile.thisFileIsNotAValidTinyBubblesBackup'),
                     )
                 );
                 return;
@@ -394,7 +394,7 @@ export function useSyncSettingsBackupActions({
                     tr('settings.backupMobile.invalidBackup'),
                     formatImportError(
                         validation.diagnostics ?? createImportDiagnostics(validation.errors, 'error'),
-                        tr('settings.backupMobile.thisFileIsNotAValidMindwtrBackup'),
+                        tr('settings.backupMobile.thisFileIsNotAValidTinyBubblesBackup'),
                     )
                 );
                 return;
@@ -532,10 +532,10 @@ export function useSyncSettingsBackupActions({
         }
     }, [formatImportMessages, formatThrownImportError, tr, refreshRecoverySnapshots, setBackupAction, showSettingsErrorToast, showToast]);
 
-    const confirmMindwtrCsvImport = useCallback(async (parsedData: ParsedMindwtrCsvImportData) => {
-        setBackupAction('import:mindwtr-csv');
+    const confirmTinyBubblesCsvImport = useCallback(async (parsedData: ParsedTinyBubblesCsvImportData) => {
+        setBackupAction('import:tinybubbles-csv');
         try {
-            const { snapshotName, result } = await importMindwtrCsvData(parsedData);
+            const { snapshotName, result } = await importTinyBubblesCsvData(parsedData);
             await refreshRecoverySnapshots();
             const details = [
                 tr('settings.backupMobile.importedTaskProjectSectionAreaCounts', {
@@ -695,28 +695,28 @@ export function useSyncSettingsBackupActions({
         }
     }, [buildOmniFocusSummary, confirmOmniFocusImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
-    const handleImportMindwtrCsv = useCallback(async () => {
-        setBackupAction('import:mindwtr-csv');
+    const handleImportTinyBubblesCsv = useCallback(async () => {
+        setBackupAction('import:tinybubbles-csv');
         try {
-            const document = await pickMindwtrCsvDocument();
+            const document = await pickTinyBubblesCsvDocument();
             if (!document) return;
-            const parseResult = await inspectMindwtrCsvDocument(document);
+            const parseResult = await inspectTinyBubblesCsvDocument(document);
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
                 showSettingsWarning(
                     tr('settings.backupMobile.importFailed'),
-                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedMindwtrCsvFile'))
+                    formatImportError(parseResult.diagnostics, tr('settings.backupMobile.theSelectedFileIsNotASupportedTinyBubblesCsvFile'))
                 );
                 return;
             }
             const parsedData = parseResult.parsedData;
             Alert.alert(
-                tr('settings.backupMobile.importMindwtrCsvData'),
-                buildMindwtrCsvSummary(parseResult.preview),
+                tr('settings.backupMobile.importTinyBubblesCsvData'),
+                buildTinyBubblesCsvSummary(parseResult.preview),
                 [
                     { text: tr('common.cancel'), style: 'cancel' },
                     {
                         text: tr('settings.backupMobile.import'),
-                        onPress: () => void confirmMindwtrCsvImport(parsedData),
+                        onPress: () => void confirmTinyBubblesCsvImport(parsedData),
                     },
                 ]
             );
@@ -726,7 +726,7 @@ export function useSyncSettingsBackupActions({
         } finally {
             setBackupAction(null);
         }
-    }, [buildMindwtrCsvSummary, confirmMindwtrCsvImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
+    }, [buildTinyBubblesCsvSummary, confirmTinyBubblesCsvImport, formatImportError, formatThrownImportError, tr, setBackupAction, showSettingsErrorToast, showSettingsWarning]);
 
     const handleRestoreRecoverySnapshot = useCallback(async (snapshotName: string) => {
         Alert.alert(
@@ -821,7 +821,7 @@ export function useSyncSettingsBackupActions({
         handleBackup,
         handleClearLog,
         handleImportDgt,
-        handleImportMindwtrCsv,
+        handleImportTinyBubblesCsv,
         handleImportOmniFocus,
         handleImportTickTick,
         handleImportTodoist,

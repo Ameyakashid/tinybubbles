@@ -10,7 +10,7 @@ use tauri_plugin_autostart::ManagerExt;
 /// Task id declared as <uap5:StartupTask> in the Microsoft Store AppxManifest
 /// (generated in .github/workflows/release-windows.yml). Keep both in sync.
 #[cfg(target_os = "windows")]
-const STORE_STARTUP_TASK_ID: &str = "MindwtrStartup";
+const STORE_STARTUP_TASK_ID: &str = "TinyBubblesStartup";
 const AUTOSTART_MIGRATION_COMPLETE: &str = "true";
 
 fn autostart_error(error: tauri_plugin_autostart::Error) -> String {
@@ -110,7 +110,7 @@ pub(crate) fn migrate_autostart_entry_if_pending(app: &tauri::AppHandle) {
 
 #[cfg(any(target_os = "linux", test))]
 fn flatpak_background_autostart_command() -> [&'static str; 2] {
-    ["mindwtr", "--startup"]
+    ["tinybubbles", "--startup"]
 }
 
 #[cfg(target_os = "linux")]
@@ -118,7 +118,7 @@ async fn set_flatpak_launch_at_startup_enabled(enabled: bool) -> Result<bool, St
     use ashpd::desktop::background::Background;
 
     let response = Background::request()
-        .reason("Keep reminders and sync running when Mindwtr is in the background")
+        .reason("Keep reminders and sync running when Tiny Bubbles is in the background")
         .auto_start(enabled)
         .dbus_activatable(false)
         .command(flatpak_background_autostart_command())
@@ -179,7 +179,7 @@ async fn set_store_launch_at_startup_enabled(enabled: bool) -> Result<bool, Stri
         // pretending the toggle worked.
         if state == StartupTaskState::DisabledByUser {
             return Err(
-                "Startup for Mindwtr is turned off in Windows. Enable it under Settings > Apps > Startup, then try again.".to_string(),
+                "Startup for Tiny Bubbles is turned off in Windows. Enable it under Settings > Apps > Startup, then try again.".to_string(),
             );
         }
         if state == StartupTaskState::DisabledByPolicy {
@@ -269,7 +269,7 @@ mod tests {
     fn flatpak_background_autostart_runs_the_app_with_startup_semantics() {
         assert_eq!(
             flatpak_background_autostart_command(),
-            ["mindwtr", "--startup"]
+            ["tinybubbles", "--startup"]
         );
     }
 }

@@ -57,7 +57,7 @@ jobs:
     timeout-minutes: 90
     env:
       VITE_DROPBOX_APP_KEY: ${{ vars.VITE_DROPBOX_APP_KEY || secrets.VITE_DROPBOX_APP_KEY }}
-      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || 'https://feedback.mindwtr.app' }}
+      VITE_FEEDBACK_ENDPOINT_URL: ${{ vars.VITE_FEEDBACK_ENDPOINT_URL || '' }}
       VITE_DONATION_PROMPT_ENABLED: "true"
 
     steps:
@@ -113,9 +113,9 @@ jobs:
             exit 0
           fi
 
-          KEYCHAIN_PATH="$RUNNER_TEMP/mindwtr-dev-id.keychain-db"
+          KEYCHAIN_PATH="$RUNNER_TEMP/tinybubbles-dev-id.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
-          CERT_PATH="$RUNNER_TEMP/mindwtr-dev-id.p12"
+          CERT_PATH="$RUNNER_TEMP/tinybubbles-dev-id.p12"
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
@@ -164,10 +164,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          PROFILE_PATH="$RUNNER_TEMP/mindwtr-dev-id.provisionprofile"
-          PROFILE_PLIST="$RUNNER_TEMP/mindwtr-dev-id-profile.plist"
-          EXPECTED_BUNDLE_ID="tech.dongdongbh.mindwtr"
-          EXPECTED_ICLOUD_CONTAINER="iCloud.tech.dongdongbh.mindwtr"
+          PROFILE_PATH="$RUNNER_TEMP/tinybubbles-dev-id.provisionprofile"
+          PROFILE_PLIST="$RUNNER_TEMP/tinybubbles-dev-id-profile.plist"
+          EXPECTED_BUNDLE_ID="app.tinybubbles"
+          EXPECTED_ICLOUD_CONTAINER="iCloud.app.tinybubbles"
 
           rm -f apps/desktop/src-tauri/embedded.provisionprofile
 
@@ -257,7 +257,7 @@ jobs:
           fi
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/mindwtr-dev-id.provisionprofile"
+          cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/tinybubbles-dev-id.provisionprofile"
           cp "$PROFILE_PATH" apps/desktop/src-tauri/embedded.provisionprofile
           echo "HAS_APPLE_PROVISIONING_PROFILE=1" >> "$GITHUB_ENV"
           echo "Installed Developer ID provisioning profile: ${PROFILE_NAME:-unknown}"
@@ -274,8 +274,8 @@ jobs:
           path = Path("apps/desktop/src-tauri/Entitlements.mac.plist")
           entitlements = plistlib.loads(path.read_bytes())
           expected_values = {
-              "com.apple.application-identifier": "5X9JC5PL7T.tech.dongdongbh.mindwtr",
-              "com.apple.developer.team-identifier": "5X9JC5PL7T",
+              "com.apple.application-identifier": "APPLE_TEAM_ID_PLACEHOLDER.app.tinybubbles",
+              "com.apple.developer.team-identifier": "APPLE_TEAM_ID_PLACEHOLDER",
               "com.apple.developer.icloud-container-environment": "Production",
           }
 
@@ -359,11 +359,11 @@ jobs:
           cd apps/desktop
 
           cleanup_dmg_mounts() {
-            # Detach stale Mindwtr DMG mounts that can make hdiutil report "Resource busy".
+            # Detach stale Tiny Bubbles DMG mounts that can make hdiutil report "Resource busy".
             local devices
             devices="$(hdiutil info | awk '
               /^\/dev\// { dev=$1 }
-              /\/Volumes\/Mindwtr/ { if (dev != "") print dev }
+              /\/Volumes\/Tiny Bubbles/ { if (dev != "") print dev }
             ' | sort -u)"
             if [ -n "${devices}" ]; then
               while IFS= read -r dev; do
@@ -416,7 +416,7 @@ jobs:
             exit 1
           fi
           codesign --verify --deep --strict --verbose=4 "$APP_PATH"
-          codesign -dvv "$APP_PATH/Contents/MacOS/mindwtr"
+          codesign -dvv "$APP_PATH/Contents/MacOS/tinybubbles"
           ENTITLEMENTS_PATH="$RUNNER_TEMP/macos-app-entitlements.plist"
           codesign -d --entitlements :- "$APP_PATH" > "$ENTITLEMENTS_PATH" 2>/dev/null || true
           if ! grep -Fq '<key>com.apple.security.personal-information.calendars</key>' "$ENTITLEMENTS_PATH"; then
@@ -442,8 +442,8 @@ jobs:
               echo "::error::Signed macOS app is missing embedded.provisionprofile."
               exit 1
             fi
-            expect_entitlement_value "com.apple.application-identifier" "5X9JC5PL7T.tech.dongdongbh.mindwtr"
-            expect_entitlement_value "com.apple.developer.team-identifier" "5X9JC5PL7T"
+            expect_entitlement_value "com.apple.application-identifier" "APPLE_TEAM_ID_PLACEHOLDER.app.tinybubbles"
+            expect_entitlement_value "com.apple.developer.team-identifier" "APPLE_TEAM_ID_PLACEHOLDER"
             expect_entitlement_value "com.apple.developer.icloud-container-environment" "Production"
             for key in \
               com.apple.developer.icloud-services \

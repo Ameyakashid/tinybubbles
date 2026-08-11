@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { SyncBackend } from './sync-service-utils';
 
-export const MOBILE_ONBOARDING_STORAGE_KEY = 'mindwtr:mobile:first-run-onboarding:v1';
+export const MOBILE_ONBOARDING_STORAGE_KEY = 'tinybubbles:mobile:first-run-onboarding:v1';
 
 type MobileFirstRunOnboardingState = {
   dataReady: boolean;

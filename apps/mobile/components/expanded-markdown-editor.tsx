@@ -26,7 +26,7 @@ import {
     type MarkdownSelection,
     type MarkdownToolbarActionId,
     type MarkdownToolbarResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useThemeColors } from '@/hooks/use-theme-colors';
 

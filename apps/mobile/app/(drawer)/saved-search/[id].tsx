@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus, tFallback } from '@mindwtr/core';
+import { useTaskStore, filterTasksBySearch, shallow, sortTasksBy, type Task, type TaskStatus, tFallback } from '@tinybubbles/core';
 import { SwipeableTaskItem, type TaskRowActions } from '@/components/swipeable-task-item';
 import { TASK_LIST_WINDOWING_PROPS } from '@/components/task-list-windowing';
 import { TaskEditModal } from '@/components/task-edit-modal';
@@ -9,7 +9,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';
-import { taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { taskMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { openContextsScreen, openProjectScreen } from '@/lib/task-meta-navigation';
 import { Trash2 } from 'lucide-react-native';
 import { resolveNonDoneTaskSortBy } from '@/lib/task-list-sort';

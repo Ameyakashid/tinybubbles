@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    isMindwtrMirrorCalendar,
+    isTinyBubblesMirrorCalendar,
     mergeExternalCalendarSources,
 } from './external-calendar-ingestion';
 
 describe('external calendar ingestion', () => {
-    it('recognizes managed Mindwtr calendar names without matching unrelated names', () => {
-        expect(isMindwtrMirrorCalendar({ name: ' Mindwtr Calendar ' })).toBe(true);
-        expect(isMindwtrMirrorCalendar({ name: 'mindwtrcal' })).toBe(true);
-        expect(isMindwtrMirrorCalendar({ name: 'Mindwtr Planning' })).toBe(false);
+    it('recognizes managed TinyBubbles calendar names without matching unrelated names', () => {
+        expect(isTinyBubblesMirrorCalendar({ name: ' TinyBubbles Calendar ' })).toBe(true);
+        expect(isTinyBubblesMirrorCalendar({ name: 'tinybubblescal' })).toBe(true);
+        expect(isTinyBubblesMirrorCalendar({ name: 'TinyBubbles Planning' })).toBe(false);
     });
 
     it('filters mirrored data, dedupes by event identity, and sorts deterministically', () => {
@@ -17,7 +17,7 @@ describe('external calendar ingestion', () => {
             {
                 calendars: [
                     { id: 'work', name: 'Work', url: 'ics://work', enabled: true },
-                    { id: 'mirror', name: 'Mindwtr', url: 'system://mirror', enabled: true },
+                    { id: 'mirror', name: 'TinyBubbles', url: 'system://mirror', enabled: true },
                 ],
                 events: [
                     {
@@ -47,7 +47,7 @@ describe('external calendar ingestion', () => {
                     {
                         id: 'pushed',
                         sourceId: 'work',
-                        title: 'Mindwtr: Pushed Task',
+                        title: 'TinyBubbles: Pushed Task',
                         start: '2026-07-23T11:00:00.000Z',
                         end: '2026-07-23T11:30:00.000Z',
                         allDay: false,

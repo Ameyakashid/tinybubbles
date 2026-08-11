@@ -88,7 +88,7 @@ const removeQuietly = async (path: string): Promise<void> => {
 
 const fileNameFromPath = (path: string): string => {
     const parts = path.split(/[\\/]/);
-    return parts[parts.length - 1] || 'mindwtr-audio.wav';
+    return parts[parts.length - 1] || 'tinybubbles-audio.wav';
 };
 
 const startNativeCapture = async (): Promise<AudioCaptureSession> => {
@@ -229,7 +229,7 @@ export async function startAudioCapture(
     options: { defaultName?: () => string } = {},
 ): Promise<AudioCaptureSession> {
     const timestampedName = options.defaultName
-        ?? (() => `mindwtr-audio-${new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')}.wav`);
+        ?? (() => `tinybubbles-audio-${new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, '')}.wav`);
 
     const preferredBackend = getPreferredDesktopAudioCaptureBackend({
         isTauriRuntime: isTauriRuntime(),

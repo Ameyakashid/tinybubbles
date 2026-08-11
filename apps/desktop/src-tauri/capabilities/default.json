@@ -38,10 +38,10 @@
       "identifier": "fs:scope",
       "allow": [
         {
-          "path": "$DATA/mindwtr"
+          "path": "$DATA/tinybubbles"
         },
         {
-          "path": "$DATA/mindwtr/**"
+          "path": "$DATA/tinybubbles/**"
         },
         {
           "path": "$DATA/attachments"
@@ -56,10 +56,10 @@
           "path": "$APPDATA/**"
         },
         {
-          "path": "$DATA/mindwtr/audio-captures/**"
+          "path": "$DATA/tinybubbles/audio-captures/**"
         },
         {
-          "path": "$DATA/mindwtr/whisper-models/**"
+          "path": "$DATA/tinybubbles/whisper-models/**"
         },
         {
           "path": "$RUNTIME/doc"

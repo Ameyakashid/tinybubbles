@@ -2,7 +2,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react';
 import type { ComponentProps, RefObject } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DragEndEvent } from '@dnd-kit/core';
-import type { Project, Section, Task } from '@mindwtr/core';
+import type { Project, Section, Task } from '@tinybubbles/core';
 
 import { useUiStore } from '../../../store/ui-store';
 import { LanguageProvider } from '../../../contexts/language-context';
@@ -215,7 +215,7 @@ describe('ProjectWorkspace sections-as-columns (#1019)', () => {
         fireEvent.click(getByRole('button', { name: 'Columns' }));
 
         expect(useUiStore.getState().projectLayouts).toEqual({ [project.id]: 'columns' });
-        expect(window.localStorage.getItem('mindwtr:project-layouts:v1'))
+        expect(window.localStorage.getItem('tinybubbles:project-layouts:v1'))
             .toBe(JSON.stringify({ [project.id]: 'columns' }));
         expect(getByRole('button', { name: 'Columns' })).toHaveAttribute('aria-pressed', 'true');
     });

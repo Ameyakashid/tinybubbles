@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Version bump script for Mindwtr monorepo.
+# Version bump script for Tiny Bubbles monorepo.
 # Usage:
 #   ./scripts/bump-version.sh 0.2.5
 #   ./scripts/bump-version.sh v1.0.5-rc.1
@@ -107,7 +107,7 @@ let content = fs.readFileSync(filePath, 'utf8');
 content = content.replace(/^(version:\s*)['"]?[^'"\n]+['"]?/m, `$1'${version}'`);
 content = content.replace(
   /^(\s*source:\s*).*/m,
-  `$1apps/desktop/src-tauri/target/release/bundle/deb/mindwtr_${version}_amd64.deb`
+  `$1apps/desktop/src-tauri/target/release/bundle/deb/tinybubbles_${version}_amd64.deb`
 );
 
 fs.writeFileSync(filePath, content);
@@ -157,10 +157,10 @@ if ! node scripts/ci/check-mobile-foss-lock-sync.js; then
     echo ""
     echo "Mobile FOSS package-lock.json does not match the FOSS dependency manifest."
     echo "Repair it before tagging with:"
-    echo "  cp apps/mobile/package.json /tmp/mindwtr-mobile-package.json.bak"
+    echo "  cp apps/mobile/package.json /tmp/tinybubbles-mobile-package.json.bak"
     echo "  bash apps/mobile/scripts/fdroid_prep.sh"
     echo "  npm install --package-lock-only --prefix apps/mobile --legacy-peer-deps --workspaces=false"
-    echo "  cp /tmp/mindwtr-mobile-package.json.bak apps/mobile/package.json"
+    echo "  cp /tmp/tinybubbles-mobile-package.json.bak apps/mobile/package.json"
     exit 1
 fi
 

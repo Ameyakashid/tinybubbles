@@ -1,4 +1,4 @@
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 
 type BulkSelectionToolbarProps = {
     selectionCount: number;

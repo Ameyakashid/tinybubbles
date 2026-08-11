@@ -1,4 +1,4 @@
-import type { Area, Project, ProjectAreaGroup, Task } from '@mindwtr/core';
+import type { Area, Project, ProjectAreaGroup, Task } from '@tinybubbles/core';
 
 export type ProjectListRow =
   | { type: 'section-label'; key: string; title: string }

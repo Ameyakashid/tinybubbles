@@ -1,6 +1,6 @@
-Tu cabeza te recuerda las cosas en el peor momento. Mindwtr les da un lugar seguro.
+Tu cabeza te recuerda las cosas en el peor momento. Tiny Bubbles les da un lugar seguro.
 
-Mindwtr es una aplicación de tareas gratuita y de código abierto basada en el método Getting Things Done (GTD). Apunta cada tarea e idea en cuanto aparece, ordénala en segundos y mira solo lo que puedes hacer ahora. Sin cuenta, sin suscripción, y tus datos se quedan en tu dispositivo.
+Tiny Bubbles es una aplicación de tareas gratuita y de código abierto basada en el método Getting Things Done (GTD). Apunta cada tarea e idea en cuanto aparece, ordénala en segundos y mira solo lo que puedes hacer ahora. Sin cuenta, sin suscripción, y tus datos se quedan en tu dispositivo.
 
 CÓMO FUNCIONA
 
@@ -9,9 +9,9 @@ CÓMO FUNCIONA
 3. Hazlo. La vista Enfoque muestra solo lo que puedes hacer ahora, nada más.
 4. Repasa cada semana. Una revisión guiada atrapa los cabos sueltos: la lista sigue siendo fiable y tu cabeza queda despejada.
 
-¿Nuevo en GTD? La idea es simple: tu cabeza sirve para tener ideas, no para guardarlas. Mindwtr te guía en cada paso.
+¿Nuevo en GTD? La idea es simple: tu cabeza sirve para tener ideas, no para guardarlas. Tiny Bubbles te guía en cada paso.
 
-POR QUÉ MINDWTR
+POR QUÉ TINYBUBBLES
 
 - Funciona totalmente sin conexión. No requiere cuenta.
 - Tus tareas se quedan en tu dispositivo. La sincronización es opcional y tú eliges dónde: Dropbox, una carpeta tuya, WebDAV, tu propio servidor o iCloud en dispositivos Apple.
@@ -26,4 +26,4 @@ SIMPLE POR DEFECTO, POTENTE CUANDO HACE FALTA
 
 Menos campos, menos ajustes, nada de estorbos. Las herramientas avanzadas, como el tablero kanban, la automatización y un asistente de IA opcional (con tu propia cuenta de IA), quedan ocultas hasta que las necesitas.
 
-Mindwtr significa "mind like water": la calma de no tener nada dando vueltas en la cabeza.
+Tiny Bubbles significa "mind like water": la calma de no tener nada dando vueltas en la cabeza.

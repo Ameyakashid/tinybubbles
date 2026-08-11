@@ -21,7 +21,7 @@ import {
   tFallback,
   type Task,
   type TaskStatus,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { useTheme } from '../../contexts/theme-context';

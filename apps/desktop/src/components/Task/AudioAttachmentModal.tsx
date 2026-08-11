@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { translateWithFallback, type Attachment } from '@mindwtr/core';
+import { translateWithFallback, type Attachment } from '@tinybubbles/core';
 import { Dialog, DialogBody } from '../ui/Dialog';
 
 type AudioAttachmentModalProps = {

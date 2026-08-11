@@ -20,12 +20,12 @@ import {
     type CalendarPushRunPorts,
     type CalendarSyncEntry,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import {
     CALENDAR_PUSH_SYNC_CONCURRENCY,
     createCalendarPushScheduler,
-} from '@mindwtr/core/calendar-push-scheduler';
+} from '@tinybubbles/core/calendar-push-scheduler';
 
 import { logInfo, logWarn } from './app-log';
 import { isTauriRuntime } from './runtime';
@@ -33,7 +33,7 @@ import { invokeNative } from './tauri-invoke';
 import {
     createSystemCalendarEventResult,
     deleteSystemCalendarEventResult,
-    ensureSystemMindwtrCalendar,
+    ensureSystemTinyBubblesCalendar,
     getSystemCalendarPlatform,
     getSystemCalendarPermissionStatus,
     getSystemCalendarPushTargets,
@@ -44,10 +44,10 @@ import {
     type SystemCalendarPushTarget,
 } from './system-calendar';
 
-const DESKTOP_CALENDAR_PUSH_ENABLED_KEY = 'mindwtr:desktop-calendar-push:enabled';
-const DESKTOP_CALENDAR_PUSH_TARGET_ID_KEY = 'mindwtr:desktop-calendar-push:target-calendar-id';
-const DESKTOP_CALENDAR_PUSH_MANAGED_ID_KEY = 'mindwtr:desktop-calendar-push:managed-calendar-id';
-const ACCOUNT_TARGET_TITLE_PREFIX = 'Mindwtr: ';
+const DESKTOP_CALENDAR_PUSH_ENABLED_KEY = 'tinybubbles:desktop-calendar-push:enabled';
+const DESKTOP_CALENDAR_PUSH_TARGET_ID_KEY = 'tinybubbles:desktop-calendar-push:target-calendar-id';
+const DESKTOP_CALENDAR_PUSH_MANAGED_ID_KEY = 'tinybubbles:desktop-calendar-push:managed-calendar-id';
+const ACCOUNT_TARGET_TITLE_PREFIX = 'Tiny Bubbles: ';
 const PROJECTED_RECURRENCE_EVENT_DATE_FORMAT = 'PP';
 
 type CalendarPushTarget = {
@@ -58,7 +58,7 @@ type CalendarPushTarget = {
 type DesktopCalendarPushDependencies = {
     createEvent: (details: SystemCalendarEventDetails) => Promise<SystemCalendarEventWriteResult>;
     deleteEvent: (eventId: string) => Promise<SystemCalendarEventWriteResult>;
-    ensureMindwtrCalendar: (storedCalendarId?: string | null) => Promise<SystemCalendarPushTarget | null>;
+    ensureTinyBubblesCalendar: (storedCalendarId?: string | null) => Promise<SystemCalendarPushTarget | null>;
     getAllSyncEntries: (platform: string) => Promise<CalendarSyncEntry[]>;
     getManagedCalendarId: () => Promise<string | null>;
     getPermissionStatus: typeof getSystemCalendarPermissionStatus;
@@ -161,7 +161,7 @@ const defaultDependencies: DesktopCalendarPushDependencies = {
     createEvent: createSystemCalendarEventResult,
     deleteEvent: deleteSystemCalendarEventResult,
     deleteSyncEntry: deleteCalendarSyncEntry,
-    ensureMindwtrCalendar: ensureSystemMindwtrCalendar,
+    ensureTinyBubblesCalendar: ensureSystemTinyBubblesCalendar,
     getAllSyncEntries: getAllCalendarSyncEntries,
     getManagedCalendarId: getDesktopCalendarPushManagedCalendarId,
     getPermissionStatus: getSystemCalendarPermissionStatus,
@@ -190,13 +190,13 @@ export const getDesktopCalendarPushTargetCalendars = async (): Promise<SystemCal
     return dependencies.getTargets();
 };
 
-const isMindwtrDedicatedTarget = (target: Pick<SystemCalendarPushTarget, 'isMindwtrDedicated' | 'name'>): boolean => (
-    target.isMindwtrDedicated || target.name.trim().toLowerCase() === 'mindwtr'
+const isTinyBubblesDedicatedTarget = (target: Pick<SystemCalendarPushTarget, 'isTinyBubblesDedicated' | 'name'>): boolean => (
+    target.isTinyBubblesDedicated || target.name.trim().toLowerCase() === 'tinybubbles'
 );
 
-async function ensureDesktopMindwtrCalendar(): Promise<SystemCalendarPushTarget | null> {
+async function ensureDesktopTinyBubblesCalendar(): Promise<SystemCalendarPushTarget | null> {
     const storedCalendarId = await dependencies.getManagedCalendarId();
-    const target = await dependencies.ensureMindwtrCalendar(storedCalendarId);
+    const target = await dependencies.ensureTinyBubblesCalendar(storedCalendarId);
     if (!target) {
         await dependencies.removeManagedCalendarId();
         return null;
@@ -213,17 +213,17 @@ async function resolveCalendarPushTarget(): Promise<CalendarPushTarget | null> {
         if (selected) {
             return {
                 id: selected.id,
-                shouldPrefixTitles: !isMindwtrDedicatedTarget(selected),
+                shouldPrefixTitles: !isTinyBubblesDedicatedTarget(selected),
             };
         }
         await dependencies.setTargetCalendarId(null);
-        void logWarn('Selected system calendar push target is unavailable; falling back to Mindwtr calendar', {
+        void logWarn('Selected system calendar push target is unavailable; falling back to Tiny Bubbles calendar', {
             scope: 'calendar-push',
             extra: { calendarId: selectedId },
         });
     }
 
-    const managed = await ensureDesktopMindwtrCalendar();
+    const managed = await ensureDesktopTinyBubblesCalendar();
     return managed ? { id: managed.id, shouldPrefixTitles: false } : null;
 }
 
@@ -255,8 +255,8 @@ function formatCalendarEventTitle(title: string, shouldPrefixTitle: boolean, occ
 function formatProjectedRecurrenceNote(task: Task): string {
     const occurrenceDateLabel = formatProjectedRecurrenceEventDate(task);
     return occurrenceDateLabel
-        ? `Projected recurring occurrence for ${occurrenceDateLabel}. Complete the current Mindwtr task to create the real next task.`
-        : 'Projected recurring occurrence. Complete the current Mindwtr task to create the real next task.';
+        ? `Projected recurring occurrence for ${occurrenceDateLabel}. Complete the current Tiny Bubbles task to create the real next task.`
+        : 'Projected recurring occurrence. Complete the current Tiny Bubbles task to create the real next task.';
 }
 
 function buildEventDetails(task: Task, target: CalendarPushTarget): SystemCalendarEventDetails {
@@ -506,7 +506,7 @@ export const enableDesktopCalendarPush = async (): Promise<boolean> => {
     if (permission !== 'granted') return false;
     const selectedTargetId = await dependencies.getTargetCalendarId();
     if (!selectedTargetId) {
-        const managed = await ensureDesktopMindwtrCalendar();
+        const managed = await ensureDesktopTinyBubblesCalendar();
         if (!managed) return false;
     }
     await dependencies.setPushEnabled(true);

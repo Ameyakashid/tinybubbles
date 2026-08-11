@@ -9,7 +9,7 @@
 import { existsSync, readFileSync, readdirSync, unlinkSync } from 'fs';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { join } from 'path';
-import { buildCalendarFeed } from '@mindwtr/core';
+import { buildCalendarFeed } from '@tinybubbles/core';
 
 import { corsOrigin } from './server-config';
 import { loadAppData } from './server-data-cache';
@@ -107,7 +107,7 @@ export const calendarFeedResponse = (dataDir: string, key: string): Response => 
             // and times. `no-cache` still permits shared caches to retain it;
             // never let a reverse proxy or browser cache store the feed (#952).
             'Cache-Control': 'private, no-store',
-            'Content-Disposition': 'inline; filename="mindwtr.ics"',
+            'Content-Disposition': 'inline; filename="tinybubbles.ics"',
             'Content-Type': 'text/calendar; charset=utf-8',
         },
     });

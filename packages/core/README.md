@@ -1,6 +1,6 @@
-# @mindwtr/core
+# @tinybubbles/core
 
-Shared domain logic for Mindwtr desktop/mobile/cloud layers.
+Shared domain logic for Tiny Bubbles desktop/mobile/cloud layers.
 
 Includes:
 
@@ -14,12 +14,12 @@ Includes:
 Run from repository root:
 
 ```bash
-bun run --filter @mindwtr/core test
+bun run --filter @tinybubbles/core test
 ```
 
 ## Documentation
 
-Detailed architecture and API docs are maintained in the public docs site. Source edits belong in the Mindwtr web docs source:
+Detailed architecture and API docs are maintained in the public docs site. Source edits belong in the Tiny Bubbles web docs source:
 
 - https://docs.mindwtr.app/
 - https://github.com/dongdongbh/mindwtr-web/tree/main/docs

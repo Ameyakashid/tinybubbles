@@ -1,11 +1,11 @@
 [package]
-name = "mindwtr"
+name = "tinybubbles"
 version = "1.2.0"
-description = "A complete Getting Things Done (GTD) productivity system - Mind Like Water"
-authors = ["DongDong"]
+description = "A complete Getting Things Done (GTD) productivity system"
+authors = ["Tiny Bubbles contributors"]
 license = "AGPL-3.0-only"
-repository = "https://github.com/dongdongbh/Mindwtr"
-homepage = "https://mindwtr.app"
+repository = "https://github.com/tinybubbles-app/tinybubbles"
+homepage = "https://github.com/tinybubbles-app/tinybubbles"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -31,7 +31,7 @@ tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = { version = "2", features = ["watch"] }
 tauri-plugin-global-shortcut = "2"
-# Mindwtr uses header/token authentication, not cookie sessions. Keeping the
+# Tiny Bubbles uses header/token authentication, not cookie sessions. Keeping the
 # plugin's default `cookies` feature would create `.cookies` under the OS app
 # cache on every launch, which breaks Windows portable mode (#855).
 tauri-plugin-http = { version = "2", default-features = false, features = ["rustls-tls", "http2", "charset", "macos-system-configuration"] }

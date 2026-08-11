@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { type Language, getSystemDefaultLanguage, loadTranslations, loadStoredLanguage, saveStoredLanguage } from '@mindwtr/core';
+import { type Language, getSystemDefaultLanguage, loadTranslations, loadStoredLanguage, saveStoredLanguage } from '@tinybubbles/core';
 import { logError } from '../lib/app-log';
 import { markStartupPhase, measureStartupPhase } from '../lib/startup-profiler';
 

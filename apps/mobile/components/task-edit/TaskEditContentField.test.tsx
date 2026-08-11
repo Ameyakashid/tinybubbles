@@ -3,7 +3,7 @@ import { Platform, Text, TextInput, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { TaskEditContentField } from './TaskEditContentField';
 

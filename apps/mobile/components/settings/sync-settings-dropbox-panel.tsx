@@ -48,7 +48,7 @@ export function SyncDropboxBackendPanel({
                 <View style={styles.settingRowColumn}>
                     <Text style={[styles.settingLabel, { color: tc.text }]}>{tr('settings.dropboxAppKey')}</Text>
                     <Text style={[styles.settingDescription, { color: tc.secondaryText, marginTop: 6 }]}>
-                        {tr('settings.syncMobile.oauthWithDropboxAppFolderAccessMindwtrSyncsAppsMindwtr')}
+                        {tr('settings.syncMobile.oauthWithDropboxAppFolderAccessTinyBubblesSyncsAppsTinyBubbles')}
                     </Text>
                     <Text style={[styles.settingDescription, { color: tc.secondaryText, marginTop: 6 }]}>
                         {tr('settings.dropboxRedirectUri')}: {redirectUri}

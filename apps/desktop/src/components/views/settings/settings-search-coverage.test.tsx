@@ -7,7 +7,7 @@ import {
     getSettingsSearchEntryKeys,
     resolveSettingsSearchI18nKey,
     type SettingsSearchPageId,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { getEnglishSettingsLabels } from './labels';
 import { SettingsAboutPage } from './SettingsAboutPage';
@@ -226,7 +226,7 @@ const dataProps: Parameters<typeof SettingsDataPage>[0] = {
     // Diagnostics is a Tauri-only section; the log path row needs logging on.
     isTauri: true,
     loggingEnabled: true,
-    logPath: '/tmp/mindwtr.log',
+    logPath: '/tmp/tinybubbles.log',
     analyticsHeartbeatAvailable: true,
     analyticsHeartbeatEnabled: true,
     onToggleLogging: noop,
@@ -240,7 +240,7 @@ const dataProps: Parameters<typeof SettingsDataPage>[0] = {
     onImportTickTick: noop,
     onImportDgt: noop,
     onImportOmniFocus: noop,
-    onImportMindwtrCsv: noop,
+    onImportTinyBubblesCsv: noop,
     onAddGettingStartedContent: noop,
     attachmentsLastCleanupDisplay: 'Never',
     pendingRemoteDeleteCount: 0,

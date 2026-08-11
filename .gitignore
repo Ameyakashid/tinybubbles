@@ -103,7 +103,7 @@ docs/agents
 scripts/ci/__pycache__/
 
 # Wiki (maintained in separate repo)
-Mindwtr.wiki/
+TinyBubbles.wiki/
 
 # Local workspace configuration
 .worktrees/

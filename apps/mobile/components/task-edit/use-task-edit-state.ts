@@ -1,10 +1,10 @@
 import React from 'react';
-import { type Attachment, type RecurrenceWeekday, type Task } from '@mindwtr/core';
+import { type Attachment, type RecurrenceWeekday, type Task } from '@tinybubbles/core';
 import {
     setTaskDraftField,
     type TaskDraft,
     type TaskDraftField,
-} from '@mindwtr/core/task-draft';
+} from '@tinybubbles/core/task-draft';
 import { getRecurrenceByDayValue } from './recurrence-utils';
 import {
     createTaskEditDraft,

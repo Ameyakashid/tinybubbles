@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 
 import { LanguageProvider } from '../../contexts/language-context';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 import { ObsidianService } from '../../lib/obsidian-service';
 import { useObsidianStore } from '../../store/obsidian-store';
 import { ObsidianView } from './ObsidianView';
@@ -32,7 +32,7 @@ beforeEach(() => {
                 vaultPath: null,
                 vaultName: '',
                 scanFolders: ['/'],
-                inboxFile: 'Mindwtr/Inbox.md',
+                inboxFile: 'Tiny Bubbles/Inbox.md',
                 taskNotesIncludeArchived: false,
                 dataviewMetadataEnabled: false,
                 newTaskFormat: 'auto',
@@ -83,7 +83,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: false,
                     newTaskFormat: 'auto',
@@ -133,7 +133,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: false,
                     newTaskFormat: 'auto',
@@ -205,7 +205,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: false,
                     newTaskFormat: 'auto',
@@ -234,7 +234,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: false,
                     newTaskFormat: 'auto',
@@ -265,7 +265,7 @@ describe('ObsidianView', () => {
                     format: 'tasknotes',
                     taskNotesData: {
                         rawStatus: 'in-progress',
-                        mindwtrStatus: 'next',
+                        tinybubblesStatus: 'next',
                         priority: 'high',
                         dueDate: '2025-01-15',
                         scheduledDate: '2025-01-14',
@@ -300,7 +300,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: true,
                     newTaskFormat: 'auto',
@@ -349,7 +349,7 @@ describe('ObsidianView', () => {
         expect(getByText(/Scheduled:/)).toBeInTheDocument();
     });
 
-    it('brings an imported Obsidian task into Mindwtr with a source backlink', async () => {
+    it('brings an imported Obsidian task into Tiny Bubbles with a source backlink', async () => {
         const toggleInline = vi.spyOn(ObsidianService, 'toggleTask');
         const toggleTaskNotes = vi.spyOn(ObsidianService, 'toggleTaskNotesTask');
         act(() => {
@@ -374,7 +374,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: true,
                     newTaskFormat: 'auto',
@@ -415,7 +415,7 @@ describe('ObsidianView', () => {
 
         const { getByRole } = renderWithProviders();
 
-        fireEvent.click(getByRole('button', { name: 'Bring into Mindwtr' }));
+        fireEvent.click(getByRole('button', { name: 'Bring into Tiny Bubbles' }));
 
         await waitFor(() => {
             const createdTask = useTaskStore.getState()._allTasks.find((task) => task.title === 'Draft launch brief');
@@ -434,7 +434,7 @@ describe('ObsidianView', () => {
             });
         });
 
-        fireEvent.click(getByRole('button', { name: 'Bring into Mindwtr' }));
+        fireEvent.click(getByRole('button', { name: 'Bring into Tiny Bubbles' }));
 
         await waitFor(() => {
             const createdTasks = useTaskStore.getState()._allTasks.filter((task) => (
@@ -487,7 +487,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: false,
                     newTaskFormat: 'auto',
@@ -536,7 +536,7 @@ describe('ObsidianView', () => {
         });
 
         const { getAllByRole } = renderWithProviders();
-        const promoteButtons = getAllByRole('button', { name: 'Bring into Mindwtr' });
+        const promoteButtons = getAllByRole('button', { name: 'Bring into Tiny Bubbles' });
 
         fireEvent.click(promoteButtons[0]);
         await waitFor(() => {
@@ -572,7 +572,7 @@ describe('ObsidianView', () => {
             }));
         });
 
-        fireEvent.click(getAllByRole('button', { name: 'Bring into Mindwtr' })[0]);
+        fireEvent.click(getAllByRole('button', { name: 'Bring into Tiny Bubbles' })[0]);
         await waitFor(() => {
             expect(useTaskStore.getState()._allTasks.filter((task) => task.title === 'Draft launch brief')).toHaveLength(2);
         });
@@ -621,7 +621,7 @@ describe('ObsidianView', () => {
                     vaultPath: '/Vault',
                     vaultName: 'Vault',
                     scanFolders: ['/'],
-                    inboxFile: 'Mindwtr/Inbox.md',
+                    inboxFile: 'Tiny Bubbles/Inbox.md',
                     taskNotesIncludeArchived: false,
                     dataviewMetadataEnabled: false,
                     newTaskFormat: 'auto',
@@ -651,7 +651,7 @@ describe('ObsidianView', () => {
         });
 
         const { getByRole } = renderWithProviders();
-        fireEvent.click(getByRole('button', { name: 'Bring into Mindwtr' }));
+        fireEvent.click(getByRole('button', { name: 'Bring into Tiny Bubbles' }));
 
         expect(addTask).not.toHaveBeenCalled();
         expect(useTaskStore.getState()._allTasks).toEqual([legacyTask]);

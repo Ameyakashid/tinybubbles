@@ -107,7 +107,7 @@ const defaultReviewLabels: ReviewLabels = {
     calendarDesc: 'Review your hard landscape first: a compact summary of the next 7 days.',
     calendarEmpty: 'No calendar events in this range.',
     calendarUpcoming: 'Next 7 days',
-    calendarTasks: 'Mindwtr tasks (next 7 days)',
+    calendarTasks: 'Tiny Bubbles tasks (next 7 days)',
     calendarTasksEmpty: 'No scheduled/due tasks in this range.',
     dueLabel: 'Due',
     startLabel: 'Start',

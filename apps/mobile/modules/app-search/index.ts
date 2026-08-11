@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 
 import type { AppSearchDoc } from '@/lib/app-search-projection';
 
-type MindwtrAppSearchNativeModule = {
+type TinyBubblesAppSearchNativeModule = {
   isSupported(): boolean;
   upsertDocuments(docs: AppSearchDoc[]): Promise<void>;
   removeDocuments(ids: string[]): Promise<void>;
@@ -11,11 +11,11 @@ type MindwtrAppSearchNativeModule = {
 };
 
 const nativeModule = Platform.OS === 'android'
-  ? requireOptionalNativeModule<MindwtrAppSearchNativeModule>('MindwtrAppSearch')
+  ? requireOptionalNativeModule<TinyBubblesAppSearchNativeModule>('TinyBubblesAppSearch')
   : null;
 
 /** True only on a real device build with the native module linked and API 31+. */
-export function isMindwtrAppSearchNativeSupported(): boolean {
+export function isTinyBubblesAppSearchNativeSupported(): boolean {
   if (Platform.OS !== 'android') return false;
   try {
     return nativeModule?.isSupported?.() === true;

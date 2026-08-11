@@ -1,6 +1,6 @@
 export type PromptTestKind = 'announcement' | 'donation' | 'update' | 'review';
 
-const PROMPT_TEST_EVENT = 'mindwtr:prompt-test';
+const PROMPT_TEST_EVENT = 'tinybubbles:prompt-test';
 const IS_TEST_RUNTIME = (
     import.meta.env.MODE === 'test'
     || import.meta.env.VITEST

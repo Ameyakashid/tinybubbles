@@ -120,7 +120,7 @@ cargoLockFiles.forEach(file => {
     try {
         const content = fs.readFileSync(filePath, 'utf8');
         const updated = content.replace(
-            /(\[\[package\]\]\nname = "mindwtr"\nversion = ")([^"]+)(")/,
+            /(\[\[package\]\]\nname = "tinybubbles"\nversion = ")([^"]+)(")/,
             (_, prefix, currentVersion, suffix) => {
                 console.log(`Updating ${file} root package version from ${currentVersion} to ${newVersion}`);
                 return `${prefix}${newVersion}${suffix}`;

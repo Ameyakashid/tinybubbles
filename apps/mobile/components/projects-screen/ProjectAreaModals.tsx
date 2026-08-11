@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ban } from 'lucide-react-native';
-import { tFallback, type Area, type Project } from '@mindwtr/core';
+import { tFallback, type Area, type Project } from '@tinybubbles/core';
 
 import { projectsScreenStyles as styles } from './projects-screen.styles';
 import { useAndroidKeyboardInset } from '../../lib/use-android-keyboard-inset';

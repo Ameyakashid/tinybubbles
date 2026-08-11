@@ -167,7 +167,7 @@ const enforcePendingSaveCap = () => {
 
 const isStartupProfilingEnabled = (): boolean => {
     const g = globalThis as Record<string, unknown>;
-    return g.__MINDWTR_STARTUP_PROFILING__ === true;
+    return g.__TINYBUBBLES_STARTUP_PROFILING__ === true;
 };
 
 const getDebouncedSaveCaller = (): string | undefined => {

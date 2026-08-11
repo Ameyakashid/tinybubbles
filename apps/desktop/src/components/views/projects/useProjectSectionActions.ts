@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { tFallback, type Project, type Section } from '@mindwtr/core';
+import { tFallback, type Project, type Section } from '@tinybubbles/core';
 import type { ConfirmationRequestOptions } from '../../../hooks/useConfirmDialog';
 
 type UseProjectSectionActionsParams = {

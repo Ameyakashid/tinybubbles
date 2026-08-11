@@ -6,7 +6,7 @@ import {
     type RecurrenceRule,
     type RecurrenceStrategy,
     type RecurrenceWeekday,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 const RULE_LABEL_KEY: Record<RecurrenceRule, string> = {
     daily: 'recurrence.daily',

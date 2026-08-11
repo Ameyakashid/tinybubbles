@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { resolveI18nText, type I18nTemplateValues } from '@mindwtr/core';
+import { resolveI18nText, type I18nTemplateValues } from '@tinybubbles/core';
 
 import { useLanguage } from '@/contexts/language-context';
 

@@ -1,4 +1,4 @@
-import type { AppData } from '@mindwtr/core';
+import type { AppData } from '@tinybubbles/core';
 
 import { reportError } from '../../../lib/report-error';
 import { requestDesktopNotificationPermission } from '../../../lib/notification-service';

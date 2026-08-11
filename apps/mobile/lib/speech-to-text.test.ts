@@ -475,7 +475,7 @@ describe('speech-to-text', () => {
 
   it('fails cleanly when Android Whisper realtime helper modules are unavailable', async () => {
     await expect(
-      startWhisperRealtimeCapture('/tmp/mindwtr-audio.wav', {
+      startWhisperRealtimeCapture('/tmp/tinybubbles-audio.wav', {
         provider: 'whisper',
         model: 'whisper-tiny',
         modelPath: '/tmp/ggml-tiny.en.bin',

@@ -1,4 +1,4 @@
-import { type Attachment, DEFAULT_MAX_FILE_SIZE_BYTES, generateUUID } from '@mindwtr/core';
+import { type Attachment, DEFAULT_MAX_FILE_SIZE_BYTES, generateUUID } from '@tinybubbles/core';
 import { logWarn } from './app-log';
 import { getManagedPath } from './managed-paths';
 import { ATTACHMENTS_DIR_NAME, extractExtension } from './sync-service-utils';

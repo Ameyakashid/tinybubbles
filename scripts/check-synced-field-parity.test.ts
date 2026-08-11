@@ -5,7 +5,7 @@ import { spawnSync } from 'child_process';
 
 // This script is a CLI entry point (top-level code runs the whole check suite
 // and may call process.exit), not a library, so it can't be imported directly
-// in a test. Mirrors scripts/mindwtr-cli.test.ts: spawn the real script and
+// in a test. Mirrors scripts/tinybubbles-cli.test.ts: spawn the real script and
 // assert on exit code + output instead.
 const REPO_ROOT = join(import.meta.dir, '..');
 const SCHEMA_PATH = join(REPO_ROOT, 'packages/core/src/cloudkit-production-schema.json');
@@ -64,16 +64,16 @@ describe('CloudKit production schema gate', () => {
 
     test('fails when a CloudKit-mapped field is listed in neither deployed nor pendingProduction', () => {
         const schema = parseSchema();
-        schema.records.MindwtrTask.deployed = schema.records.MindwtrTask.deployed.filter((key) => key !== 'title');
+        schema.records.TinyBubblesTask.deployed = schema.records.TinyBubblesTask.deployed.filter((key) => key !== 'title');
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('missing from both lists');
-        expect(result.stdout + result.stderr).toContain('MindwtrTask.title');
+        expect(result.stdout + result.stderr).toContain('TinyBubblesTask.title');
     });
 
     test('fails when a key is listed in both deployed and pendingProduction', () => {
         const schema = parseSchema();
-        schema.records.MindwtrTask.pendingProduction.push('title');
+        schema.records.TinyBubblesTask.pendingProduction.push('title');
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('listed in both deployed and pendingProduction');
@@ -81,36 +81,36 @@ describe('CloudKit production schema gate', () => {
 
     test('fails when a listed key no longer exists in its CloudKit record schema', () => {
         const schema = parseSchema();
-        schema.records.MindwtrPerson.deployed.push('notARealCloudKitKey');
+        schema.records.TinyBubblesPerson.deployed.push('notARealCloudKitKey');
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('stale');
-        expect(result.stdout + result.stderr).toContain('MindwtrPerson.notARealCloudKitKey');
+        expect(result.stdout + result.stderr).toContain('TinyBubblesPerson.notARealCloudKitKey');
     });
 
     test('requires every synced CloudKit record type to be classified', () => {
         const schema = parseSchema();
-        delete schema.records.MindwtrArea;
+        delete schema.records.TinyBubblesArea;
         const result = runCheckWithSchema(schema);
         expect(result.status).toBe(1);
-        expect(result.stdout + result.stderr).toContain('missing record type MindwtrArea');
+        expect(result.stdout + result.stderr).toContain('missing record type TinyBubblesArea');
     });
 
     test('records project taskSortBy as deployed in Production', () => {
         const schema = parseSchema();
-        expect(schema.records.MindwtrProject.deployed).toContain('taskSortBy');
-        expect(schema.records.MindwtrProject.pendingProduction).not.toContain('taskSortBy');
+        expect(schema.records.TinyBubblesProject.deployed).toContain('taskSortBy');
+        expect(schema.records.TinyBubblesProject.pendingProduction).not.toContain('taskSortBy');
     });
 
     test('--release-gate fails while pendingProduction is non-empty', () => {
         const schema = parseSchema();
         markAllDeployed(schema);
-        schema.records.MindwtrTask.deployed = schema.records.MindwtrTask.deployed.filter((key) => key !== 'title');
-        schema.records.MindwtrTask.pendingProduction.push('title');
+        schema.records.TinyBubblesTask.deployed = schema.records.TinyBubblesTask.deployed.filter((key) => key !== 'title');
+        schema.records.TinyBubblesTask.pendingProduction.push('title');
         const result = runCheckWithSchema(schema, ['--release-gate']);
         expect(result.status).toBe(1);
         expect(result.stdout + result.stderr).toContain('pending Production deployment');
-        expect(result.stdout + result.stderr).toContain('MindwtrTask.title');
+        expect(result.stdout + result.stderr).toContain('TinyBubblesTask.title');
     });
 
     test('--release-gate passes once pendingProduction is empty', () => {

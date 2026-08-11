@@ -5,7 +5,7 @@ import {
     normalizeWeekStartSetting,
     resolveCalendarSystemSetting,
     resolveDateLocaleTag,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 type NativeDateInputLocaleParams = {
     language?: string | null;

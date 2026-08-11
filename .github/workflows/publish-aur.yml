@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing Mindwtr release tag whose saved AUR proposal should be published"
+        description: "Existing Tiny Bubbles release tag whose saved AUR proposal should be published"
         required: true
         type: string
       package:
@@ -12,9 +12,9 @@ on:
         required: true
         type: choice
         options:
-          - mindwtr-bin-beta
-          - mindwtr-bin
-          - mindwtr
+          - tinybubbles-bin-beta
+          - tinybubbles-bin
+          - tinybubbles
 
 permissions:
   actions: read
@@ -42,7 +42,7 @@ jobs:
             exit 1
           fi
           case "$PACKAGE_NAME" in
-            mindwtr|mindwtr-bin|mindwtr-bin-beta) ;;
+            tinybubbles|tinybubbles-bin|tinybubbles-bin-beta) ;;
             *) echo "Unsupported AUR package: $PACKAGE_NAME" >&2; exit 1 ;;
           esac
 
@@ -228,7 +228,7 @@ jobs:
             exit 0
           fi
 
-          git -C aur-live config user.name "${AUR_USERNAME:-mindwtr-bot}"
+          git -C aur-live config user.name "${AUR_USERNAME:-tinybubbles-bot}"
           git -C aur-live config user.email "${AUR_EMAIL:-actions@github.com}"
           git -C aur-live add PKGBUILD .SRCINFO
           if git -C aur-live ls-files --error-unmatch tauri-v2-schema.patch >/dev/null 2>&1; then

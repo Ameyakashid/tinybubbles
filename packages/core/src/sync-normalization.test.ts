@@ -111,7 +111,7 @@ describe('sync normalization', () => {
             tasks: compact.tasks.map((task) => ({
                 ...task,
                 isFocusedToday: false,
-                suppressMindwtrReminders: false,
+                suppressTinyBubblesReminders: false,
                 showFutureRecurrence: false,
             })),
             projects: compact.projects.map((project) => ({
@@ -713,19 +713,19 @@ describe('sync-merge numeric boolean tolerance (#902)', () => {
             ...createMockTask('task-1', NOW),
             recurrence: 'daily',
             isFocusedToday: 1,
-            suppressMindwtrReminders: 1,
+            suppressTinyBubblesReminders: 1,
             showFutureRecurrence: 1,
         } as unknown as Task, NOW);
 
         expect(numeric.isFocusedToday).toBe(true);
-        expect(numeric.suppressMindwtrReminders).toBe(true);
+        expect(numeric.suppressTinyBubblesReminders).toBe(true);
         expect(numeric.showFutureRecurrence).toBe(true);
 
         const strict = normalizeTaskForSyncMerge({
             ...createMockTask('task-1', NOW),
             recurrence: 'daily',
             isFocusedToday: true,
-            suppressMindwtrReminders: true,
+            suppressTinyBubblesReminders: true,
             showFutureRecurrence: true,
         }, NOW);
 
@@ -737,18 +737,18 @@ describe('sync-merge numeric boolean tolerance (#902)', () => {
             ...createMockTask('task-1', NOW),
             recurrence: 'daily',
             isFocusedToday: 0,
-            suppressMindwtrReminders: 0,
+            suppressTinyBubblesReminders: 0,
             showFutureRecurrence: 0,
         } as unknown as Task, NOW);
 
         expect(zero.isFocusedToday).toBe(false);
-        expect(zero.suppressMindwtrReminders).toBe(false);
+        expect(zero.suppressTinyBubblesReminders).toBe(false);
         expect(zero.showFutureRecurrence).toBeUndefined();
 
         const absent = normalizeTaskForSyncMerge(createMockTask('task-1', NOW), NOW);
 
         expect(absent.isFocusedToday).toBe(false);
-        expect(absent.suppressMindwtrReminders).toBe(false);
+        expect(absent.suppressTinyBubblesReminders).toBe(false);
         expect(absent.showFutureRecurrence).toBeUndefined();
     });
 

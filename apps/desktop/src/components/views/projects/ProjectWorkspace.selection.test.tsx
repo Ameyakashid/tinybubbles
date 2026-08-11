@@ -1,7 +1,7 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Project, Section, Task } from '@mindwtr/core';
+import type { Project, Section, Task } from '@tinybubbles/core';
 
 import { useUiStore } from '../../../store/ui-store';
 import { LanguageProvider } from '../../../contexts/language-context';
@@ -274,7 +274,7 @@ describe('ProjectWorkspace Select mode', () => {
 
     it('opens global quick add with the selected project defaults', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
         const { getByRole } = renderWorkspace();
 
         fireEvent.click(getByRole('button', { name: 'Add task' }));
@@ -288,12 +288,12 @@ describe('ProjectWorkspace Select mode', () => {
             },
         });
         expect(useUiStore.getState().editingTaskId).toBeNull();
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('opens quick add with the selected project from the app-scoped add-task shortcut (#978)', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
         renderWorkspaceWithKeybindings();
 
@@ -306,12 +306,12 @@ describe('ProjectWorkspace Select mode', () => {
                 status: 'next',
             },
         });
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('opens global quick add with section defaults from section add buttons', () => {
         const quickAddListener = vi.fn();
-        window.addEventListener('mindwtr:quick-add', quickAddListener);
+        window.addEventListener('tinybubbles:quick-add', quickAddListener);
         const { getAllByRole } = renderWorkspace({
             sections: [projectSection],
         });
@@ -327,7 +327,7 @@ describe('ProjectWorkspace Select mode', () => {
                 status: 'next',
             },
         });
-        window.removeEventListener('mindwtr:quick-add', quickAddListener);
+        window.removeEventListener('tinybubbles:quick-add', quickAddListener);
     });
 
     it('renders a newly created save-and-edit task outside the initial virtualized project rows', () => {

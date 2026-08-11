@@ -1,5 +1,5 @@
-import type { Attachment } from '@mindwtr/core';
-import { runAttachmentTransferLifecycle, type AttachmentTransferLifecycleOptions } from '@mindwtr/core';
+import type { Attachment } from '@tinybubbles/core';
+import { runAttachmentTransferLifecycle, type AttachmentTransferLifecycleOptions } from '@tinybubbles/core';
 import * as FileSystem from '../file-system';
 import {
   bytesToBase64,

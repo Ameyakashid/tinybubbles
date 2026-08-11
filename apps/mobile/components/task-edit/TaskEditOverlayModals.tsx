@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, Modal, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { translateWithFallback, type Attachment } from '@mindwtr/core';
+import { translateWithFallback, type Attachment } from '@tinybubbles/core';
 
 import { styles } from './task-edit-modal.styles';
 

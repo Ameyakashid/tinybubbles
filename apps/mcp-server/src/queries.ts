@@ -18,7 +18,7 @@ import {
   type TaskPriority as CoreTaskPriority,
   type TaskStatus as CoreTaskStatus,
   type TimeEstimate as CoreTimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import type { DbClient } from './db.js';
 import { NotFoundError } from './errors.js';
 import { MAX_TASK_LIST_LIMIT } from './input-validation.js';
@@ -69,7 +69,7 @@ export type TaskGeneratedCreateFields = Pick<CoreTask,
   | 'areaId'
   | 'isFocusedToday'
   | 'timeSpentMinutes'
-  | 'suppressMindwtrReminders'
+  | 'suppressTinyBubblesReminders'
   | 'repeatReminderMinutes'
   | 'reviewAt'
 >;
@@ -242,7 +242,7 @@ export function listTasks(db: DbClient, input: ListTasksInput): TaskRow[] {
   if (input.isFocusedToday === true && !selectColumns.includes('isFocusedToday')) {
     return [];
   }
-  // mindwtr_list_tasks has no default done/archived hiding (unlike the cloud REST
+  // tinybubbles_list_tasks has no default done/archived hiding (unlike the cloud REST
   // API's GET /v1/tasks) - opt out of buildTaskWhere's archived default explicitly
   // via includeArchived rather than special-casing this surface's own default.
   const { sql: coreWhere, params: coreParams } = buildTaskWhere({

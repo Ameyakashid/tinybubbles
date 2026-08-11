@@ -44,7 +44,7 @@ describe('parseTaskNotesFile', () => {
             },
             taskNotesData: {
                 rawStatus: 'in-progress',
-                mindwtrStatus: 'next',
+                tinybubblesStatus: 'next',
                 priority: 'high',
                 dueDate: '2025-01-15',
                 scheduledDate: '2025-01-14',
@@ -76,7 +76,7 @@ describe('parseTaskNotesFile', () => {
         );
 
         expect(result.task?.completed).toBe(true);
-        expect(result.task?.taskNotesData?.mindwtrStatus).toBe('done');
+        expect(result.task?.taskNotesData?.tinybubblesStatus).toBe('done');
         expect(result.task?.taskNotesData?.completedDate).toBe('2025-01-20');
     });
 

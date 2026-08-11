@@ -1,6 +1,6 @@
-# Mindwtr Architecture
+# Tiny Bubbles Architecture
 
-Mindwtr is a local-first GTD system built as a Bun workspace monorepo. The shared `@mindwtr/core` package owns the data model, persistence behavior, and sync rules; desktop, mobile, cloud, and MCP layers stay thin around that core.
+Tiny Bubbles is a local-first GTD system built as a Bun workspace monorepo. The shared `@tinybubbles/core` package owns the data model, persistence behavior, and sync rules; desktop, mobile, cloud, and MCP layers stay thin around that core.
 
 ## System shape
 
@@ -33,7 +33,7 @@ The design goal is that GTD behavior, merge logic, and validation live once in c
 
 The SQLite<->JSON bridge contract is recorded in [ADR 0009](./adr/0009-sqlite-json-sync-bridge.md).
 
-Mindwtr prefers explicit repair and merge logic in the app layer over hard database-only assumptions. That is why sync-sensitive relationships are normalized and repaired by shared code instead of depending purely on foreign-key enforcement.
+Tiny Bubbles prefers explicit repair and merge logic in the app layer over hard database-only assumptions. That is why sync-sensitive relationships are normalized and repaired by shared code instead of depending purely on foreign-key enforcement.
 
 ## Sync model
 
@@ -47,9 +47,9 @@ Important properties:
 - Attachments are merged and transferred separately from the main JSON payload.
 - New or changed sync destinations stay inactive until a candidate probe verifies snapshot IO and every live attachment. Failed commits restore the last verified setup or leave sync off.
 
-The detailed algorithm, edge cases, and tie-break rules are documented in the public docs site. The source for those pages lives in the Mindwtr web docs source:
+The detailed algorithm, edge cases, and tie-break rules are documented in the public docs site. The source for those pages lives in the Tiny Bubbles web docs source:
 
-- [Docs source](https://github.com/dongdongbh/mindwtr-web/tree/main/docs)
+- [Docs source](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs)
 - [Architecture](https://docs.mindwtr.app/developers/architecture)
 - [Sync Algorithm](https://docs.mindwtr.app/data-sync/sync-algorithm)
 - [Data and Sync](https://docs.mindwtr.app/data-sync/)

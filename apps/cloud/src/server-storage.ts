@@ -14,7 +14,7 @@ import {
 } from 'fs';
 import { createHash } from 'crypto';
 import { basename, dirname, join, relative, resolve, sep } from 'path';
-import { sleep, type AppData } from '@mindwtr/core';
+import { sleep, type AppData } from '@tinybubbles/core';
 import {
     ATTACHMENT_PATH_ALLOWLIST,
     CLOUD_DATA_LOCK_WAIT_TIMEOUT_MS,
@@ -26,7 +26,7 @@ export type RequestAbortError = Error & {
 };
 
 type BodyReadError = {
-    __mindwtrError: {
+    __tinybubblesError: {
         message: string;
         status: number;
     };
@@ -151,7 +151,7 @@ export function throwIfRequestAborted(signal?: AbortSignal, fallbackMessage = 'R
 
 function createBodyReadError(message: string, status: number): BodyReadError {
     return {
-        __mindwtrError: {
+        __tinybubblesError: {
             message,
             status,
         },
@@ -160,9 +160,9 @@ function createBodyReadError(message: string, status: number): BodyReadError {
 
 export function isBodyReadError(value: unknown): value is BodyReadError {
     return isObjectRecord(value)
-        && isObjectRecord(value.__mindwtrError)
-        && typeof value.__mindwtrError.message === 'string'
-        && typeof value.__mindwtrError.status === 'number';
+        && isObjectRecord(value.__tinybubblesError)
+        && typeof value.__tinybubblesError.message === 'string'
+        && typeof value.__tinybubblesError.status === 'number';
 }
 
 function decodeAttachmentPath(rawPath: string): string | null {
@@ -519,7 +519,7 @@ export function writeAttachmentFileSafely(rootRealPath: string, filePath: string
     }
 
     return durablyPublishFile(safeFilePath, body, {
-        tempName: `.mindwtr-upload-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`,
+        tempName: `.tinybubbles-upload-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.tmp`,
         beforeRename: (tempPath) => {
             const tempRealPath = realpathSync(tempPath);
             if (!isPathWithinRoot(tempRealPath, rootRealPath)) {
@@ -691,7 +691,7 @@ export function ensureWritableDir(dirPath: string): boolean {
             });
             return false;
         }
-        const testPath = join(durableDirPath, '.mindwtr_write_test');
+        const testPath = join(durableDirPath, '.tinybubbles_write_test');
         writeFileSync(testPath, 'ok');
         unlinkSync(testPath);
         return true;

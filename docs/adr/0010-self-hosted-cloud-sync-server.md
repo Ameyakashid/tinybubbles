@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr supports BYOS sync through file sync, WebDAV, Dropbox in supported builds, iCloud on Apple platforms, and the optional self-hosted cloud server.
+Tiny Bubbles supports BYOS sync through file sync, WebDAV, Dropbox in supported builds, iCloud on Apple platforms, and the optional self-hosted cloud server.
 
 The cloud server is intentionally small:
 
@@ -14,11 +14,11 @@ The cloud server is intentionally small:
 - it uses the shared core merge logic instead of inventing server-only conflict rules
 - it is meant for self-hosting behind HTTPS, not as a multi-tenant hosted SaaS
 
-The main risk is treating the server as a general collaboration backend. That would pull Mindwtr toward account management, per-row authorization, real-time fan-out, and operational complexity that does not fit a personal local-first GTD app.
+The main risk is treating the server as a general collaboration backend. That would pull Tiny Bubbles toward account management, per-row authorization, real-time fan-out, and operational complexity that does not fit a personal local-first GTD app.
 
 ## Decision
 
-Mindwtr keeps the cloud server as a self-hosted sync endpoint.
+Tiny Bubbles keeps the cloud server as a self-hosted sync endpoint.
 
 Server responsibilities are limited to:
 
@@ -39,4 +39,4 @@ Clients remain responsible for normal app state, local SQLite persistence, and u
 - Concurrent writes need per-namespace serialization to avoid file-level lost updates. Process locks use a bounded set of SQLite lock shards so attacker-controlled tokens cannot create unbounded lock files; the operating system releases each transaction when a worker exits. Timestamp-based stale-lock deletion is not safe.
 - Dynamic namespace quota checks and reservation of a valid empty sync document form one short critical section across processes. Existing namespaces do not take that global admission lock, and request bodies are read only after admission is released.
 - Operators must handle TLS, token secrecy, reverse proxy configuration, backups, and host hardening.
-- If Mindwtr later needs hosted multi-user collaboration, that should be a separate ADR because it would require a different trust, authorization, and storage model.
+- If Tiny Bubbles later needs hosted multi-user collaboration, that should be a separate ADR because it would require a different trust, authorization, and storage model.

@@ -20,14 +20,14 @@ import { shallow,
     isAreaFilterSelectionActive,
     resolveAreaFilterSelection,
     taskMatchesAreaFilterSelection,
-    projectMatchesAreaFilterSelection, tFallback, } from '@mindwtr/core';
+    projectMatchesAreaFilterSelection, tFallback, } from '@tinybubbles/core';
 import { useLanguage } from '../contexts/language-context';
 import { cn } from '../lib/utils';
 import { getUrgencyColor } from './Task/TaskItemDisplay';
 import { PromptModal } from './PromptModal';
 import { Dialog } from './ui/Dialog';
 import { useUiStore } from '../store/ui-store';
-import { computeGlobalSearchResults, type DuePreset, type GlobalSearchScope } from '@mindwtr/core/global-search-filter';
+import { computeGlobalSearchResults, type DuePreset, type GlobalSearchScope } from '@tinybubbles/core/global-search-filter';
 import { resolveTaskNavigationView } from '../lib/task-navigation';
 import { useFutureStartRevealTick, useLocalDayKey } from '../hooks/useLocalDayKey';
 
@@ -110,8 +110,8 @@ export function GlobalSearch({ onNavigate }: GlobalSearchProps) {
 
     useEffect(() => {
         const handleOpen: EventListener = () => setIsOpen(true);
-        window.addEventListener('mindwtr:open-search', handleOpen);
-        return () => window.removeEventListener('mindwtr:open-search', handleOpen);
+        window.addEventListener('tinybubbles:open-search', handleOpen);
+        return () => window.removeEventListener('tinybubbles:open-search', handleOpen);
     }, []);
 
     // Auto-focus input when opened. Focus immediately so keys typed right

@@ -1,7 +1,7 @@
-import { AppData, StorageAdapter } from '@mindwtr/core';
+import { AppData, StorageAdapter } from '@tinybubbles/core';
 import { reportError } from './report-error';
 
-const DATA_KEY = 'mindwtr-data';
+const DATA_KEY = 'tinybubbles-data';
 
 export const webStorage: StorageAdapter = {
     getData: async (): Promise<AppData> => {

@@ -64,13 +64,13 @@ describe('persistent-capture-notification', () => {
 
     it('round-trips the device-local preference', async () => {
         await writePersistentCaptureEnabled(true);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:persistentCaptureNotification', 'true');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:persistentCaptureNotification', 'true');
 
         mockGetItem.mockResolvedValue('true');
         expect(await readPersistentCaptureEnabled()).toBe(true);
 
         await writePersistentCaptureEnabled(false);
-        expect(mockRemoveItem).toHaveBeenCalledWith('mindwtr:persistentCaptureNotification');
+        expect(mockRemoveItem).toHaveBeenCalledWith('tinybubbles:persistentCaptureNotification');
     });
 
     it('shows and hides the notification to match the toggle', () => {

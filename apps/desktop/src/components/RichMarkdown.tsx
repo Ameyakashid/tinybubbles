@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { normalizeMarkdownInternalLinks, tFallback } from '@mindwtr/core';
+import { normalizeMarkdownInternalLinks, tFallback } from '@tinybubbles/core';
 import { Copy } from 'lucide-react';
 
 import { useLanguage } from '../contexts/language-context';
@@ -9,12 +9,12 @@ import { cn } from '../lib/utils';
 import { InternalMarkdownLink, useInternalMarkdownLinkContext } from './InternalMarkdownLink';
 
 const BLANK_LINE_MARKER = '\u00A0';
-const BLANK_LINE_CLASS = 'mindwtr-markdown-blank-line';
+const BLANK_LINE_CLASS = 'tinybubbles-markdown-blank-line';
 
 function transformMarkdownUrl(url: string) {
     const normalized = url.trim().toLowerCase();
     if (
-        normalized.startsWith('mindwtr://')
+        normalized.startsWith('tinybubbles://')
         || normalized.startsWith('http://')
         || normalized.startsWith('https://')
         || normalized.startsWith('mailto:')

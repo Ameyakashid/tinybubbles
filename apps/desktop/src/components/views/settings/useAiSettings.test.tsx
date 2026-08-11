@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getModelOptions } from '@mindwtr/core';
-import type { AppData } from '@mindwtr/core';
+import { getModelOptions } from '@tinybubbles/core';
+import type { AppData } from '@tinybubbles/core';
 
 import { useAiSettings } from './useAiSettings';
 import { useUiStore } from '../../../store/ui-store';
@@ -51,8 +51,8 @@ vi.mock('../../../lib/ai-config', () => ({
     saveAIKey: aiConfigMocks.saveAIKey,
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => ({
-    ...await importOriginal<typeof import('@mindwtr/core')>(),
+vi.mock('@tinybubbles/core', async (importOriginal) => ({
+    ...await importOriginal<typeof import('@tinybubbles/core')>(),
     fetchProviderModelsCached: coreMocks.fetchProviderModelsCached,
 }));
 
@@ -170,7 +170,7 @@ describe('useAiSettings speech provider changes', () => {
         const settings = settingsWithSpeech({
             provider: 'whisper',
             model: 'whisper-base',
-            offlineModelPath: '/home/dd/.local/share/mindwtr/whisper-models/ggml-base.bin',
+            offlineModelPath: '/home/dd/.local/share/tinybubbles/whisper-models/ggml-base.bin',
         });
 
         function Probe() {
@@ -229,10 +229,10 @@ describe('useAiSettings speech provider changes', () => {
         render(<Probe />);
 
         await waitFor(() => {
-            expect(screen.getByTestId('speech-state').textContent).toContain('/home/dd/.local/share/mindwtr/parakeet-model');
+            expect(screen.getByTestId('speech-state').textContent).toContain('/home/dd/.local/share/tinybubbles/parakeet-model');
         });
         expect(JSON.parse(screen.getByTestId('speech-state').textContent ?? '{}')).toMatchObject({
-            path: '/home/dd/.local/share/mindwtr/parakeet-model',
+            path: '/home/dd/.local/share/tinybubbles/parakeet-model',
             ready: false,
         });
         expect(updateSettings).not.toHaveBeenCalled();
@@ -341,7 +341,7 @@ describe('useAiSettings speech provider changes', () => {
         let result: HookResult | null = null;
         const updateSettings = vi.fn(async () => undefined);
         const showSaved = vi.fn();
-        const installedPath = '/home/dd/.local/share/mindwtr/whisper-models/ggml-tiny.bin';
+        const installedPath = '/home/dd/.local/share/tinybubbles/whisper-models/ggml-tiny.bin';
         tauriCoreMocks.invoke.mockImplementation(async (command: string) => {
             if (command === 'download_whisper_model') return installedPath;
             return null;
@@ -386,7 +386,7 @@ describe('useAiSettings speech provider changes', () => {
         let result: HookResult | null = null;
         const updateSettings = vi.fn(async () => undefined);
         const showSaved = vi.fn();
-        const installedPath = '/home/dd/.local/share/mindwtr/parakeet-model';
+        const installedPath = '/home/dd/.local/share/tinybubbles/parakeet-model';
         tauriCoreMocks.invoke.mockImplementation(async (command: string) => {
             if (command === 'download_parakeet_model') return installedPath;
             return null;

@@ -219,8 +219,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
         };
     }
 
-    // Handle @mindwtr/core workspace package
-    if (moduleName === '@mindwtr/core' || moduleName.startsWith('@mindwtr/core/')) {
+    // Handle @tinybubbles/core workspace package
+    if (moduleName === '@tinybubbles/core' || moduleName.startsWith('@tinybubbles/core/')) {
         const corePath = path.resolve(workspaceRoot, 'packages/core/src/index.ts');
         return {
             filePath: corePath,

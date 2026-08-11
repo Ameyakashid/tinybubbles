@@ -23,7 +23,7 @@ import {
     type Section,
     type Task,
     type TaskStatus,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     getAuthFailureRateKey,
     getAuthFailureTokenRateKey,
@@ -388,7 +388,7 @@ const readEntityObjectBody = async (
 ): Promise<EntityBodyResult> => {
     const body = await readJsonBody(req, maxBodyBytes, signal);
     if (isBodyReadError(body)) {
-        const err = body.__mindwtrError;
+        const err = body.__tinybubblesError;
         return {
             ok: false,
             response: errorResponse(String(err?.message || 'Payload too large'), Number(err?.status) || 413),
@@ -908,39 +908,39 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     const flags = parseArgs(process.argv.slice(2));
     const port = Number(options.port ?? flags.port ?? process.env.PORT ?? 8787);
     const host = String(options.host ?? flags.host ?? process.env.HOST ?? '0.0.0.0');
-    const dataDir = String(options.dataDir ?? process.env.MINDWTR_CLOUD_DATA_DIR ?? join(process.cwd(), 'data'));
+    const dataDir = String(options.dataDir ?? process.env.TINYBUBBLES_CLOUD_DATA_DIR ?? join(process.cwd(), 'data'));
     const attachmentPathResolver = options.attachmentPathResolver ?? resolveAttachmentPath;
 
-    const windowMs = Number(options.windowMs ?? process.env.MINDWTR_CLOUD_RATE_WINDOW_MS ?? 60_000);
-    const maxPerWindow = Number(options.maxPerWindow ?? process.env.MINDWTR_CLOUD_RATE_MAX ?? 120);
+    const windowMs = Number(options.windowMs ?? process.env.TINYBUBBLES_CLOUD_RATE_WINDOW_MS ?? 60_000);
+    const maxPerWindow = Number(options.maxPerWindow ?? process.env.TINYBUBBLES_CLOUD_RATE_MAX ?? 120);
     const maxAttachmentPerWindow = Number(
-        options.maxAttachmentPerWindow ?? process.env.MINDWTR_CLOUD_ATTACHMENT_RATE_MAX ?? maxPerWindow
+        options.maxAttachmentPerWindow ?? process.env.TINYBUBBLES_CLOUD_ATTACHMENT_RATE_MAX ?? maxPerWindow
     );
-    const maxBodyBytes = Number(options.maxBodyBytes ?? process.env.MINDWTR_CLOUD_MAX_BODY_BYTES ?? 2_000_000);
+    const maxBodyBytes = Number(options.maxBodyBytes ?? process.env.TINYBUBBLES_CLOUD_MAX_BODY_BYTES ?? 2_000_000);
     const maxAttachmentBytes = Number(
-        options.maxAttachmentBytes ?? process.env.MINDWTR_CLOUD_MAX_ATTACHMENT_BYTES ?? 50_000_000
+        options.maxAttachmentBytes ?? process.env.TINYBUBBLES_CLOUD_MAX_ATTACHMENT_BYTES ?? 50_000_000
     );
     const allowedAuthTokens = normalizeAllowedAuthTokens(
         options.allowedAuthTokens === undefined
             ? resolveAllowedAuthTokensFromEnv(process.env)
             : options.allowedAuthTokens
     );
-    const trustProxyHeaders = options.trustProxyHeaders ?? parseBoolEnv(process.env.MINDWTR_CLOUD_TRUST_PROXY_HEADERS);
-    const trustedProxyIps = options.trustedProxyIps ?? parseTrustedProxyIps(process.env.MINDWTR_CLOUD_TRUSTED_PROXY_IPS);
+    const trustProxyHeaders = options.trustProxyHeaders ?? parseBoolEnv(process.env.TINYBUBBLES_CLOUD_TRUST_PROXY_HEADERS);
+    const trustedProxyIps = options.trustedProxyIps ?? parseTrustedProxyIps(process.env.TINYBUBBLES_CLOUD_TRUSTED_PROXY_IPS);
     const rawMaxAnyTokenNamespaces = Number(
         options.maxAnyTokenNamespaces
-        ?? process.env.MINDWTR_CLOUD_ANY_TOKEN_MAX_NAMESPACES
+        ?? process.env.TINYBUBBLES_CLOUD_ANY_TOKEN_MAX_NAMESPACES
         ?? ANY_TOKEN_NAMESPACE_LIMIT_DEFAULT
     );
     const maxAnyTokenNamespaces = Number.isFinite(rawMaxAnyTokenNamespaces) && rawMaxAnyTokenNamespaces >= 0
         ? Math.floor(rawMaxAnyTokenNamespaces)
         : ANY_TOKEN_NAMESPACE_LIMIT_DEFAULT;
     const withWriteLock = createWriteLockRunner(dataDir);
-    const rateLimitCleanupMs = Number(process.env.MINDWTR_CLOUD_RATE_CLEANUP_MS || 60_000);
-    const requestTimeoutMs = Number(options.requestTimeoutMs ?? process.env.MINDWTR_CLOUD_REQUEST_TIMEOUT_MS ?? 30_000);
+    const rateLimitCleanupMs = Number(process.env.TINYBUBBLES_CLOUD_RATE_CLEANUP_MS || 60_000);
+    const requestTimeoutMs = Number(options.requestTimeoutMs ?? process.env.TINYBUBBLES_CLOUD_REQUEST_TIMEOUT_MS ?? 30_000);
     const logAllRequests = options.logAllRequests
-        ?? parseBoolEnv(process.env.MINDWTR_CLOUD_LOG_ALL_REQUESTS);
-    const rawSlowRequestMs = Number(options.slowRequestMs ?? process.env.MINDWTR_CLOUD_SLOW_REQUEST_MS ?? 1_000);
+        ?? parseBoolEnv(process.env.TINYBUBBLES_CLOUD_LOG_ALL_REQUESTS);
+    const rawSlowRequestMs = Number(options.slowRequestMs ?? process.env.TINYBUBBLES_CLOUD_SLOW_REQUEST_MS ?? 1_000);
     const slowRequestMs = Number.isFinite(rawSlowRequestMs) && rawSlowRequestMs >= 0
         ? rawSlowRequestMs
         : 1_000;
@@ -1035,20 +1035,20 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
     }
 
     const usingLegacyTokenVar = options.allowedAuthTokens === undefined
-        && !String(process.env.MINDWTR_CLOUD_AUTH_TOKENS || '').trim()
-        && !String(process.env.MINDWTR_CLOUD_AUTH_TOKENS_FILE || '').trim()
+        && !String(process.env.TINYBUBBLES_CLOUD_AUTH_TOKENS || '').trim()
+        && !String(process.env.TINYBUBBLES_CLOUD_AUTH_TOKENS_FILE || '').trim()
         && (
-            String(process.env.MINDWTR_CLOUD_TOKEN || '').trim().length > 0
-            || String(process.env.MINDWTR_CLOUD_TOKEN_FILE || '').trim().length > 0
+            String(process.env.TINYBUBBLES_CLOUD_TOKEN || '').trim().length > 0
+            || String(process.env.TINYBUBBLES_CLOUD_TOKEN_FILE || '').trim().length > 0
         );
     if (usingLegacyTokenVar) {
-        logWarn('MINDWTR_CLOUD_TOKEN is deprecated; use MINDWTR_CLOUD_AUTH_TOKENS instead');
+        logWarn('TINYBUBBLES_CLOUD_TOKEN is deprecated; use TINYBUBBLES_CLOUD_AUTH_TOKENS instead');
     }
     if (allowedAuthTokens) {
         logInfo('token auth allowlist enabled', { allowedTokens: String(allowedAuthTokens.size) });
     } else {
         logInfo('token namespace mode enabled by explicit opt-in', {
-            hint: 'set MINDWTR_CLOUD_AUTH_TOKENS to enforce a strict token allowlist',
+            hint: 'set TINYBUBBLES_CLOUD_AUTH_TOKENS to enforce a strict token allowlist',
             maxNamespaces: String(maxAnyTokenNamespaces),
         });
     }
@@ -1056,11 +1056,11 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         if (trustedProxyIps.size > 0) {
             logWarn('trusting proxy IP headers for auth failure rate limiting', {
                 trustedProxyIps: String(trustedProxyIps.size),
-                hint: 'only requests from MINDWTR_CLOUD_TRUSTED_PROXY_IPS can supply forwarded client IP headers',
+                hint: 'only requests from TINYBUBBLES_CLOUD_TRUSTED_PROXY_IPS can supply forwarded client IP headers',
             });
         } else {
-            logWarn('MINDWTR_CLOUD_TRUST_PROXY_HEADERS is enabled but no trusted proxy IPs are configured; forwarded IP headers will be ignored', {
-                hint: 'set MINDWTR_CLOUD_TRUSTED_PROXY_IPS to the exact reverse-proxy source IPs',
+            logWarn('TINYBUBBLES_CLOUD_TRUST_PROXY_HEADERS is enabled but no trusted proxy IPs are configured; forwarded IP headers will be ignored', {
+                hint: 'set TINYBUBBLES_CLOUD_TRUSTED_PROXY_IPS to the exact reverse-proxy source IPs',
             });
         }
     }
@@ -1072,7 +1072,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
 
     const bunRuntime = getBunRuntime();
     if (!bunRuntime) {
-        throw new Error('Mindwtr Cloud requires the Bun runtime.');
+        throw new Error('Tiny Bubbles Cloud requires the Bun runtime.');
     }
 
     const server = bunRuntime.serve({
@@ -1263,7 +1263,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                         // global admission lock.
                         const body = await readJsonBody(req, maxBodyBytes, requestAbortController.signal);
                         if (isBodyReadError(body)) {
-                            const err = body.__mindwtrError;
+                            const err = body.__tinybubblesError;
                             return errorResponse(String(err?.message || 'Payload too large'), Number(err?.status) || 413);
                         }
                         if (!body) return errorResponse('Missing body');

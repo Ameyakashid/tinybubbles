@@ -8,8 +8,8 @@ const storeMock = vi.hoisted(() => ({
     seedGettingStarted: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@mindwtr/core')>()),
+vi.mock('@tinybubbles/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@tinybubbles/core')>()),
     useTaskStore: (selector: (state: Record<string, unknown>) => unknown) => selector({
         settings: { attachments: { pendingRemoteDeletes: ['attachment-1'] } },
         updateSettings: storeMock.updateSettings,
@@ -68,7 +68,7 @@ describe('useSettingsDataPage', () => {
                 onImportTickTick: vi.fn(),
                 onImportDgt: vi.fn(),
                 onImportOmniFocus: vi.fn(),
-                onImportMindwtrCsv: vi.fn(),
+                onImportTinyBubblesCsv: vi.fn(),
             },
         }));
 

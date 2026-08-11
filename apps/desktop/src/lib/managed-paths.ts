@@ -7,7 +7,7 @@ let pendingDir: Promise<string> | null = null;
 
 // The directory for app-managed files the webview reads and writes directly
 // (attachments, logs, audio captures, speech models). Standard installs
-// resolve to the OS data dir + "mindwtr" (the historical layout); portable
+// resolve to the OS data dir + "tinybubbles" (the historical layout); portable
 // installs resolve into the portable profile dir (#855). Never anchor managed
 // files on BaseDirectory.Data — that bypasses the portable redirect.
 export async function getManagedDataDir(): Promise<string> {
@@ -22,7 +22,7 @@ export async function getManagedDataDir(): Promise<string> {
                     // Older backend without the command — fall through.
                 }
             }
-            return await join(await dataDir(), 'mindwtr');
+            return await join(await dataDir(), 'tinybubbles');
         })()
             .then((dir) => {
                 cachedDir = dir;

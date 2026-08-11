@@ -1,5 +1,5 @@
-import type { AppData, AppTheme } from '@mindwtr/core';
-import { resolveThemeColorScheme } from '@mindwtr/core';
+import type { AppData, AppTheme } from '@tinybubbles/core';
+import { resolveThemeColorScheme } from '@tinybubbles/core';
 
 import { invokeNative } from './tauri-invoke';
 
@@ -21,7 +21,7 @@ type NativeThemeWindowModule = {
     getCurrentWindow: () => NativeThemeWindow;
 };
 
-export const THEME_STORAGE_KEY = 'mindwtr-theme';
+export const THEME_STORAGE_KEY = 'tinybubbles-theme';
 const SYSTEM_THEME_MEDIA_QUERY = '(prefers-color-scheme: dark)';
 const COMMAND_THEME_POLL_INTERVAL_MS = 2000;
 let cachedSystemThemePreference: SystemThemePreference = null;

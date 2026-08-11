@@ -21,7 +21,7 @@ import {
     type AIReasoningEffort,
     type AppSettings,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { loadAIKey, saveAIKey } from '@/lib/ai-config';
 import { DEFAULT_GEMINI_STT_MODEL, DEFAULT_OPENAI_STT_MODEL } from '@/lib/speech-to-text';

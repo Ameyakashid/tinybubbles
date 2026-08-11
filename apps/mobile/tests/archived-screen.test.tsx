@@ -85,8 +85,8 @@ vi.mock('react-native', async () => {
   };
 });
 
-vi.mock('@mindwtr/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@mindwtr/core')>();
+vi.mock('@tinybubbles/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tinybubbles/core')>();
   return {
     ...actual,
     shallow: Object.is,
@@ -469,7 +469,7 @@ describe('ArchivedScreen', () => {
       { ...mocks.storeState._allTasks[0], id: 'task-2', title: 'Fix the printer' },
     ];
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => (
-      key === 'mindwtr:view:archived:v1' ? JSON.stringify({ groupBy: 'area' }) : null
+      key === 'tinybubbles:view:archived:v1' ? JSON.stringify({ groupBy: 'area' }) : null
     ));
 
     let tree!: renderer.ReactTestRenderer;
@@ -505,7 +505,7 @@ describe('ArchivedScreen', () => {
       { ...mocks.storeState._allTasks[0], tags: ['Work', 'Urgent'] },
     ];
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => (
-      key === 'mindwtr:view:archived:v1' ? JSON.stringify({ groupBy: 'tag' }) : null
+      key === 'tinybubbles:view:archived:v1' ? JSON.stringify({ groupBy: 'tag' }) : null
     ));
 
     let tree!: renderer.ReactTestRenderer;

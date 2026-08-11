@@ -6,7 +6,7 @@ import {
   sanitizeAttachmentUriForSyncMerge,
   webdavDeleteFile,
   type CloudProvider,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { getBaseSyncUrl, getCloudBaseUrl } from './attachment-sync';
 import { ATTACHMENTS_DIR_NAME } from './attachment-sync-utils';
 import * as FileSystem from './file-system';

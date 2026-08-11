@@ -34,7 +34,7 @@ const enabledConfig = (): EmailCaptureConfig => ({
     host: 'imap.example.com',
     port: 993,
     username: 'user@example.com',
-    folder: 'Mindwtr',
+    folder: 'Tiny Bubbles',
     hasPassword: true,
 });
 

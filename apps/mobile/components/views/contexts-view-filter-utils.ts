@@ -1,4 +1,4 @@
-import { matchesHierarchicalToken, type Task } from '@mindwtr/core';
+import { matchesHierarchicalToken, type Task } from '@tinybubbles/core';
 
 export type ContextsViewFilterSection = {
   kind: 'contexts' | 'tags';

@@ -12,7 +12,7 @@ import exportsBaseline from './index-exports.baseline.json';
 //    (Object.keys(await import('./index')).sort()) when that happens. A name disappearing is
 //    the failure this guards against.
 // 2. Every packages/core/package.json "exports" target must exist on disk.
-// 3. Every '@mindwtr/core/<module>' subpath imported anywhere under apps/ must be reachable
+// 3. Every '@tinybubbles/core/<module>' subpath imported anywhere under apps/ must be reachable
 //    from the barrel. Mobile's Metro resolver collapses every such subpath onto index.ts and
 //    ignores package.json "exports" entirely, so a module reachable only by subpath (and not
 //    re-exported here) is `undefined` at runtime on a real device even though vitest resolves
@@ -61,7 +61,7 @@ function collectSourceFiles(dir: string): string[] {
 
 function findImportedSubpaths(root: string): Set<string> {
     const subpaths = new Set<string>();
-    const pattern = /@mindwtr\/core\/([A-Za-z0-9_/-]+)/g;
+    const pattern = /@tinybubbles\/core\/([A-Za-z0-9_/-]+)/g;
     for (const file of collectSourceFiles(root)) {
         const text = readFileSync(file, 'utf8');
         for (const match of text.matchAll(pattern)) subpaths.add(match[1]);
@@ -69,7 +69,7 @@ function findImportedSubpaths(root: string): Set<string> {
     return subpaths;
 }
 
-describe('@mindwtr/core subpath imports under apps/', () => {
+describe('@tinybubbles/core subpath imports under apps/', () => {
     it('are all barrel-reachable', async () => {
         const barrelNames = new Set(Object.keys(barrel));
         const subpaths = findImportedSubpaths(join(repoRoot, 'apps'));
@@ -83,7 +83,7 @@ describe('@mindwtr/core subpath imports under apps/', () => {
             const modulePath = existsSync(`${base}.ts`) ? `${base}.ts` : join(base, 'index.ts');
             const moduleExports = await import(modulePath);
             for (const name of Object.keys(moduleExports)) {
-                if (!barrelNames.has(name)) unreachable.push(`@mindwtr/core/${subpath}: ${name}`);
+                if (!barrelNames.has(name)) unreachable.push(`@tinybubbles/core/${subpath}: ${name}`);
             }
         }
         expect(unreachable).toEqual([]);

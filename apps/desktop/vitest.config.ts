@@ -13,11 +13,11 @@ export default defineConfig({
         alias: [
             { find: '@', replacement: path.resolve(__dirname, './src') },
             {
-                find: /^@mindwtr\/core$/,
+                find: /^@tinybubbles\/core$/,
                 replacement: path.resolve(__dirname, '../../packages/core/src/index.ts'),
             },
             {
-                find: /^@mindwtr\/core\/(.+)$/,
+                find: /^@tinybubbles\/core\/(.+)$/,
                 replacement: path.resolve(__dirname, '../../packages/core/src/$1.ts'),
             },
         ],

@@ -1,8 +1,8 @@
 import React from 'react';
 import renderer from 'react-test-renderer';
 import { describe, expect, it } from 'vitest';
-import type { AppData, Task } from '@mindwtr/core';
-import { createTaskDraft, setTaskDraftField } from '@mindwtr/core/task-draft';
+import type { AppData, Task } from '@tinybubbles/core';
+import { createTaskDraft, setTaskDraftField } from '@tinybubbles/core/task-draft';
 
 import { DEFAULT_TASK_EDITOR_ORDER } from './task-edit-modal.utils';
 import { useTaskEditDerivedState } from './use-task-edit-derived-state';

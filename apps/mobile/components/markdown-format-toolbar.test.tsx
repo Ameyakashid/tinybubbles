@@ -1,7 +1,7 @@
 import React from 'react';
 import { Dimensions, Keyboard, Platform, Pressable, ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-import { MARKDOWN_TOOLBAR_ACTIONS } from '@mindwtr/core';
+import { MARKDOWN_TOOLBAR_ACTIONS } from '@tinybubbles/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { KeyboardAccessoryHost } from './keyboard-accessory-host';

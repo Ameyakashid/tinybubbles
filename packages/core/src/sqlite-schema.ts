@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   isFocusedToday INTEGER,
   timeEstimate TEXT,
   timeSpentMinutes INTEGER,
-  suppressMindwtrReminders INTEGER,
+  suppressTinyBubblesReminders INTEGER,
   repeatReminderMinutes INTEGER,
   reviewAt TEXT,
   completedAt TEXT,

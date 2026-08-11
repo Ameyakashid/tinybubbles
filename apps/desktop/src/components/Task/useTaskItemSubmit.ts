@@ -6,7 +6,7 @@ import {
     type Task,
     type TaskDraft,
     type TaskStatus,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 type UseTaskItemSubmitParams = {
     draft: TaskDraft;

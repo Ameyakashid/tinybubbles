@@ -56,7 +56,7 @@ const t = {
     speechBaseUrlHint: "Leave blank for official OpenAI. Set this for a self-hosted OpenAI-compatible transcription server. API key is optional.",
     speechOfflineModel: 'Offline model',
     speechOfflineModelDesc: 'Download once to transcribe fully offline.',
-    speechParakeetModelDesc: 'Download once to install the Parakeet ASR model for local transcription. Model weights are not bundled with Mindwtr.',
+    speechParakeetModelDesc: 'Download once to install the Parakeet ASR model for local transcription. Model weights are not bundled with Tiny Bubbles.',
     speechParakeetModelPath: 'Install folder',
     speechParakeetModelPathPlaceholder: 'App data folder',
     speechOfflineReady: 'Model downloaded',
@@ -192,7 +192,7 @@ describe('SettingsAiPage', () => {
                 speechProvider="parakeet"
                 speechModel="parakeet-tdt-0.6b-v3-int8"
                 speechModelOptions={["parakeet-tdt-0.6b-v3-int8"]}
-                speechOfflineModelPath="/home/dd/.local/share/mindwtr/parakeet-model"
+                speechOfflineModelPath="/home/dd/.local/share/tinybubbles/parakeet-model"
                 speechOfflineEstimatedSize={670478772}
                 speechDownloadState="downloading"
                 speechDownloadProgress={{ stage: 'model_download', loaded: 335239386, total: 670478772, percent: 50 }}
@@ -232,14 +232,14 @@ describe('SettingsAiPage', () => {
                 speechProvider="parakeet"
                 speechModel="parakeet-tdt-0.6b-v3-int8"
                 speechModelOptions={["parakeet-tdt-0.6b-v3-int8"]}
-                speechOfflineModelPath="/home/dd/.local/share/mindwtr/parakeet-model"
+                speechOfflineModelPath="/home/dd/.local/share/tinybubbles/parakeet-model"
                 speechOfflineEstimatedSize={670478772}
                 onDownloadWhisperModel={onDownloadWhisperModel}
             />
         );
 
         fireEvent.click(getByRole('button', { name: /Speech to text/i }));
-        expect(getByDisplayValue('/home/dd/.local/share/mindwtr/parakeet-model')).toBeInTheDocument();
+        expect(getByDisplayValue('/home/dd/.local/share/tinybubbles/parakeet-model')).toBeInTheDocument();
         expect(getByText(/Estimated download size: 639\.4 MB/)).toBeInTheDocument();
 
         fireEvent.click(getByRole('button', { name: 'Download' }));

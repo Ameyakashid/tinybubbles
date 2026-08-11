@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 
 export type QuickCaptureOptions = {
   initialProps?: Partial<Task>;

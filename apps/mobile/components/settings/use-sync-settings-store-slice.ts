@@ -2,7 +2,7 @@ import {
     shallow,
     useTaskStore,
     type AppData,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export type SettingsScreenMode = 'sync' | 'data';
 

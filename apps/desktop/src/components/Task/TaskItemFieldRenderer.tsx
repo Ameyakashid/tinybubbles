@@ -35,8 +35,8 @@ import {
     type TaskPriority,
     type TaskStatus,
     type TimeEstimate,
-} from '@mindwtr/core';
-import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
+} from '@tinybubbles/core';
+import { joinDateTime, splitDateTime } from '@tinybubbles/core/date-draft';
 import { remove } from '@tauri-apps/plugin-fs';
 
 import { useMarkdownReferenceAutocomplete } from '../MarkdownReferenceAutocomplete';
@@ -213,7 +213,7 @@ export function TaskItemFieldRenderer({
         dueDate: editDueDate,
         reviewAt: editReviewAt,
         repeatReminderMinutes: editRepeatReminderMinutes,
-        suppressMindwtrReminders: editSuppressMindwtrReminders,
+        suppressTinyBubblesReminders: editSuppressTinyBubblesReminders,
         status: editStatus,
         priority: editPriority,
         energyLevel: editEnergyLevel,
@@ -234,7 +234,7 @@ export function TaskItemFieldRenderer({
     const setEditDueDate = (value: string) => setField('dueDate', value);
     const setEditReviewAt = (value: string) => setField('reviewAt', value);
     const setEditRepeatReminderMinutes = (value: number | undefined) => setField('repeatReminderMinutes', value);
-    const setEditSuppressMindwtrReminders = (value: boolean) => setField('suppressMindwtrReminders', value);
+    const setEditSuppressTinyBubblesReminders = (value: boolean) => setField('suppressTinyBubblesReminders', value);
     const setEditStatus = (value: TaskStatus) => setField('status', value);
     const setEditPriority = (value: TaskPriority | '') => setField('priority', value);
     const setEditEnergyLevel = (value: NonNullable<TaskEnergyLevel> | '') => setField('energyLevel', value);
@@ -965,7 +965,7 @@ export function TaskItemFieldRenderer({
                         {hasReminderHandoffSchedule && (() => {
                             const repeatLabel = tFallback(t, 'taskEdit.repeatReminderLabel', 'Repeat reminder');
                             const current = editRepeatReminderMinutes ?? 0;
-                            const showRepeat = hasTime && !editSuppressMindwtrReminders;
+                            const showRepeat = hasTime && !editSuppressTinyBubblesReminders;
                             const formatValue = (minutes: number) => (
                                 minutes === 0
                                     ? tFallback(t, 'taskEdit.repeatReminderOff', 'Off')
@@ -980,9 +980,9 @@ export function TaskItemFieldRenderer({
                             // say when either one is off its default without being opened.
                             // A stored repeat interval is unreachable once the due time is
                             // gone, so it must not light up a summary that cannot show it.
-                            const isDefault = !editSuppressMindwtrReminders && (!showRepeat || current === 0);
-                            const summary = editSuppressMindwtrReminders
-                                ? tFallback(t, 'taskEdit.suppressMindwtrRemindersViewValue', 'Mindwtr reminders off')
+                            const isDefault = !editSuppressTinyBubblesReminders && (!showRepeat || current === 0);
+                            const summary = editSuppressTinyBubblesReminders
+                                ? tFallback(t, 'taskEdit.suppressTinyBubblesRemindersViewValue', 'Tiny Bubbles reminders off')
                                 : [
                                     tFallback(t, 'taskEdit.remindersSummaryOn', 'Reminders on'),
                                     ...(showRepeat ? [`${repeatLabel}: ${formatValue(current)}`] : []),
@@ -1005,16 +1005,16 @@ export function TaskItemFieldRenderer({
                                             <label className="flex items-start gap-2 rounded border border-border/70 bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
                                                 <input
                                                     type="checkbox"
-                                                    checked={editSuppressMindwtrReminders}
-                                                    onChange={(event) => setEditSuppressMindwtrReminders(event.target.checked)}
+                                                    checked={editSuppressTinyBubblesReminders}
+                                                    onChange={(event) => setEditSuppressTinyBubblesReminders(event.target.checked)}
                                                     className="mt-0.5 shrink-0 accent-primary"
                                                 />
                                                 <span className="min-w-0">
                                                     <span className="block font-medium text-foreground">
-                                                        {tFallback(t, 'taskEdit.suppressMindwtrReminders', 'Skip reminders')}
+                                                        {tFallback(t, 'taskEdit.suppressTinyBubblesReminders', 'Skip reminders')}
                                                     </span>
                                                     <span className="block leading-snug">
-                                                        {tFallback(t, 'taskEdit.suppressMindwtrRemindersHint', 'Skip start and due reminders for this task. It still appears in Focus and your lists.')}
+                                                        {tFallback(t, 'taskEdit.suppressTinyBubblesRemindersHint', 'Skip start and due reminders for this task. It still appears in Focus and your lists.')}
                                                     </span>
                                                 </span>
                                             </label>

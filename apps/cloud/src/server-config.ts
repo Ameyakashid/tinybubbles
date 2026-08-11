@@ -1,5 +1,5 @@
-import type { Area, Project, Section, Task } from '@mindwtr/core';
-// Relative path, not '@mindwtr/core/task-sync-schema': this file is imported by
+import type { Area, Project, Section, Task } from '@tinybubbles/core';
+// Relative path, not '@tinybubbles/core/task-sync-schema': this file is imported by
 // scripts/check-synced-field-parity.ts, which the native-schema CI job runs without
 // `bun install` (see BEARER_TOKEN_PATTERN below), so a workspace-package import
 // cannot resolve there. A plain relative path always resolves.
@@ -38,9 +38,9 @@ export type CloudFailureContext = {
 export const CLOUD_LOG_MESSAGES = [
     'Failed to clone cloud app data cache entry',
     'Failed to start server',
-    'MINDWTR_CLOUD_ALLOW_ANY_TOKEN is enabled. Prefer MINDWTR_CLOUD_AUTH_TOKENS for stronger access control.',
-    'MINDWTR_CLOUD_TOKEN is deprecated; use MINDWTR_CLOUD_AUTH_TOKENS instead',
-    'MINDWTR_CLOUD_TRUST_PROXY_HEADERS is enabled but no trusted proxy IPs are configured; forwarded IP headers will be ignored',
+    'TINYBUBBLES_CLOUD_ALLOW_ANY_TOKEN is enabled. Prefer TINYBUBBLES_CLOUD_AUTH_TOKENS for stronger access control.',
+    'TINYBUBBLES_CLOUD_TOKEN is deprecated; use TINYBUBBLES_CLOUD_AUTH_TOKENS instead',
+    'TINYBUBBLES_CLOUD_TRUST_PROXY_HEADERS is enabled but no trusted proxy IPs are configured; forwarded IP headers will be ignored',
     'Stored cloud data failed validation',
     'Stored cloud data failed validation before attachment GC',
     'cloud data directory is not writable',
@@ -99,53 +99,53 @@ export const logError = (message: CloudLogMessage, context: CloudFailureContext)
     writeLog({ ts: new Date().toISOString(), level: 'error', scope: 'cloud', message, context });
 };
 
-const configuredCorsOrigin = (process.env.MINDWTR_CLOUD_CORS_ORIGIN || '').trim();
+const configuredCorsOrigin = (process.env.TINYBUBBLES_CLOUD_CORS_ORIGIN || '').trim();
 if (configuredCorsOrigin === '*') {
-    throw new Error('MINDWTR_CLOUD_CORS_ORIGIN cannot be "*" in production. Set an explicit origin.');
+    throw new Error('TINYBUBBLES_CLOUD_CORS_ORIGIN cannot be "*" in production. Set an explicit origin.');
 }
 const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
 const isProductionEnv = nodeEnv === 'production';
 if (!configuredCorsOrigin && isProductionEnv) {
-    throw new Error('MINDWTR_CLOUD_CORS_ORIGIN must be set in production.');
+    throw new Error('TINYBUBBLES_CLOUD_CORS_ORIGIN must be set in production.');
 }
 
 export const corsOrigin = configuredCorsOrigin || 'http://localhost:5173';
-const maxTaskTitleLengthValue = Number(process.env.MINDWTR_CLOUD_MAX_TASK_TITLE_LENGTH || 500);
+const maxTaskTitleLengthValue = Number(process.env.TINYBUBBLES_CLOUD_MAX_TASK_TITLE_LENGTH || 500);
 export const MAX_TASK_TITLE_LENGTH = Number.isFinite(maxTaskTitleLengthValue) && maxTaskTitleLengthValue > 0
     ? Math.floor(maxTaskTitleLengthValue)
     : 500;
-const maxTaskQuickAddLengthValue = Number(process.env.MINDWTR_CLOUD_MAX_TASK_QUICK_ADD_LENGTH || 2000);
+const maxTaskQuickAddLengthValue = Number(process.env.TINYBUBBLES_CLOUD_MAX_TASK_QUICK_ADD_LENGTH || 2000);
 export const MAX_TASK_QUICK_ADD_LENGTH = Number.isFinite(maxTaskQuickAddLengthValue) && maxTaskQuickAddLengthValue > 0
     ? Math.floor(maxTaskQuickAddLengthValue)
     : 2000;
 // Aligned with apps/mcp-server's area-name cap (packages/core/src/shared-api-write-limits.ts)
 // — this used to reuse MAX_TASK_TITLE_LENGTH (500), letting a cloud-created area name run
 // 2.5x longer than the same call through MCP or the desktop/mobile apps for no reason.
-const maxAreaNameLengthValue = Number(process.env.MINDWTR_CLOUD_MAX_AREA_NAME_LENGTH || SHARED_AREA_NAME_MAX_LENGTH);
+const maxAreaNameLengthValue = Number(process.env.TINYBUBBLES_CLOUD_MAX_AREA_NAME_LENGTH || SHARED_AREA_NAME_MAX_LENGTH);
 export const MAX_AREA_NAME_LENGTH = Number.isFinite(maxAreaNameLengthValue) && maxAreaNameLengthValue > 0
     ? Math.floor(maxAreaNameLengthValue)
     : SHARED_AREA_NAME_MAX_LENGTH;
-const maxItemsPerCollectionValue = Number(process.env.MINDWTR_CLOUD_MAX_ITEMS_PER_COLLECTION || 50_000);
+const maxItemsPerCollectionValue = Number(process.env.TINYBUBBLES_CLOUD_MAX_ITEMS_PER_COLLECTION || 50_000);
 export const MAX_ITEMS_PER_COLLECTION = Number.isFinite(maxItemsPerCollectionValue) && maxItemsPerCollectionValue > 0
     ? Math.floor(maxItemsPerCollectionValue)
     : 50_000;
-const listDefaultLimitValue = Number(process.env.MINDWTR_CLOUD_LIST_DEFAULT_LIMIT || 200);
+const listDefaultLimitValue = Number(process.env.TINYBUBBLES_CLOUD_LIST_DEFAULT_LIMIT || 200);
 export const LIST_DEFAULT_LIMIT = Number.isFinite(listDefaultLimitValue) && listDefaultLimitValue > 0
     ? Math.floor(listDefaultLimitValue)
     : 200;
 // Aligned with apps/mcp-server's page-size cap (packages/core/src/shared-api-write-limits.ts)
 // — this used to default to 1000 while MCP capped the same kind of request at 500.
-const listMaxLimitValue = Number(process.env.MINDWTR_CLOUD_LIST_MAX_LIMIT || SHARED_LIST_PAGE_MAX_LIMIT);
+const listMaxLimitValue = Number(process.env.TINYBUBBLES_CLOUD_LIST_MAX_LIMIT || SHARED_LIST_PAGE_MAX_LIMIT);
 export const LIST_MAX_LIMIT = Number.isFinite(listMaxLimitValue) && listMaxLimitValue > 0
     ? Math.floor(listMaxLimitValue)
     : SHARED_LIST_PAGE_MAX_LIMIT;
-const rateLimitMaxKeysValue = Number(process.env.MINDWTR_CLOUD_RATE_MAX_KEYS || 10_000);
+const rateLimitMaxKeysValue = Number(process.env.TINYBUBBLES_CLOUD_RATE_MAX_KEYS || 10_000);
 export const RATE_LIMIT_MAX_KEYS = Number.isFinite(rateLimitMaxKeysValue) && rateLimitMaxKeysValue > 0
     ? Math.floor(rateLimitMaxKeysValue)
     : 10_000;
 export const MAX_PENDING_REMOTE_DELETE_ATTEMPTS = 100;
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const authFailureRateMaxValue = Number(process.env.MINDWTR_CLOUD_AUTH_FAILURE_RATE_MAX || 30);
+const authFailureRateMaxValue = Number(process.env.TINYBUBBLES_CLOUD_AUTH_FAILURE_RATE_MAX || 30);
 export const AUTH_FAILURE_RATE_MAX = Number.isFinite(authFailureRateMaxValue) && authFailureRateMaxValue > 0
     ? Math.floor(authFailureRateMaxValue)
     : 30;
@@ -202,7 +202,7 @@ export const CLOUD_AREA_PATCH_ALLOWED_PROP_KEYS = new Set<keyof Area>([
 ]);
 export const CLOUD_API_REV_BY = 'cloud';
 // Must stay a literal: this file is imported by scripts/check-synced-field-parity.ts,
-// which CI runs without installing workspace deps, so a runtime @mindwtr/core import
+// which CI runs without installing workspace deps, so a runtime @tinybubbles/core import
 // cannot resolve there. A test in server.test.ts pins this to core's
 // CLOUD_SYNC_TOKEN_PATTERN so client and server cannot drift.
 export const BEARER_TOKEN_PATTERN = /^[A-Za-z0-9._~+/=-]{20,512}$/;

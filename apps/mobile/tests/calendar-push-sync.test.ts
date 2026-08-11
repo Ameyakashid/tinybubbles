@@ -128,8 +128,8 @@ vi.mock('react-native', () => ({
     Platform: mockPlatform,
 }));
 
-vi.mock('@mindwtr/core', async (importOriginal) => ({
-    ...(await importOriginal<typeof import('@mindwtr/core')>()),
+vi.mock('@tinybubbles/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@tinybubbles/core')>()),
     useTaskStore: {
         getState: mockGetState,
         subscribe: mockSubscribe,
@@ -217,14 +217,14 @@ vi.mock('@/lib/app-log', () => ({
 // ---------------------------------------------------------------------------
 
 import {
-    deleteMindwtrCalendar,
-    ensureMindwtrCalendar,
+    deleteTinyBubblesCalendar,
+    ensureTinyBubblesCalendar,
     getCalendarPushColor,
     getCalendarPushTargetCalendars,
     runFullCalendarSync,
     startCalendarPushSync,
     stopCalendarPushSync,
-    updateMindwtrCalendarColor,
+    updateTinyBubblesCalendarColor,
 } from '@/lib/calendar-push-sync';
 
 // ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ function setupEnabled(calendarId = 'cal-1', targetCalendarId: string | null = nu
         .mockResolvedValueOnce('1')         // getCalendarPushEnabled → enabled
         .mockResolvedValueOnce(targetCalendarId); // getCalendarPushTargetCalendarId
     if (!targetCalendarId) {
-        mockGetItem.mockResolvedValueOnce(calendarId); // ensureMindwtrCalendar → stored ID
+        mockGetItem.mockResolvedValueOnce(calendarId); // ensureTinyBubblesCalendar → stored ID
     }
 }
 
@@ -298,9 +298,9 @@ type MockAndroidCalendar = {
  */
 function setupStatefulAndroidCalendar() {
     const storage = new Map<string, string>([
-        ['mindwtr:calendar-push-sync:enabled', '1'],
-        ['mindwtr:calendar-push-sync:calendar-id', 'cal-old'],
-        ['mindwtr:calendar-push-sync:color', '#3B82F6'],
+        ['tinybubbles:calendar-push-sync:enabled', '1'],
+        ['tinybubbles:calendar-push-sync:calendar-id', 'cal-old'],
+        ['tinybubbles:calendar-push-sync:color', '#3B82F6'],
     ]);
     mockGetItem.mockImplementation(async (key: string) => storage.get(key) ?? null);
     mockSetItem.mockImplementation(async (key: string, value: string) => { storage.set(key, value); });
@@ -313,7 +313,7 @@ function setupStatefulAndroidCalendar() {
         source: { name: 'me@gmail.com', type: 'com.google' },
     };
     let calendars: MockAndroidCalendar[] = [
-        { id: 'cal-old', title: 'Mindwtr', name: 'mindwtr', color: '#3B82F6', ...ownedAccount },
+        { id: 'cal-old', title: 'Tiny Bubbles', name: 'tinybubbles', color: '#3B82F6', ...ownedAccount },
         { id: 'google-primary', title: 'Personal', ...ownedAccount },
     ];
     mockGetCalendarsAsync.mockImplementation(async () => calendars);
@@ -321,7 +321,7 @@ function setupStatefulAndroidCalendar() {
         calendars = calendars.filter((c) => c.id !== id);
     });
     mockCreateCalendarAsync.mockImplementation(async (details?: { color?: string }) => {
-        calendars = [...calendars, { id: 'cal-new', title: 'Mindwtr', name: 'mindwtr', color: details?.color, ...ownedAccount }];
+        calendars = [...calendars, { id: 'cal-new', title: 'Tiny Bubbles', name: 'tinybubbles', color: details?.color, ...ownedAccount }];
         return 'cal-new';
     });
 
@@ -333,7 +333,7 @@ beforeEach(() => {
     vi.useFakeTimers();
     mockPlatform.OS = 'ios';
     // Default: the stored calendar still exists
-    mockGetCalendarsAsync.mockResolvedValue([{ id: 'cal-1', title: 'Mindwtr' }]);
+    mockGetCalendarsAsync.mockResolvedValue([{ id: 'cal-1', title: 'Tiny Bubbles' }]);
     // Default: no prior sync entries
     mockGetCalendarSyncEntry.mockResolvedValue(null);
     mockGetAllCalendarSyncEntries.mockResolvedValue([]);
@@ -374,11 +374,11 @@ describe('calendar sync storage readiness', () => {
     });
 });
 
-describe('ensureMindwtrCalendar', () => {
+describe('ensureTinyBubblesCalendar', () => {
     it('returns the stored calendar ID when the calendar still exists', async () => {
         mockGetItem.mockResolvedValueOnce('cal-1'); // CALENDAR_ID_KEY
 
-        const id = await ensureMindwtrCalendar();
+        const id = await ensureTinyBubblesCalendar();
 
         expect(id).toBe('cal-1');
         expect(mockCreateCalendarAsync).not.toHaveBeenCalled();
@@ -389,23 +389,23 @@ describe('ensureMindwtrCalendar', () => {
         mockGetCalendarsAsync.mockResolvedValue([]);  // not found
         mockCreateCalendarAsync.mockResolvedValue('cal-2');
 
-        const id = await ensureMindwtrCalendar();
+        const id = await ensureTinyBubblesCalendar();
 
         expect(mockCreateCalendarAsync).toHaveBeenCalledOnce();
         expect(id).toBe('cal-2');
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:calendar-id', 'cal-2');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:calendar-id', 'cal-2');
     });
 
-    it('uses the saved Mindwtr calendar color when creating the calendar', async () => {
+    it('uses the saved Tiny Bubbles calendar color when creating the calendar', async () => {
         mockGetItem.mockImplementation(async (key: string) => {
-            if (key === 'mindwtr:calendar-push-sync:calendar-id') return null;
-            if (key === 'mindwtr:calendar-push-sync:color') return '#DB2777';
+            if (key === 'tinybubbles:calendar-push-sync:calendar-id') return null;
+            if (key === 'tinybubbles:calendar-push-sync:color') return '#DB2777';
             return null;
         });
         mockGetCalendarsAsync.mockResolvedValue([]);
         mockCreateCalendarAsync.mockResolvedValue('cal-pink');
 
-        const id = await ensureMindwtrCalendar();
+        const id = await ensureTinyBubblesCalendar();
 
         expect(id).toBe('cal-pink');
         expect(mockCreateCalendarAsync).toHaveBeenCalledWith(expect.objectContaining({
@@ -430,12 +430,12 @@ describe('ensureMindwtrCalendar', () => {
             },
         ]);
 
-        const id = await ensureMindwtrCalendar();
+        const id = await ensureTinyBubblesCalendar();
 
         expect(id).toBe('cal-android');
         expect(mockCreateCalendarAsync).toHaveBeenCalledWith(expect.objectContaining({
-            title: 'Mindwtr',
-            name: 'mindwtr',
+            title: 'Tiny Bubbles',
+            name: 'tinybubbles',
             ownerAccount: 'me@gmail.com',
             accessLevel: 'owner',
             isVisible: true,
@@ -454,7 +454,7 @@ describe('ensureMindwtrCalendar', () => {
             { id: 'read-only', title: 'Holidays', accessLevel: 'read' },
         ]);
 
-        const id = await ensureMindwtrCalendar();
+        const id = await ensureTinyBubblesCalendar();
 
         expect(id).toBeNull();
         expect(mockCreateCalendarAsync).not.toHaveBeenCalled();
@@ -463,19 +463,19 @@ describe('ensureMindwtrCalendar', () => {
 });
 
 describe('calendar push color', () => {
-    it('normalizes saved colors and updates the managed Mindwtr calendar when supported', async () => {
+    it('normalizes saved colors and updates the managed Tiny Bubbles calendar when supported', async () => {
         mockGetItem.mockImplementation(async (key: string) => {
-            if (key === 'mindwtr:calendar-push-sync:calendar-id') return 'cal-1';
-            if (key === 'mindwtr:calendar-push-sync:color') return '#db2777';
+            if (key === 'tinybubbles:calendar-push-sync:calendar-id') return 'cal-1';
+            if (key === 'tinybubbles:calendar-push-sync:color') return '#db2777';
             return null;
         });
-        mockGetCalendarsAsync.mockResolvedValue([{ id: 'cal-1', title: 'Mindwtr', allowsModifications: true }]);
+        mockGetCalendarsAsync.mockResolvedValue([{ id: 'cal-1', title: 'Tiny Bubbles', allowsModifications: true }]);
 
         await expect(getCalendarPushColor()).resolves.toBe('#DB2777');
-        const updated = await updateMindwtrCalendarColor('#059669');
+        const updated = await updateTinyBubblesCalendarColor('#059669');
 
         expect(updated).toBe(true);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:color', '#059669');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:color', '#059669');
         expect(mockUpdateCalendarAsync).toHaveBeenCalledWith('cal-1', { color: '#059669' });
         // iOS updates the calendar in place — it must not recreate it.
         expect(mockDeleteCalendarAsync).not.toHaveBeenCalled();
@@ -487,10 +487,10 @@ describe('calendar push color', () => {
         const { calendars } = setupStatefulAndroidCalendar();
         setStoreTasks([]);
 
-        const updated = await updateMindwtrCalendarColor('#059669');
+        const updated = await updateTinyBubblesCalendarColor('#059669');
 
         expect(updated).toBe(true);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:color', '#059669');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:color', '#059669');
         // expo-calendar cannot change a calendar's color in place on Android, so
         // the managed calendar is deleted and recreated with the new color.
         expect(mockUpdateCalendarAsync).not.toHaveBeenCalled();
@@ -498,7 +498,7 @@ describe('calendar push color', () => {
         expect(mockCreateCalendarAsync).toHaveBeenCalledTimes(1);
         expect(mockCreateCalendarAsync).toHaveBeenCalledWith(expect.objectContaining({ color: '#059669' }));
         expect(calendars().some((c) => c.id === 'cal-new' && c.color === '#059669')).toBe(true);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:calendar-id', 'cal-new');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:calendar-id', 'cal-new');
     });
 
     it('re-pushes events to the recreated Android calendar so they inherit the new color (#726)', async () => {
@@ -506,7 +506,7 @@ describe('calendar push color', () => {
         setupStatefulAndroidCalendar();
         setStoreTasks([makeTask({ id: 'task-1', dueDate: '2026-04-20' })]);
 
-        await updateMindwtrCalendarColor('#059669');
+        await updateTinyBubblesCalendarColor('#059669');
 
         expect(mockCreateEventAsync).toHaveBeenCalledWith('cal-new', expect.objectContaining({
             calendarId: 'cal-new',
@@ -516,16 +516,16 @@ describe('calendar push color', () => {
     it('stores the color but does not recreate when no managed Android calendar exists yet (#726)', async () => {
         mockPlatform.OS = 'android';
         mockGetItem.mockImplementation(async (key: string) => (
-            key === 'mindwtr:calendar-push-sync:color' ? '#3B82F6' : null
+            key === 'tinybubbles:calendar-push-sync:color' ? '#3B82F6' : null
         ));
         mockGetCalendarsAsync.mockResolvedValue([
             { id: 'google-primary', title: 'Personal', accessLevel: 'owner', allowsModifications: true },
         ]);
 
-        const updated = await updateMindwtrCalendarColor('#059669');
+        const updated = await updateTinyBubblesCalendarColor('#059669');
 
         expect(updated).toBe(false);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:color', '#059669');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:color', '#059669');
         expect(mockDeleteCalendarAsync).not.toHaveBeenCalled();
         expect(mockCreateCalendarAsync).not.toHaveBeenCalled();
     });
@@ -538,14 +538,14 @@ describe('getCalendarPushTargetCalendars', () => {
             { id: 'holidays', title: 'Holidays', allowsModifications: false },
             {
                 id: 'managed-local',
-                title: 'Mindwtr',
+                title: 'Tiny Bubbles',
                 accessLevel: 'owner',
                 allowsModifications: true,
                 source: { name: 'local account', type: 'local' },
             },
             {
-                id: 'google-mindwtr',
-                title: 'Mindwtr',
+                id: 'google-tinybubbles',
+                title: 'Tiny Bubbles',
                 ownerAccount: 'me@gmail.com',
                 accessLevel: 'owner',
                 allowsModifications: true,
@@ -566,25 +566,25 @@ describe('getCalendarPushTargetCalendars', () => {
         expect(targets).toEqual(expect.arrayContaining([
             expect.objectContaining({
                 id: 'managed-local',
-                name: 'Mindwtr',
-                isMindwtrDedicated: true,
-                isMindwtrManaged: true,
+                name: 'Tiny Bubbles',
+                isTinyBubblesDedicated: true,
+                isTinyBubblesManaged: true,
                 isLocalOnly: true,
             }),
             expect.objectContaining({
-                id: 'google-mindwtr',
-                name: 'Mindwtr',
+                id: 'google-tinybubbles',
+                name: 'Tiny Bubbles',
                 sourceName: 'me@gmail.com',
-                isMindwtrDedicated: true,
-                isMindwtrManaged: false,
+                isTinyBubblesDedicated: true,
+                isTinyBubblesManaged: false,
                 isLocalOnly: false,
             }),
             expect.objectContaining({
                 id: 'google-primary',
                 name: 'Google',
                 sourceName: 'me@gmail.com',
-                isMindwtrDedicated: false,
-                isMindwtrManaged: false,
+                isTinyBubblesDedicated: false,
+                isTinyBubblesManaged: false,
                 isLocalOnly: false,
             }),
         ]));
@@ -595,8 +595,8 @@ describe('getCalendarPushTargetCalendars', () => {
         mockGetItem.mockResolvedValueOnce(null);
         mockGetCalendarsAsync.mockResolvedValue([
             {
-                id: 'google-mindwtr',
-                title: 'Mindwtr',
+                id: 'google-tinybubbles',
+                title: 'Tiny Bubbles',
                 ownerAccount: 'me@gmail.com',
                 accessLevel: 'owner',
                 allowsModifications: true,
@@ -608,7 +608,7 @@ describe('getCalendarPushTargetCalendars', () => {
 
         expect(targets).toEqual([
             expect.objectContaining({
-                id: 'google-mindwtr',
+                id: 'google-tinybubbles',
                 sourceName: 'me@gmail.com',
                 isLocalOnly: false,
             }),
@@ -619,8 +619,8 @@ describe('getCalendarPushTargetCalendars', () => {
         mockGetItem.mockResolvedValueOnce(null);
         mockGetCalendarsAsync.mockResolvedValue([
             {
-                id: 'google-secondary-mindwtr',
-                title: 'Mindwtr',
+                id: 'google-secondary-tinybubbles',
+                title: 'Tiny Bubbles',
                 ownerAccount: 'abc123@group.calendar.google.com',
                 accessLevel: 'owner',
                 allowsModifications: true,
@@ -632,7 +632,7 @@ describe('getCalendarPushTargetCalendars', () => {
 
         expect(targets).toEqual([
             expect.objectContaining({
-                id: 'google-secondary-mindwtr',
+                id: 'google-secondary-tinybubbles',
                 sourceName: 'me@gmail.com',
                 isLocalOnly: false,
             }),
@@ -643,8 +643,8 @@ describe('getCalendarPushTargetCalendars', () => {
         mockGetItem.mockResolvedValueOnce(null);
         mockGetCalendarsAsync.mockResolvedValue([
             {
-                id: 'local-mindwtr',
-                title: 'Mindwtr',
+                id: 'local-tinybubbles',
+                title: 'Tiny Bubbles',
                 ownerAccount: 'local account',
                 accessLevel: 'owner',
                 allowsModifications: true,
@@ -656,30 +656,30 @@ describe('getCalendarPushTargetCalendars', () => {
 
         expect(targets).toEqual([
             expect.objectContaining({
-                id: 'local-mindwtr',
-                isMindwtrDedicated: true,
+                id: 'local-tinybubbles',
+                isTinyBubblesDedicated: true,
                 isLocalOnly: true,
             }),
         ]);
     });
 });
 
-describe('deleteMindwtrCalendar', () => {
-    it('removes app-created Mindwtr calendars even when the stored calendar id was lost', async () => {
+describe('deleteTinyBubblesCalendar', () => {
+    it('removes app-created Tiny Bubbles calendars even when the stored calendar id was lost', async () => {
         mockGetItem
             .mockResolvedValueOnce(null) // stored calendar id after reinstall
             .mockResolvedValueOnce(null); // selected target id
         mockGetCalendarsAsync.mockResolvedValue([
             {
                 id: 'old-app-calendar',
-                title: 'Mindwtr',
-                name: 'mindwtr',
+                title: 'Tiny Bubbles',
+                name: 'tinybubbles',
                 accessLevel: 'owner',
                 allowsModifications: true,
             },
             {
                 id: 'user-calendar',
-                title: 'Mindwtr',
+                title: 'Tiny Bubbles',
                 accessLevel: 'owner',
                 allowsModifications: true,
             },
@@ -691,23 +691,23 @@ describe('deleteMindwtrCalendar', () => {
             },
         ]);
 
-        await deleteMindwtrCalendar();
+        await deleteTinyBubblesCalendar();
 
         expect(mockDeleteCalendarAsync).toHaveBeenCalledWith('old-app-calendar');
         expect(mockDeleteCalendarAsync).not.toHaveBeenCalledWith('user-calendar');
         expect(mockDeleteCalendarAsync).not.toHaveBeenCalledWith('other');
-        expect(mockRemoveItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:calendar-id');
+        expect(mockRemoveItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:calendar-id');
     });
 
-    it('clears the selected target and sync rows for deleted Mindwtr calendars', async () => {
+    it('clears the selected target and sync rows for deleted Tiny Bubbles calendars', async () => {
         mockGetItem
             .mockResolvedValueOnce('stored-calendar')
             .mockResolvedValueOnce('stored-calendar');
         mockGetCalendarsAsync.mockResolvedValue([
             {
                 id: 'stored-calendar',
-                title: 'Mindwtr',
-                name: 'mindwtr',
+                title: 'Tiny Bubbles',
+                name: 'tinybubbles',
                 accessLevel: 'owner',
                 allowsModifications: true,
             },
@@ -717,10 +717,10 @@ describe('deleteMindwtrCalendar', () => {
             { taskId: 'task-2', calendarEventId: 'evt-2', calendarId: 'other', platform: 'ios', lastSyncedAt: '' },
         ]);
 
-        await deleteMindwtrCalendar();
+        await deleteTinyBubblesCalendar();
 
         expect(mockDeleteCalendarAsync).toHaveBeenCalledWith('stored-calendar');
-        expect(mockRemoveItem).toHaveBeenCalledWith('mindwtr:calendar-push-sync:target-calendar-id');
+        expect(mockRemoveItem).toHaveBeenCalledWith('tinybubbles:calendar-push-sync:target-calendar-id');
         expect(mockDeleteCalendarSyncEntry).toHaveBeenCalledWith('task-1', 'ios');
         expect(mockDeleteCalendarSyncEntry).not.toHaveBeenCalledWith('task-2', 'ios');
     });
@@ -934,12 +934,12 @@ describe('runFullCalendarSync — selected target calendar', () => {
         }));
     });
 
-    it('keeps titles unprefixed when the selected target is the managed Mindwtr calendar', async () => {
+    it('keeps titles unprefixed when the selected target is the managed Tiny Bubbles calendar', async () => {
         setupEnabled('cal-managed', 'cal-managed');
         mockGetCalendarsAsync.mockResolvedValue([
             {
                 id: 'cal-managed',
-                title: 'Mindwtr',
+                title: 'Tiny Bubbles',
                 accessLevel: 'owner',
                 allowsModifications: true,
             },
@@ -955,7 +955,7 @@ describe('runFullCalendarSync — selected target calendar', () => {
         }));
     });
 
-    it('preserves task titles that already start with the Mindwtr prefix', async () => {
+    it('preserves task titles that already start with the Tiny Bubbles prefix', async () => {
         setupEnabled('cal-managed', 'google-primary');
         mockGetCalendarsAsync.mockResolvedValue([
             {
@@ -965,7 +965,7 @@ describe('runFullCalendarSync — selected target calendar', () => {
                 allowsModifications: true,
             },
         ]);
-        const task = makeTask({ title: 'Mindwtr: Existing prefix' });
+        const task = makeTask({ title: 'Tiny Bubbles: Existing prefix' });
         setStoreTasks([task]);
 
         await runFullCalendarSync();
@@ -976,12 +976,12 @@ describe('runFullCalendarSync — selected target calendar', () => {
         }));
     });
 
-    it('keeps titles unprefixed when the selected target is a user-created Google Mindwtr calendar', async () => {
-        setupEnabled('cal-managed', 'google-mindwtr');
+    it('keeps titles unprefixed when the selected target is a user-created Google Tiny Bubbles calendar', async () => {
+        setupEnabled('cal-managed', 'google-tinybubbles');
         mockGetCalendarsAsync.mockResolvedValue([
             {
-                id: 'google-mindwtr',
-                title: 'Mindwtr',
+                id: 'google-tinybubbles',
+                title: 'Tiny Bubbles',
                 accessLevel: 'owner',
                 allowsModifications: true,
                 source: { name: 'me@gmail.com', type: 'com.google' },
@@ -992,8 +992,8 @@ describe('runFullCalendarSync — selected target calendar', () => {
 
         await runFullCalendarSync();
 
-        expect(mockCreateEventAsync).toHaveBeenCalledWith('google-mindwtr', expect.objectContaining({
-            calendarId: 'google-mindwtr',
+        expect(mockCreateEventAsync).toHaveBeenCalledWith('google-tinybubbles', expect.objectContaining({
+            calendarId: 'google-tinybubbles',
             title: task.title,
         }));
     });

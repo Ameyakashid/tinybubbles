@@ -1,4 +1,4 @@
-import { resolveThemeColorScheme } from '@mindwtr/core';
+import { resolveThemeColorScheme } from '@tinybubbles/core';
 import { Colors } from '../constants/theme';
 import { THEME_PRESETS } from '../constants/theme-presets';
 import { M3Colors, type M3ColorRoles } from '../constants/material3/m3-color';

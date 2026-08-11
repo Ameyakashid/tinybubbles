@@ -15,7 +15,7 @@ describe('fdroid_strip_deps', () => {
   it('strips non-FOSS package dependencies and keeps npm-compatible workspace deps', () => {
     const pkg = {
       dependencies: {
-        '@mindwtr/core': 'workspace:*',
+        '@tinybubbles/core': 'workspace:*',
         'expo-dev-client': '~6.0.21',
       },
       devDependencies: {
@@ -32,17 +32,17 @@ describe('fdroid_strip_deps', () => {
 
     expect(pkg.dependencies).not.toHaveProperty('expo-dev-client');
     expect(pkg.devDependencies).not.toHaveProperty('expo-dev-client');
-    expect(pkg.dependencies['@mindwtr/core']).toBe('file:../../packages/core');
+    expect(pkg.dependencies['@tinybubbles/core']).toBe('file:../../packages/core');
     expect(pkg.expo.doctor).toEqual({ reactNativeDirectoryCheck: {} });
     expect(pkg.expo.autolinking.exclude).toEqual(['play-store-updates', 'expo-store-review']);
     expect(changes).toContain('removed dependency expo-dev-client');
-    expect(changes).toContain('rewrote @mindwtr/core to file:../../packages/core for npm compatibility');
+    expect(changes).toContain('rewrote @tinybubbles/core to file:../../packages/core for npm compatibility');
   });
 
   it('writes FOSS autolinking excludes to app.json Expo config used by prebuild', () => {
     const appJson = {
       expo: {
-        name: 'Mindwtr',
+        name: 'Tiny Bubbles',
         autolinking: {
           exclude: ['existing-native-module'],
         },
@@ -64,7 +64,7 @@ describe('fdroid_strip_deps', () => {
   });
 
   it('removes Google-backed native module sources from the F-Droid prep tree', () => {
-    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mindwtr-fdroid-strip-'));
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tinybubbles-fdroid-strip-'));
     const moduleDir = path.join(rootDir, 'modules', 'play-store-updates', 'android');
     fs.mkdirSync(moduleDir, { recursive: true });
     fs.writeFileSync(

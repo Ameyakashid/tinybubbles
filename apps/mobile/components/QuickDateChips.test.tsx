@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { describe, expect, it, vi } from 'vitest';
-import { getQuickDate } from '@mindwtr/core';
+import { getQuickDate } from '@tinybubbles/core';
 
 import { QuickDateChips } from './QuickDateChips';
 

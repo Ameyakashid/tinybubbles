@@ -3,7 +3,7 @@ import {
     parseObsidianTasksFromMarkdown,
     parseTaskNotesFile,
     type ObsidianTask,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export type ObsidianImportMode = 'inline' | 'tasknotes';
 export type ObsidianNewTaskFormat = 'auto' | 'inline' | 'tasknotes';
@@ -59,7 +59,7 @@ export type ObsidianScannerDependencies = {
 };
 
 const DEFAULT_SCAN_FOLDERS = ['/'];
-export const DEFAULT_OBSIDIAN_INBOX_FILE = 'Mindwtr/Inbox.md';
+export const DEFAULT_OBSIDIAN_INBOX_FILE = 'Tiny Bubbles/Inbox.md';
 export const DEFAULT_OBSIDIAN_NEW_TASK_FORMAT: ObsidianNewTaskFormat = 'auto';
 export const MAX_OBSIDIAN_MARKDOWN_BYTES = 5 * 1024 * 1024;
 export const MAX_OBSIDIAN_SCAN_WARNINGS = 100;

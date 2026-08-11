@@ -9,7 +9,7 @@ import {
     type BulkOrganizeStatus,
     type BulkOrganizeTaskUpdateInput,
     type Project,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';

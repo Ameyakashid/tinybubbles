@@ -4,8 +4,8 @@ import CloudKit
 
 public class CloudKitSyncModule: Module {
 
-    private static let remoteChangeNotification = Notification.Name("tech.dongdongbh.mindwtr.cloudkit.remoteChange")
-    private static let pendingRemoteChangeKey = "tech.dongdongbh.mindwtr.cloudkit.pendingRemoteChange"
+    private static let remoteChangeNotification = Notification.Name("app.tinybubbles.cloudkit.remoteChange")
+    private static let pendingRemoteChangeKey = "app.tinybubbles.cloudkit.pendingRemoteChange"
 
     private let manager = CloudKitSyncManager.shared
     private var remoteChangeObserver: NSObjectProtocol?

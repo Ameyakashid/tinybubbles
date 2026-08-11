@@ -23,10 +23,10 @@ import { buildProjectOrderMap,
     TaskPriority,
     TimeEstimate,
     resolveI18nText,
-    useTaskStore, tFallback, } from '@mindwtr/core';
-import type { FilterCriteria, Task, TaskStatus } from '@mindwtr/core';
-import type { BulkOrganizeTaskUpdateInput } from '@mindwtr/core';
-import type { TaskSortBy } from '@mindwtr/core';
+    useTaskStore, tFallback, } from '@tinybubbles/core';
+import type { FilterCriteria, Task, TaskStatus } from '@tinybubbles/core';
+import type { BulkOrganizeTaskUpdateInput } from '@tinybubbles/core';
+import type { TaskSortBy } from '@tinybubbles/core';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ListEmptyState } from './list/ListEmptyState';
 import { ListHeader } from './list/ListHeader';
@@ -50,7 +50,7 @@ import { useListViewOptimizations } from '../../hooks/useListViewOptimizations';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { reportError } from '../../lib/report-error';
 import { nextDensityMode } from '../../lib/density';
-import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue, isTaskVisibleInArea, projectMatchesAreaFilterSelection, taskMatchesAreaFilterSelection } from '@mindwtr/core';
+import { AREA_FILTER_ALL, AREA_FILTER_NONE, areaFilterSelectionToValue, isTaskVisibleInArea, projectMatchesAreaFilterSelection, taskMatchesAreaFilterSelection } from '@tinybubbles/core';
 import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { sortDoneTasksForListView } from './list/done-sort';
 import { DONE_SORT_OPTIONS, LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
@@ -97,7 +97,7 @@ const NEXT_WARNING_THRESHOLD = 15;
 // Reference kept its own key from when it was the only collapsible list (#734);
 // every other status gets its own, so collapsing Someday does not fold Next.
 const getListViewStateStorageKey = (statusFilter: string) => (
-    statusFilter === 'reference' ? 'mindwtr:view:reference:v1' : `mindwtr:view:list:${statusFilter}:v1`
+    statusFilter === 'reference' ? 'tinybubbles:view:reference:v1' : `tinybubbles:view:list:${statusFilter}:v1`
 );
 type ShowToast = (
     message: string,
@@ -825,7 +825,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
 
     const openQuickAdd = useCallback((status: TaskStatus | 'all', captureMode?: 'text' | 'audio') => {
         const initialStatus = status === 'all' ? 'inbox' : status;
-        window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+        window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
             detail: { initialProps: { status: initialStatus }, captureMode },
         }));
     }, []);

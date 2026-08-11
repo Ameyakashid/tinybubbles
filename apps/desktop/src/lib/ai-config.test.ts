@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AiSettings, AppSettings } from '@mindwtr/core';
+import type { AiSettings, AppSettings } from '@tinybubbles/core';
 import { buildAIConfig, isAIKeyRequired } from './ai-config';
 
 const isTauriRuntimeMock = vi.hoisted(() => vi.fn(() => false));

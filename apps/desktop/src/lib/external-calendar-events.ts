@@ -1,13 +1,13 @@
 import {
     expandCategoryCalendars,
-    isMindwtrMirrorCalendar,
+    isTinyBubblesMirrorCalendar,
     mergeExternalCalendarSources,
     parseIcsWithMetadata,
     type ExternalCalendarEvent,
     type ExternalCalendarSourceResult,
     type ExternalCalendarSubscription,
     type IcsCategoryInfo,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { gunzipSync, strFromU8 } from 'fflate';
 import { ExternalCalendarService } from './external-calendar-service';
 import { isLocalCalendarFileUrl } from './external-calendar-source';
@@ -195,7 +195,7 @@ export async function fetchExternalCalendarEvents(
     warnings: string[];
 }> {
     const calendars = await ExternalCalendarService.getCalendars();
-    const importableCalendars = calendars.filter((calendar) => !isMindwtrMirrorCalendar(calendar));
+    const importableCalendars = calendars.filter((calendar) => !isTinyBubblesMirrorCalendar(calendar));
     const enabled = importableCalendars.filter((calendar) => calendar.enabled);
     const monthRanges = getVisibleMonthRanges(rangeStart, rangeEnd);
 

@@ -127,7 +127,7 @@ const sanitizeLinkHref = (href: string): string | null => {
     }
     try {
         const url = new URL(trimmed);
-        if (['http:', 'https:', 'mailto:', 'tel:', 'mid:', 'mindwtr:'].includes(url.protocol)) {
+        if (['http:', 'https:', 'mailto:', 'tel:', 'mid:', 'tinybubbles:'].includes(url.protocol)) {
             return trimmed;
         }
     } catch {
@@ -188,7 +188,7 @@ export function sanitizeMarkdownReferenceLabel(label: string): string {
 }
 
 export function serializeMarkdownReferenceHref(reference: MarkdownReferenceTarget): string {
-    return `mindwtr://${reference.entityType}/${encodeURIComponent(reference.id)}`;
+    return `tinybubbles://${reference.entityType}/${encodeURIComponent(reference.id)}`;
 }
 
 export function serializeMarkdownReference(reference: MarkdownReference): string {
@@ -208,7 +208,7 @@ export function parseMarkdownReferenceToken(token: string): MarkdownReference | 
 export function parseMarkdownReferenceHref(href: string): MarkdownReferenceTarget | null {
     try {
         const url = new URL(href);
-        if (url.protocol !== 'mindwtr:') return null;
+        if (url.protocol !== 'tinybubbles:') return null;
         const entityType = url.hostname;
         if (entityType !== 'task' && entityType !== 'project') return null;
         const id = decodeURIComponent(url.pathname.replace(/^\/+/, '').trim());

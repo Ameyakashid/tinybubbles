@@ -7,8 +7,8 @@ import {
   tFallback,
   updateRangeSelection,
   type BulkOrganizeTaskUpdateInput,
-} from '@mindwtr/core';
-import type { StoreActionResult, Task, TaskStatus } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { StoreActionResult, Task, TaskStatus } from '@tinybubbles/core';
 import { logError } from '../lib/app-log';
 import { getBulkActionFailureMessage } from './task-list-utils';
 import { useToast } from '../contexts/toast-context';

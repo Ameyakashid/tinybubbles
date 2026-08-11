@@ -14,7 +14,7 @@ import {
 } from './sync-normalization';
 import { parseSyncDocument } from './sync-document';
 
-export const BACKUP_FILE_PREFIX = 'mindwtr-backup-';
+export const BACKUP_FILE_PREFIX = 'tinybubbles-backup-';
 
 // Backups legitimately include tombstones and attachment metadata, so they get a larger ceiling
 // than third-party imports. The cap still bounds the single JSON string each client must allocate.
@@ -57,7 +57,7 @@ export const assertBackupSourceFileSize = (size: number | null | undefined): voi
     if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) {
         throw new BackupSourceFileError(
             'backup-source-size-unknown',
-            'Mindwtr could not verify the selected backup file size. Copy it locally and try again.',
+            'Tiny Bubbles could not verify the selected backup file size. Copy it locally and try again.',
         );
     }
     if (size > MAX_BACKUP_SOURCE_BYTES) {
@@ -426,10 +426,10 @@ export const validateBackupJson = (
     if (metadataVersion && appVersion) {
         const comparison = compareVersions(metadataVersion, appVersion);
         if (comparison > 0) {
-            warnings.push(`This backup was created by a newer Mindwtr version (${metadataVersion}).`);
+            warnings.push(`This backup was created by a newer Tiny Bubbles version (${metadataVersion}).`);
             diagnostics.push({ code: 'backup-newer-version', params: { version: metadataVersion }, severity: 'warning' });
         } else if (comparison < 0) {
-            warnings.push(`This backup was created by an older Mindwtr version (${metadataVersion}).`);
+            warnings.push(`This backup was created by an older Tiny Bubbles version (${metadataVersion}).`);
             diagnostics.push({ code: 'backup-older-version', params: { version: metadataVersion }, severity: 'warning' });
         }
     }

@@ -2,7 +2,7 @@ import { render } from '@testing-library/react';
 import { DndContext } from '@dnd-kit/core';
 import { SortableContext } from '@dnd-kit/sortable';
 import { describe, expect, it, vi } from 'vitest';
-import type { Project, Task } from '@mindwtr/core';
+import type { Project, Task } from '@tinybubbles/core';
 
 import { DraggableProjectTaskRow, SortableProjectTaskRow } from './SortableRows';
 

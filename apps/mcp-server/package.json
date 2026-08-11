@@ -1,13 +1,13 @@
 {
-  "name": "mindwtr-mcp",
-  "description": "Stdio MCP server for Mindwtr local and self-hosted Cloud task access.",
+  "name": "tinybubbles-mcp",
+  "description": "Stdio MCP server for Tiny Bubbles local and self-hosted Cloud task access.",
   "version": "1.1.4",
   "license": "AGPL-3.0-only",
   "type": "module",
-  "mcpName": "io.github.dongdongbh/mindwtr",
+  "mcpName": "io.github.tinybubbles-app/tinybubbles",
   "main": "dist/index.js",
   "bin": {
-    "mindwtr-mcp": "dist/index.js"
+    "tinybubbles-mcp": "dist/index.js"
   },
   "files": [
     "dist/index.js",
@@ -18,17 +18,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dongdongbh/Mindwtr.git",
+    "url": "git+https://github.com/tinybubbles-app/tinybubbles.git",
     "directory": "apps/mcp-server"
   },
   "bugs": {
-    "url": "https://github.com/dongdongbh/Mindwtr/issues"
+    "url": "https://github.com/tinybubbles-app/tinybubbles/issues"
   },
-  "homepage": "https://docs.mindwtr.app/power-users/mcp",
+  "homepage": "https://github.com/tinybubbles-app/tinybubbles/tree/main/apps/mcp-server",
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "mindwtr",
+    "tinybubbles",
     "gtd",
     "tasks"
   ],

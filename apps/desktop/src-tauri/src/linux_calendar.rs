@@ -76,13 +76,13 @@ pub(crate) async fn get_linux_writable_calendars() -> Result<Vec<MacOsCalendarPu
 }
 
 #[tauri::command]
-pub(crate) async fn ensure_linux_mindwtr_calendar(
+pub(crate) async fn ensure_linux_tinybubbles_calendar(
     stored_calendar_id: Option<String>,
 ) -> Result<Option<MacOsCalendarPushTarget>, String> {
     #[cfg(target_os = "linux")]
     {
         tauri::async_runtime::spawn_blocking(move || {
-            imp::ensure_mindwtr_calendar(stored_calendar_id.as_deref())
+            imp::ensure_tinybubbles_calendar(stored_calendar_id.as_deref())
         })
         .await
         .map_err(|error| error.to_string())?
@@ -593,7 +593,7 @@ mod imp {
         let color = source_color(session.api, source.ptr);
         Some(MacOsCalendarPushTarget {
             id,
-            is_mindwtr_dedicated: name.eq_ignore_ascii_case("mindwtr"),
+            is_tinybubbles_dedicated: name.eq_ignore_ascii_case("tinybubbles"),
             name,
             source_name,
             color,
@@ -622,7 +622,7 @@ mod imp {
         Ok(targets)
     }
 
-    pub(super) fn ensure_mindwtr_calendar(
+    pub(super) fn ensure_tinybubbles_calendar(
         stored_calendar_id: Option<&str>,
     ) -> Result<Option<MacOsCalendarPushTarget>, String> {
         let api = eds_api()?;
@@ -640,18 +640,18 @@ mod imp {
         }
 
         for source in session.list_sources() {
-            if source_name(session.api, source.ptr).eq_ignore_ascii_case("mindwtr") {
+            if source_name(session.api, source.ptr).eq_ignore_ascii_case("tinybubbles") {
                 if let Some(target) = push_target_from_source(&session, &source) {
                     return Ok(Some(target));
                 }
             }
         }
 
-        create_mindwtr_calendar(&session).map(Some)
+        create_tinybubbles_calendar(&session).map(Some)
     }
 
-    fn create_mindwtr_calendar(session: &Session<'_>) -> Result<MacOsCalendarPushTarget, String> {
-        let uid = format!("mindwtr-calendar-{:032x}", rand::random::<u128>());
+    fn create_tinybubbles_calendar(session: &Session<'_>) -> Result<MacOsCalendarPushTarget, String> {
+        let uid = format!("tinybubbles-calendar-{:032x}", rand::random::<u128>());
         let uid_c = c_string(&uid, "calendar ID")?;
         let mut error = ptr::null_mut();
         let source = unsafe {
@@ -666,7 +666,7 @@ mod imp {
             unsafe { (session.api.error_free)(error) };
         }
 
-        let name = c_string("Mindwtr", "calendar name")?;
+        let name = c_string("TinyBubbles", "calendar name")?;
         unsafe { (session.api.source_set_display_name)(source.ptr, name.as_ptr()) };
         let extension = unsafe {
             (session.api.source_get_extension)(source.ptr, CALENDAR_EXTENSION.as_ptr().cast())
@@ -689,7 +689,7 @@ mod imp {
             return Err(unsafe {
                 session
                     .api
-                    .take_error(error, "Could not create the Mindwtr calendar")
+                    .take_error(error, "Could not create the TinyBubbles calendar")
             });
         }
         if !error.is_null() {
@@ -710,7 +710,7 @@ mod imp {
             }
             thread::sleep(Duration::from_millis(50));
         }
-        Err("Mindwtr calendar was created but is not ready yet".to_string())
+        Err("TinyBubbles calendar was created but is not ready yet".to_string())
     }
 
     pub(super) fn get_events(
@@ -1166,7 +1166,7 @@ mod imp {
     }
 
     fn random_event_uid() -> String {
-        format!("{:032x}@mindwtr", rand::random::<u128>())
+        format!("{:032x}@tinybubbles", rand::random::<u128>())
     }
 
     fn encode_event_id(calendar_id: &str, uid: &str) -> String {

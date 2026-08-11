@@ -16,7 +16,7 @@ import {
     shallow,
     useTaskStore,
     isTaskInActiveProject,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import { useLanguage } from '../../../contexts/language-context';
 import { FocusStarIcon } from '../../FocusStarIcon';
@@ -34,7 +34,7 @@ type DailyReviewStepDefinition = {
     icon: LucideIcon;
     hasWork: boolean;
 };
-const DAILY_REVIEW_STEP_STORAGE_KEY = 'mindwtr:dailyReview:currentStep';
+const DAILY_REVIEW_STEP_STORAGE_KEY = 'tinybubbles:dailyReview:currentStep';
 const DAILY_REVIEW_STEPS = new Set<DailyReviewStep>(['today', 'focus', 'inbox', 'waiting', 'completed']);
 
 function loadStoredDailyReviewStep(): DailyReviewStep {

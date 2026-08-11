@@ -19,7 +19,7 @@ function buildAbiSplitsBlock() {
 
 function withAbiSplits(config, props = {}) {
     config = withGradleProperties(config, (config) => {
-        const envArchs = process.env.MINDWTR_ANDROID_ARCHS;
+        const envArchs = process.env.TINYBUBBLES_ANDROID_ARCHS;
         const resolvedArchs = envArchs
             ? envArchs.split(',').map((arch) => arch.trim()).filter(Boolean)
             : [];
@@ -80,4 +80,4 @@ function withAbiSplits(config, props = {}) {
     });
 }
 
-module.exports = createRunOncePlugin(withAbiSplits, 'mindwtr-abi-splits', '1.0.0');
+module.exports = createRunOncePlugin(withAbiSplits, 'tinybubbles-abi-splits', '1.0.0');

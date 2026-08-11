@@ -1,4 +1,4 @@
-import { getBreadcrumbs, sanitizeForLog, sanitizeLogContext, sanitizeUrl, useTaskStore } from '@mindwtr/core';
+import { getBreadcrumbs, sanitizeForLog, sanitizeLogContext, sanitizeUrl, useTaskStore } from '@tinybubbles/core';
 import * as ExpoLegacyFileSystem from 'expo-file-system/legacy';
 
 type ExpoDirectory = {
@@ -77,7 +77,7 @@ const logInternalFailure = (phase: string, error?: unknown): void => {
   if (!__DEV__) return;
   const message = error instanceof Error ? error.message : String(error ?? 'unknown');
   // Console is the only reliable fallback when the diagnostics file itself is unavailable.
-  console.warn(`[Mindwtr diagnostics] ${phase} failed: ${message}`);
+  console.warn(`[Tiny Bubbles diagnostics] ${phase} failed: ${message}`);
 };
 
 const logEntryToDevConsole = (entry: LogEntry): void => {
@@ -85,7 +85,7 @@ const logEntryToDevConsole = (entry: LogEntry): void => {
   const context = entry.context && Object.keys(entry.context).length > 0
     ? ` ${JSON.stringify(entry.context)}`
     : '';
-  const line = `[Mindwtr ${entry.scope}] ${entry.message}${context}`;
+  const line = `[Tiny Bubbles ${entry.scope}] ${entry.message}${context}`;
   if (entry.level === 'error') {
     console.error(line);
   } else if (entry.level === 'warn') {
@@ -99,7 +99,7 @@ const buildLegacyTargets = (documentDirectory?: string | null): { dirUri: string
   if (!documentDirectory) return null;
   const baseUri = documentDirectory.endsWith('/') ? documentDirectory : `${documentDirectory}/`;
   const dirUri = `${baseUri}logs`;
-  return { dirUri, fileUri: `${dirUri}/mindwtr.log` };
+  return { dirUri, fileUri: `${dirUri}/tinybubbles.log` };
 };
 
 const ensureLogTargets = async (): Promise<void> => {
@@ -113,7 +113,7 @@ const ensureLogTargets = async (): Promise<void> => {
     }
     const normalizedBase = baseUri.endsWith('/') ? baseUri : `${baseUri}/`;
     LOG_DIR_URI = `${normalizedBase}logs`;
-    LOG_FILE_URI = `${LOG_DIR_URI}/mindwtr.log`;
+    LOG_FILE_URI = `${LOG_DIR_URI}/tinybubbles.log`;
     LOG_DIR = new fs.Directory(LOG_DIR_URI);
     LOG_FILE = new fs.File(LOG_FILE_URI);
     logTargetsInitialized = true;

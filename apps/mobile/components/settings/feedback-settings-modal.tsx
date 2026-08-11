@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Bug, Lightbulb, MessageSquare, X, type LucideIcon } from 'lucide-react-native';
 
-import { FEEDBACK_CATEGORIES, type FeedbackCategory } from '@mindwtr/core';
+import { FEEDBACK_CATEGORIES, type FeedbackCategory } from '@tinybubbles/core';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';
 import { styles } from './settings.styles';

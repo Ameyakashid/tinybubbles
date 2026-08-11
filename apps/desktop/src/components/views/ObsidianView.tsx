@@ -16,7 +16,7 @@ import {
     Tags,
 } from 'lucide-react';
 
-import { DEFAULT_TASKNOTES_FOLDER, safeFormatDate, translateWithFallback, useTaskStore, type ObsidianTask, type Task } from '@mindwtr/core';
+import { DEFAULT_TASKNOTES_FOLDER, safeFormatDate, translateWithFallback, useTaskStore, type ObsidianTask, type Task } from '@tinybubbles/core';
 
 import { ObsidianService } from '../../lib/obsidian-service';
 import { dispatchNavigateEvent } from '../../lib/navigation-events';
@@ -34,7 +34,7 @@ const navigateToSettings = () => {
 const pageShellClassName = 'h-full px-4 pt-3';
 const pageContentClassName = 'mx-auto w-full max-w-[84rem] min-w-0 2xl:max-w-[88rem]';
 const MAX_TASKNOTES_DETECTED_PATHS = 6;
-const OBSIDIAN_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:obsidian:v1';
+const OBSIDIAN_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:obsidian:v1';
 
 type ObsidianPersistedViewState = {
     showCompleted: boolean;
@@ -140,7 +140,7 @@ const buildObsidianSourceAttachmentIdentity = (
     };
 };
 
-const buildMindwtrTaskInitialProps = (
+const buildTinyBubblesTaskInitialProps = (
     task: ObsidianTask,
     sourceUri: string,
     sourceTitle: string,
@@ -148,7 +148,7 @@ const buildMindwtrTaskInitialProps = (
 ): Partial<Task> => {
     const metadata = task.taskNotesData ?? task.dataviewData;
     const now = new Date().toISOString();
-    const status = task.completed ? 'done' : (task.taskNotesData?.mindwtrStatus ?? 'inbox');
+    const status = task.completed ? 'done' : (task.taskNotesData?.tinybubblesStatus ?? 'inbox');
     const attachment = {
         id: sourceAttachmentId,
         kind: 'link' as const,
@@ -198,7 +198,7 @@ export function ObsidianView() {
     const { t } = useLanguage();
     const showToast = useUiStore((state) => state.showToast);
     const addTask = useTaskStore((state) => state.addTask);
-    const mindwtrTasks = useTaskStore((state) => state._allTasks);
+    const tinybubblesTasks = useTaskStore((state) => state._allTasks);
     const config = useObsidianStore((state) => state.config);
     const tasks = useObsidianStore((state) => state.tasks);
     const scannedFileCount = useObsidianStore((state) => state.scannedFileCount);
@@ -217,7 +217,7 @@ export function ObsidianView() {
     const [newTaskText, setNewTaskText] = useState('');
     const [isCreatingTask, setIsCreatingTask] = useState(false);
     const [pendingTaskIds, setPendingTaskIds] = useState<Record<string, true>>({});
-    const [pendingMindwtrTaskIds, setPendingMindwtrTaskIds] = useState<Record<string, true>>({});
+    const [pendingTinyBubblesTaskIds, setPendingTinyBubblesTaskIds] = useState<Record<string, true>>({});
     const [persistedViewState, setPersistedViewState] = usePersistedViewState(
         OBSIDIAN_VIEW_STATE_STORAGE_KEY,
         DEFAULT_OBSIDIAN_VIEW_STATE,
@@ -302,23 +302,23 @@ export function ObsidianView() {
     }, [resolveText, showToast]);
 
 
-    const handleBringIntoMindwtr = useCallback(async (task: typeof tasks[number]) => {
+    const handleBringIntoTinyBubbles = useCallback(async (task: typeof tasks[number]) => {
         const sourceUri = ObsidianService.buildObsidianUri(task.source);
         const sourceIdentity = buildObsidianSourceAttachmentIdentity(task, tasks);
-        if (mindwtrTasks.some((existingTask) => hasObsidianSourceAttachment(
+        if (tinybubblesTasks.some((existingTask) => hasObsidianSourceAttachment(
             existingTask,
             sourceIdentity,
             sourceUri,
             task.text,
         ))) {
-            showToast(resolveText('obsidian.bringIntoMindwtrAlreadyExists', 'Task already exists in Mindwtr.'), 'info');
+            showToast(resolveText('obsidian.bringIntoTinyBubblesAlreadyExists', 'Task already exists in Tiny Bubbles.'), 'info');
             return;
         }
-        setPendingMindwtrTaskIds((current) => ({ ...current, [task.id]: true }));
+        setPendingTinyBubblesTaskIds((current) => ({ ...current, [task.id]: true }));
         try {
             const result = await addTask(
                 task.text,
-                buildMindwtrTaskInitialProps(
+                buildTinyBubblesTaskInitialProps(
                     task,
                     sourceUri,
                     resolveText('obsidian.sourceAttachmentTitle', 'Obsidian source'),
@@ -326,25 +326,25 @@ export function ObsidianView() {
                 )
             );
             if (!result.success) {
-                throw new Error(result.error || resolveText('obsidian.bringIntoMindwtrFailed', 'Could not add the task to Mindwtr.'));
+                throw new Error(result.error || resolveText('obsidian.bringIntoTinyBubblesFailed', 'Could not add the task to Tiny Bubbles.'));
             }
-            showToast(resolveText('obsidian.bringIntoMindwtrSuccess', 'Task added to Mindwtr.'), 'success');
+            showToast(resolveText('obsidian.bringIntoTinyBubblesSuccess', 'Task added to Tiny Bubbles.'), 'success');
         } catch (bringError) {
             showToast(
                 bringError instanceof Error && bringError.message.trim()
                     ? bringError.message
-                    : resolveText('obsidian.bringIntoMindwtrFailed', 'Could not add the task to Mindwtr.'),
+                    : resolveText('obsidian.bringIntoTinyBubblesFailed', 'Could not add the task to Tiny Bubbles.'),
                 'error',
                 5000
             );
         } finally {
-            setPendingMindwtrTaskIds((current) => {
+            setPendingTinyBubblesTaskIds((current) => {
                 const next = { ...current };
                 delete next[task.id];
                 return next;
             });
         }
-    }, [addTask, mindwtrTasks, resolveText, showToast, tasks]);
+    }, [addTask, tinybubblesTasks, resolveText, showToast, tasks]);
 
     const handleToggleTask = useCallback(async (task: typeof tasks[number]) => {
         if (!config.vaultPath) return;
@@ -461,7 +461,7 @@ export function ObsidianView() {
                                 <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
                                     {resolveText(
                                         'obsidian.description',
-                                        'Import tasks from your Obsidian vault, keep the source note visible, and bring real commitments into Mindwtr when needed.'
+                                        'Import tasks from your Obsidian vault, keep the source note visible, and bring real commitments into Tiny Bubbles when needed.'
                                     )}
                                 </p>
                             </div>
@@ -632,7 +632,7 @@ export function ObsidianView() {
                                 <p className="mt-1 text-sm text-foreground/85">
                                     {resolveText(
                                         'obsidian.taskNotesDetectedBody',
-                                        'Mindwtr detected TaskNotes-style frontmatter in these files, so inline checklist tasks from other notes are ignored.'
+                                        'Tiny Bubbles detected TaskNotes-style frontmatter in these files, so inline checklist tasks from other notes are ignored.'
                                     )}
                                 </p>
                                 <p className="mt-2 text-xs text-muted-foreground">
@@ -713,7 +713,7 @@ export function ObsidianView() {
                         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
                             {resolveText(
                                 'obsidian.emptyBody',
-                                'Mindwtr scanned the configured folders but did not find any Markdown checklist items yet.'
+                                'Tiny Bubbles scanned the configured folders but did not find any Markdown checklist items yet.'
                             )}
                         </p>
                     </section>
@@ -723,7 +723,7 @@ export function ObsidianView() {
                     <section className="space-y-3">
                         {visibleTasks.map((task) => {
                             const isPending = Boolean(pendingTaskIds[task.id]);
-                            const isBringingIntoMindwtr = Boolean(pendingMindwtrTaskIds[task.id]);
+                            const isBringingIntoTinyBubbles = Boolean(pendingTinyBubblesTaskIds[task.id]);
                             const taskNotesData = task.taskNotesData;
                             const dataviewData = task.dataviewData;
                             const metadata = taskNotesData ?? dataviewData;
@@ -760,9 +760,9 @@ export function ObsidianView() {
                                                                 ? resolveText('obsidian.taskNotesBadge', 'TaskNotes')
                                                                 : resolveText('obsidian.inlineBadge', 'Inline')}
                                                         </span>
-                                                        {taskNotesData?.mindwtrStatus && (
+                                                        {taskNotesData?.tinybubblesStatus && (
                                                             <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                                                                {taskNotesData.mindwtrStatus}
+                                                                {taskNotesData.tinybubblesStatus}
                                                             </span>
                                                         )}
                                                         {dataviewData && (
@@ -872,18 +872,18 @@ export function ObsidianView() {
                                         <div className="flex flex-wrap items-center justify-end gap-2">
                                             <button
                                                 type="button"
-                                                onClick={() => void handleBringIntoMindwtr(task)}
-                                                disabled={isBringingIntoMindwtr}
+                                                onClick={() => void handleBringIntoTinyBubbles(task)}
+                                                disabled={isBringingIntoTinyBubbles}
                                                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
                                             >
-                                                {isBringingIntoMindwtr ? (
+                                                {isBringingIntoTinyBubbles ? (
                                                     <Loader2 className="h-4 w-4 animate-spin" />
                                                 ) : (
                                                     <ArrowRight className="h-4 w-4" />
                                                 )}
-                                                {isBringingIntoMindwtr
+                                                {isBringingIntoTinyBubbles
                                                     ? resolveText('common.saving', 'Saving...')
-                                                    : resolveText('obsidian.bringIntoMindwtr', 'Bring into Mindwtr')}
+                                                    : resolveText('obsidian.bringIntoTinyBubbles', 'Bring into Tiny Bubbles')}
                                             </button>
                                             <button
                                                 type="button"

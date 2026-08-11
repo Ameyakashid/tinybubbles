@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 
 import { useLanguage } from '@/contexts/language-context';
 import { useToast } from '@/contexts/toast-context';
@@ -96,7 +96,7 @@ export function useManualPullSync() {
             ? tFallback(t, 'common.notice', 'Notice')
             : tFallback(t, 'common.offline', 'Offline'),
           message: serverUnreachable
-            ? tFallback(t, 'settings.syncServerUnreachable', "Couldn't reach the sync server. Check that Mindwtr is allowed to use the network (cellular data, VPN, or firewall).")
+            ? tFallback(t, 'settings.syncServerUnreachable', "Couldn't reach the sync server. Check that Tiny Bubbles is allowed to use the network (cellular data, VPN, or firewall).")
             : tFallback(t, 'settings.syncSkippedOffline', 'No internet connection. Sync skipped.'),
           tone: 'warning',
         });

@@ -1,6 +1,6 @@
 import { View, Text, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
-import { buildTrashTimeline, getInlineMarkdownPreview, projectMatchesAreaFilterSelection, shallow, taskMatchesAreaFilterSelection, tFallback, useTaskStore } from '@mindwtr/core';
-import type { Project, StoreActionResult, Task } from '@mindwtr/core';
+import { buildTrashTimeline, getInlineMarkdownPreview, projectMatchesAreaFilterSelection, shallow, taskMatchesAreaFilterSelection, tFallback, useTaskStore } from '@tinybubbles/core';
+import type { Project, StoreActionResult, Task } from '@tinybubbles/core';
 import { MarkdownInlineText } from '@/components/markdown-text';
 import { assertBulkActionSucceeded } from '@/components/use-task-list-selection';
 import { getBulkActionFailureMessage } from '@/components/task-list-utils';

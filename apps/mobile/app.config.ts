@@ -10,7 +10,7 @@ const configuredAnalyticsHeartbeatUrl = (process.env.ANALYTICS_HEARTBEAT_URL ?? 
 // send the anonymous opt-out heartbeat too — a CI secret cannot reach those builds, and
 // baking it from source keeps the FOSS APK byte-identical across rebuilds. Dev builds
 // and Expo Go never send regardless of this value.
-const DEFAULT_ANALYTICS_HEARTBEAT_URL = 'https://mindwtr-analytics.mindwtr.workers.dev/';
+const DEFAULT_ANALYTICS_HEARTBEAT_URL = 'https://ANALYTICS_HEARTBEAT_URL_PLACEHOLDER.example/';
 const analyticsHeartbeatUrl = analyticsHeartbeatDisabled
   ? ''
   : (configuredAnalyticsHeartbeatUrl || DEFAULT_ANALYTICS_HEARTBEAT_URL);

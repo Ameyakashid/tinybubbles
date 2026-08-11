@@ -44,6 +44,6 @@ describe('Markdown', () => {
             </LanguageProvider>
         );
 
-        expect(container.querySelectorAll('.mindwtr-markdown-blank-line')).toHaveLength(1);
+        expect(container.querySelectorAll('.tinybubbles-markdown-blank-line')).toHaveLength(1);
     });
 });

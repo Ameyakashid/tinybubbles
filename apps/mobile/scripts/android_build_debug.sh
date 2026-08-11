@@ -66,7 +66,7 @@ for arch in "${ARCH_LIST[@]}"; do
   fi
   apk_path="$(ls "$APK_DIR"/app-*${arch_trimmed}*-debug*.apk 2>/dev/null | head -1 || true)"
   if [[ -n "$apk_path" ]]; then
-    out_name="mindwtr-${VERSION}-${arch_trimmed}-debug.apk"
+    out_name="tinybubbles-${VERSION}-${arch_trimmed}-debug.apk"
     cp "$apk_path" "${OUTPUT_DIR}/${out_name}"
     echo "APK: ${OUTPUT_DIR}/${out_name}"
     found=1
@@ -79,7 +79,7 @@ if [[ "$found" -eq 0 ]]; then
     echo "No debug APKs found in ${APK_DIR}" >&2
     exit 1
   fi
-  out_name="mindwtr-${VERSION}-debug.apk"
+  out_name="tinybubbles-${VERSION}-debug.apk"
   cp "$apk_path" "${OUTPUT_DIR}/${out_name}"
   echo "APK: ${OUTPUT_DIR}/${out_name}"
 fi

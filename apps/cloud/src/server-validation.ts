@@ -14,8 +14,8 @@ import {
     type Section,
     type Task,
     type TaskStatus,
-} from '@mindwtr/core';
-// Relative path (not '@mindwtr/core/...'): TASK_RECURRENCE_FIELD_KEYS is the shared home for
+} from '@tinybubbles/core';
+// Relative path (not '@tinybubbles/core/...'): TASK_RECURRENCE_FIELD_KEYS is the shared home for
 // the recurrence object's field-key allowlist (see that file's header). This file isn't part
 // of the native-schema CI job's zero-install import chain, but the relative path is harmless
 // here and keeps the pattern consistent with task-sync-schema.ts's sibling imports below.

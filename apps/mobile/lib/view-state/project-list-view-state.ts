@@ -4,7 +4,7 @@ export type ProjectListViewState = {
   showDeferredProjects: boolean;
 };
 
-export const PROJECT_LIST_VIEW_STATE_STORAGE_KEY = 'mindwtr:view:projects:v1';
+export const PROJECT_LIST_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:projects:v1';
 
 export const DEFAULT_PROJECT_LIST_VIEW_STATE: ProjectListViewState = {
   collapsedAreas: {},

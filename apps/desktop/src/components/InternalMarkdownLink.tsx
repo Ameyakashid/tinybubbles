@@ -1,5 +1,5 @@
 import React from 'react';
-import { parseMarkdownReferenceHref, tFallback, useTaskStore, shallow, type Project, type Task } from '@mindwtr/core';
+import { parseMarkdownReferenceHref, tFallback, useTaskStore, shallow, type Project, type Task } from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 import { dispatchNavigateEvent } from '../lib/navigation-events';

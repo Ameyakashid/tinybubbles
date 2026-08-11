@@ -36,7 +36,7 @@ import {
     useTaskStore,
     type AppAnnouncement,
     type AppAnnouncementAction,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { buildTrayTooltip } from './lib/tray-tooltip';
 import { GlobalSearch } from './components/GlobalSearch';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -124,7 +124,7 @@ import {
     PROMPT_TEST_CONTROLS_ENABLED,
     subscribePromptTest,
 } from './lib/prompt-test-controls';
-import { useStartupPromptQueue, type StartupPromptDescriptor } from '@mindwtr/core';
+import { useStartupPromptQueue, type StartupPromptDescriptor } from '@tinybubbles/core';
 import { useUiStore } from './store/ui-store';
 import { useObsidianStore } from './store/obsidian-store';
 import type { SettingsOnboardingHintPage, SettingsPage } from './components/views/SettingsView';
@@ -139,7 +139,7 @@ const SettingsView = lazy(wrapSettingsOpenImport(
 ));
 
 const DEFAULT_DESKTOP_VIEW = 'agenda';
-const DESKTOP_ONBOARDING_STORAGE_KEY = 'mindwtr:desktop:first-run-onboarding:v1';
+const DESKTOP_ONBOARDING_STORAGE_KEY = 'tinybubbles:desktop:first-run-onboarding:v1';
 const DONATION_PROMPT_ENABLED = (
     import.meta.env.VITE_DONATION_PROMPT_ENABLED === '1'
     || import.meta.env.VITE_DONATION_PROMPT_ENABLED === 'true'
@@ -150,8 +150,10 @@ const DONATION_PROMPT_STARTUP_DELAY_MS = 2000;
 // the user — generously past any normal save, and past the native watchdog's
 // 5s so its forced trace lands first if the whole channel is dead.
 const CLOSE_FLUSH_TIMEOUT_MS = 10_000;
-const MS_STORE_REVIEW_URL = 'ms-windows-store://review/?ProductId=9N0V5B0B6FRX';
-const MAC_APP_STORE_REVIEW_URL = 'macappstore://itunes.apple.com/app/id6758597144?action=write-review';
+// Tiny Bubbles has no Microsoft Store listing yet; empty keeps the review prompt hidden.
+const MS_STORE_REVIEW_URL = '';
+// Tiny Bubbles has no Mac App Store listing yet; leave empty so the review prompt stays hidden.
+const MAC_APP_STORE_REVIEW_URL = '';
 
 type DesktopUpdateReminderInfo = {
     currentVersion: string;
@@ -187,7 +189,7 @@ const writeDesktopOnboardingDismissed = () => {
 const buildUpdateReminderAnnouncement = (info: DesktopUpdateReminderInfo): AppAnnouncement => ({
     id: `update-reminder-${info.latestVersion}`,
     title: 'Update available',
-    body: `Mindwtr ${info.latestVersion} is available. You are using ${info.currentVersion}. Update when you have a minute to keep fixes and improvements current.`,
+    body: `Tiny Bubbles ${info.latestVersion} is available. You are using ${info.currentVersion}. Update when you have a minute to keep fixes and improvements current.`,
     action: {
         type: 'url',
         label: info.actionLabel ?? 'View release',
@@ -213,14 +215,15 @@ const getDesktopReviewTarget = (installSource: InstallSource | null): { label: s
     const platform = getDesktopPlatform();
     if (platform === 'linux') return null;
     if (installSource === 'microsoft-store' || platform === 'windows') {
-        return { label: 'Rate Mindwtr', url: MS_STORE_REVIEW_URL };
+        // No store listing yet, so fall through to the repo rather than a dead link.
+        if (MS_STORE_REVIEW_URL) return { label: 'Rate Tiny Bubbles', url: MS_STORE_REVIEW_URL };
     }
     if (installSource === 'mac-app-store' || platform === 'macos') {
-        return { label: 'Rate Mindwtr', url: MAC_APP_STORE_REVIEW_URL };
+        if (MAC_APP_STORE_REVIEW_URL) return { label: 'Rate Tiny Bubbles', url: MAC_APP_STORE_REVIEW_URL };
     }
     return {
         label: 'Open GitHub',
-        url: 'https://github.com/dongdongbh/Mindwtr',
+        url: 'https://github.com/tinybubbles-app/tinybubbles',
     };
 };
 
@@ -229,7 +232,7 @@ const buildPromptTestReviewAnnouncement = (installSource: InstallSource | null):
     if (!target) return null;
     return {
         id: 'prompt-test-review',
-        title: 'Enjoying Mindwtr?',
+        title: 'Enjoying Tiny Bubbles?',
         body: 'A quick rating helps others discover it. It only takes a moment.',
         action: {
             type: 'url',
@@ -316,7 +319,7 @@ function App() {
         ).map((task) => task.title).join(FOCUS_TITLE_SEPARATOR)
     ));
     const trayTooltip = useMemo(() => buildTrayTooltip({
-        appName: translateWithFallback(t, 'app.name', 'Mindwtr'),
+        appName: translateWithFallback(t, 'app.name', 'Tiny Bubbles'),
         focusLabel: translateWithFallback(t, 'agenda.todaysFocus', "Today's Focus"),
         titles: focusTaskTitles ? focusTaskTitles.split(FOCUS_TITLE_SEPARATOR) : [],
     }), [focusTaskTitles, t]);
@@ -799,10 +802,10 @@ function App() {
                         }
                         if (!timedOut) return;
                         const closeAnyway = await requestConfirmation({
-                            title: translateOrFallbackRef.current('app.closeStillSavingTitle', 'Mindwtr is still saving'),
+                            title: translateOrFallbackRef.current('app.closeStillSavingTitle', 'Tiny Bubbles is still saving'),
                             description: translateOrFallbackRef.current(
                                 'app.closeStillSavingBody',
-                                'Mindwtr has not finished saving your recent changes. '
+                                'Tiny Bubbles has not finished saving your recent changes. '
                                 + 'Close anyway? Unsaved changes will be lost.'
                             ),
                             confirmLabel: translateOrFallbackRef.current('common.close', 'Close'),
@@ -1607,10 +1610,10 @@ function App() {
                     {confirmModal}
                     <CloseBehaviorModal
                         isOpen={closePromptOpen}
-                        title={translateOrFallback('settings.closeBehaviorPromptTitle', 'Close Mindwtr?')}
+                        title={translateOrFallback('settings.closeBehaviorPromptTitle', 'Close Tiny Bubbles?')}
                         description={translateOrFallback(
                             'settings.closeBehaviorPromptBody',
-                            'Do you want Mindwtr to stay running in the tray or quit completely?'
+                            'Do you want Tiny Bubbles to stay running in the tray or quit completely?'
                         )}
                         rememberLabel={translateOrFallback('settings.closeBehaviorRemember', "Don't ask again")}
                         stayLabel={translateOrFallback('settings.closeBehaviorTray', 'Keep running in tray')}

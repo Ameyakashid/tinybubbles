@@ -1,5 +1,5 @@
-repo_url: https://github.com/dongdongbh/Mindwtr
-repo_name: Mindwtr
+repo_url: https://github.com/tinybubbles-app/tinybubbles
+repo_name: Tiny Bubbles
 
 build:
   - npm ci --workspaces=false --legacy-peer-deps --no-audit --no-fund --prefix packages/core
@@ -8,15 +8,15 @@ build:
   - UNSIGNED_APK=1 FOSS_BUILD=1 SKIP_FDROID_PREP=1 ARCHS=arm64-v8a bash apps/mobile/scripts/android_build.sh
 
 artifacts:
-  - apps/mobile/build/mindwtr-*-arm64-v8a-foss.apk
+  - apps/mobile/build/tinybubbles-*-arm64-v8a-foss.apk
 
 notes:
   - Build with plain npm + Gradle; no Bun and no EAS required.
   - Use npm ci (not npm install) to enforce the committed lockfiles for reproducible dependency resolution.
   - FOSS mode strips non-free Expo dependencies via scripts/fdroid_prep.sh.
   - F-Droid can additionally opt into Expo Android source builds with FDROID_EXPO_BUILD_FROM_SOURCE=1 when stricter scanner rules require it.
-  - scripts/fdroid_prep.sh rewrites @mindwtr/core from workspace:* to file:../../packages/core for npm compatibility.
-  - Install packages/core first because @mindwtr/core is a local package in this flow.
+  - scripts/fdroid_prep.sh rewrites @tinybubbles/core from workspace:* to file:../../packages/core for npm compatibility.
+  - Install packages/core first because @tinybubbles/core is a local package in this flow.
   - scripts/fdroid_prep.sh mutates apps/mobile/package.json; run from a clean checkout/CI workspace.
   - SKIP_FDROID_PREP=1 avoids running prep twice after explicit pre-install prep.
   - Use `FOSS_BUILD=1 ARCHS=arm64-v8a bash apps/mobile/scripts/android_build.sh --prep-only` for prep-only mode, then run Gradle manually in apps/mobile/android.

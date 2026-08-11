@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import React from 'react';
 import { ActivityIndicator, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { translateWithFallback } from '@mindwtr/core';
+import { translateWithFallback } from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import type { BackupAction } from './use-sync-settings-backup-actions';
@@ -118,7 +118,7 @@ export function BackgroundSyncInfoCard({
           </Text>
           <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
             {isRemoteBackend
-              ? tr('settings.syncMobile.mindwtrAsksTheSystemToSyncAboutEvery15Minutes')
+              ? tr('settings.syncMobile.tinybubblesAsksTheSystemToSyncAboutEvery15Minutes')
               : tr('settings.syncMobile.scheduledBackgroundSyncIsAvailableForWebdavSelfHostedCloud')}
           </Text>
         </View>
@@ -132,7 +132,7 @@ type SyncBackupSectionProps = {
   handleAddGettingStartedContent: () => void;
   handleBackup: () => void;
   handleImportDgt: () => void;
-  handleImportMindwtrCsv: () => void;
+  handleImportTinyBubblesCsv: () => void;
   handleImportOmniFocus: () => void;
   handleImportTickTick: () => void;
   handleImportTodoist: () => void;
@@ -159,7 +159,7 @@ export function SyncBackupSection({
   handleAddGettingStartedContent,
   handleBackup,
   handleImportDgt,
-  handleImportMindwtrCsv,
+  handleImportTinyBubblesCsv,
   handleImportOmniFocus,
   handleImportTickTick,
   handleImportTodoist,
@@ -317,14 +317,14 @@ export function SyncBackupSection({
             disabled={isSyncing || isBackupBusy}
             accessibilityRole="button"
             accessibilityLabel={tr('settings.syncMobile.importFromTodoist')}
-            accessibilityHint={tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
+            accessibilityHint={tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoTinyBubblesProjects')}
             accessibilityState={{ busy: backupAction === 'import:todoist', disabled: isSyncing || isBackupBusy }}
             testID="data-transfer-import-todoist"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTodoist')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                {tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoMindwtrProjects')}
+                {tr('settings.syncMobile.importTodoistCsvOrZipExportsIntoTinyBubblesProjects')}
               </Text>
             </View>
             {backupAction === 'import:todoist' && renderDecorativeActivityIndicator(tc.tint)}
@@ -335,14 +335,14 @@ export function SyncBackupSection({
             disabled={isSyncing || isBackupBusy}
             accessibilityRole="button"
             accessibilityLabel={tr('settings.syncMobile.importFromTicktick')}
-            accessibilityHint={tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
+            accessibilityHint={tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoTinyBubblesAreas')}
             accessibilityState={{ busy: backupAction === 'import:ticktick', disabled: isSyncing || isBackupBusy }}
             testID="data-transfer-import-ticktick"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTicktick')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                {tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoMindwtrAreas')}
+                {tr('settings.syncMobile.importTicktickCsvOrZipBackupsIntoTinyBubblesAreas')}
               </Text>
             </View>
             {backupAction === 'import:ticktick' && renderDecorativeActivityIndicator(tc.tint)}
@@ -353,14 +353,14 @@ export function SyncBackupSection({
             disabled={isSyncing || isBackupBusy}
             accessibilityRole="button"
             accessibilityLabel={tr('settings.syncMobile.importFromDgtGtd')}
-            accessibilityHint={tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
+            accessibilityHint={tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoTinyBubblesAreas')}
             accessibilityState={{ busy: backupAction === 'import:dgt', disabled: isSyncing || isBackupBusy }}
             testID="data-transfer-import-dgt"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromDgtGtd')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                {tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoMindwtrAreas')}
+                {tr('settings.syncMobile.importDgtGtdJsonOrZipExportsIntoTinyBubblesAreas')}
               </Text>
             </View>
             {backupAction === 'import:dgt' && renderDecorativeActivityIndicator(tc.tint)}
@@ -371,35 +371,35 @@ export function SyncBackupSection({
             disabled={isSyncing || isBackupBusy}
             accessibilityRole="button"
             accessibilityLabel={tr('settings.syncMobile.importFromOmnifocus')}
-            accessibilityHint={tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
+            accessibilityHint={tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoTinyBubblesProjects')}
             accessibilityState={{ busy: backupAction === 'import:omnifocus', disabled: isSyncing || isBackupBusy }}
             testID="data-transfer-import-omnifocus"
           >
             <View style={styles.settingInfo}>
               <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromOmnifocus')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoMindwtrProjects')}
+                {tr('settings.syncMobile.importOmnifocusCsvJsonOrZipExportsIntoTinyBubblesProjects')}
               </Text>
             </View>
             {backupAction === 'import:omnifocus' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-            onPress={handleImportMindwtrCsv}
+            onPress={handleImportTinyBubblesCsv}
             disabled={isSyncing || isBackupBusy}
             accessibilityRole="button"
-            accessibilityLabel={tr('settings.syncMobile.importFromMindwtrCsv')}
-            accessibilityHint={tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
-            accessibilityState={{ busy: backupAction === 'import:mindwtr-csv', disabled: isSyncing || isBackupBusy }}
-            testID="data-transfer-import-mindwtr-csv"
+            accessibilityLabel={tr('settings.syncMobile.importFromTinyBubblesCsv')}
+            accessibilityHint={tr('settings.syncMobile.importTinyBubblesCsvFileIntoTinyBubblesAreasProjectsAndTasks')}
+            accessibilityState={{ busy: backupAction === 'import:tinybubbles-csv', disabled: isSyncing || isBackupBusy }}
+            testID="data-transfer-import-tinybubbles-csv"
           >
             <View style={styles.settingInfo}>
-              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromMindwtrCsv')}</Text>
+              <Text style={[styles.settingLabel, { color: tc.tint }]}>{tr('settings.syncMobile.importFromTinyBubblesCsv')}</Text>
               <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                {tr('settings.syncMobile.importMindwtrCsvFileIntoMindwtrAreasProjectsAndTasks')}
+                {tr('settings.syncMobile.importTinyBubblesCsvFileIntoTinyBubblesAreasProjectsAndTasks')}
               </Text>
             </View>
-            {backupAction === 'import:mindwtr-csv' && renderDecorativeActivityIndicator(tc.tint)}
+            {backupAction === 'import:tinybubbles-csv' && renderDecorativeActivityIndicator(tc.tint)}
           </TouchableOpacity>
         </>
         )}

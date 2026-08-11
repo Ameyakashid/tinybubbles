@@ -27,8 +27,8 @@ use crate::config::{
 use crate::storage::{get_config_path, get_secrets_path, read_json_with_retries_validated};
 #[cfg(target_os = "macos")]
 use crate::{
-    mindwtr_macos_create_security_bookmark, mindwtr_macos_free_bookmark_string,
-    mindwtr_macos_resolve_security_bookmark,
+    tinybubbles_macos_create_security_bookmark, tinybubbles_macos_free_bookmark_string,
+    tinybubbles_macos_resolve_security_bookmark,
 };
 use crate::{
     AppConfigToml, DropboxResolvedCredentialHandle, DropboxTokenBundle, DropboxTokenResponse,
@@ -1399,7 +1399,7 @@ fn wait_for_dropbox_auth_code(
                     let _ = write_oauth_http_response(
                         &mut stream,
                         "404 Not Found",
-                        "Mindwtr OAuth callback endpoint not found.",
+                        "Tiny Bubbles OAuth callback endpoint not found.",
                     );
                     continue;
                 }
@@ -1416,7 +1416,7 @@ fn wait_for_dropbox_auth_code(
                     let _ = write_oauth_http_response(
                         &mut stream,
                         "400 Bad Request",
-                        "Dropbox authorization failed. You can return to Mindwtr.",
+                        "Dropbox authorization failed. You can return to Tiny Bubbles.",
                     );
                     return Err(format!("Dropbox authorization failed: {details}"));
                 }
@@ -1426,7 +1426,7 @@ fn wait_for_dropbox_auth_code(
                     let _ = write_oauth_http_response(
                         &mut stream,
                         "400 Bad Request",
-                        "Dropbox state validation failed. Please retry from Mindwtr.",
+                        "Dropbox state validation failed. Please retry from Tiny Bubbles.",
                     );
                     return Err("Dropbox authorization failed: state mismatch".to_string());
                 }
@@ -1444,7 +1444,7 @@ fn wait_for_dropbox_auth_code(
                 let _ = write_oauth_http_response(
                     &mut stream,
                     "200 OK",
-                    "Dropbox connected. You can close this tab and return to Mindwtr.",
+                    "Dropbox connected. You can close this tab and return to Tiny Bubbles.",
                 );
                 return Ok(code);
             }
@@ -2638,13 +2638,13 @@ fn configured_sync_dir(app: &tauri::AppHandle) -> Result<Option<PathBuf>, String
 #[cfg(target_os = "macos")]
 fn create_sync_path_bookmark(path: &Path) -> Option<String> {
     let c_path = CString::new(path.to_string_lossy().as_bytes()).ok()?;
-    let raw = unsafe { mindwtr_macos_create_security_bookmark(c_path.as_ptr()) };
+    let raw = unsafe { tinybubbles_macos_create_security_bookmark(c_path.as_ptr()) };
     if raw.is_null() {
         log::warn!("Failed to create security-scoped bookmark for {:?}", path);
         return None;
     }
     let result = unsafe { CStr::from_ptr(raw) }.to_string_lossy().to_string();
-    unsafe { mindwtr_macos_free_bookmark_string(raw) };
+    unsafe { tinybubbles_macos_free_bookmark_string(raw) };
     log::info!("Created security-scoped bookmark for {:?}", path);
     Some(result)
 }
@@ -2652,13 +2652,13 @@ fn create_sync_path_bookmark(path: &Path) -> Option<String> {
 #[cfg(target_os = "macos")]
 pub(crate) fn resolve_sync_path_bookmark(base64: &str) -> Option<PathBuf> {
     let c_b64 = CString::new(base64).ok()?;
-    let raw = unsafe { mindwtr_macos_resolve_security_bookmark(c_b64.as_ptr()) };
+    let raw = unsafe { tinybubbles_macos_resolve_security_bookmark(c_b64.as_ptr()) };
     if raw.is_null() {
         log::warn!("Failed to resolve security-scoped bookmark");
         return None;
     }
     let resolved = unsafe { CStr::from_ptr(raw) }.to_string_lossy().to_string();
-    unsafe { mindwtr_macos_free_bookmark_string(raw) };
+    unsafe { tinybubbles_macos_free_bookmark_string(raw) };
     log::info!("Resolved security-scoped bookmark → {resolved}");
     Some(PathBuf::from(resolved))
 }
@@ -2702,7 +2702,7 @@ pub(crate) fn set_sync_path(
     let icloud = is_icloud_path(&sanitized_path);
     if icloud {
         log::info!(
-            "Sync path is inside iCloud Drive. Mindwtr will detect evicted files \
+            "Sync path is inside iCloud Drive. Tiny Bubbles will detect evicted files \
              and fall back gracefully, but disabling 'Optimize Mac Storage' in \
              iCloud settings is recommended for best reliability."
         );
@@ -3094,10 +3094,10 @@ fn cloud_request_builder(
 }
 
 /// A bare 405 from a cloud sync URL usually means the URL points at
-/// something other than a Mindwtr sync server (e.g. the wrong port).
+/// something other than a Tiny Bubbles sync server (e.g. the wrong port).
 fn wrong_sync_server_hint(status: reqwest::StatusCode) -> &'static str {
     if status == reqwest::StatusCode::METHOD_NOT_ALLOWED {
-        " — this URL may not be a Mindwtr sync server (check host and port)"
+        " — this URL may not be a Tiny Bubbles sync server (check host and port)"
     } else {
         ""
     }
@@ -3108,7 +3108,7 @@ fn parse_cloud_json_body(body: &str) -> Result<Value, String> {
     serde_json::from_str::<Value>(normalized).map_err(|error| {
         let lower = normalized.to_ascii_lowercase();
         if lower.starts_with("<!doctype html") || lower.starts_with("<html") {
-            "Cloud GET failed: server returned HTML instead of Mindwtr sync data — check the Self-Hosted URL, host, and port".to_string()
+            "Cloud GET failed: server returned HTML instead of Tiny Bubbles sync data — check the Self-Hosted URL, host, and port".to_string()
         } else {
             format!("Cloud GET failed: invalid JSON ({error})")
         }
@@ -3244,11 +3244,11 @@ mod tests {
             blocking_http_client(Some(&format!("http://{proxy_addr}"))).expect("client with proxy");
         // The target host does not resolve; reaching our listener proves the
         // request went to the proxy instead of connecting directly.
-        let _ = client.get("http://mindwtr-proxy-test.invalid/ping").send();
+        let _ = client.get("http://tinybubbles-proxy-test.invalid/ping").send();
 
         let request = handle.join().expect("proxy thread");
         assert!(
-            request.contains("mindwtr-proxy-test.invalid"),
+            request.contains("tinybubbles-proxy-test.invalid"),
             "proxy did not receive the request: {request}"
         );
     }
@@ -3256,16 +3256,16 @@ mod tests {
     #[test]
     fn strips_windows_verbatim_prefix_from_sync_path_display() {
         assert_eq!(
-            strip_windows_verbatim_prefix(r"\\?\C:\Users\mmbtu\Dropbox\Apps\Mindwtr"),
-            r"C:\Users\mmbtu\Dropbox\Apps\Mindwtr"
+            strip_windows_verbatim_prefix(r"\\?\C:\Users\mmbtu\Dropbox\Apps\Tiny Bubbles"),
+            r"C:\Users\mmbtu\Dropbox\Apps\Tiny Bubbles"
         );
         assert_eq!(
-            strip_windows_verbatim_prefix(r"\\?\UNC\server\share\Mindwtr"),
-            r"\\server\share\Mindwtr"
+            strip_windows_verbatim_prefix(r"\\?\UNC\server\share\Tiny Bubbles"),
+            r"\\server\share\Tiny Bubbles"
         );
         assert_eq!(
-            strip_windows_verbatim_prefix(r"C:\Users\mmbtu\Dropbox\Apps\Mindwtr"),
-            r"C:\Users\mmbtu\Dropbox\Apps\Mindwtr"
+            strip_windows_verbatim_prefix(r"C:\Users\mmbtu\Dropbox\Apps\Tiny Bubbles"),
+            r"C:\Users\mmbtu\Dropbox\Apps\Tiny Bubbles"
         );
     }
 
@@ -3273,7 +3273,7 @@ mod tests {
     fn wrong_sync_server_hint_appears_only_for_405() {
         assert_eq!(
             wrong_sync_server_hint(reqwest::StatusCode::METHOD_NOT_ALLOWED),
-            " — this URL may not be a Mindwtr sync server (check host and port)"
+            " — this URL may not be a Tiny Bubbles sync server (check host and port)"
         );
         assert_eq!(wrong_sync_server_hint(reqwest::StatusCode::NOT_FOUND), "");
         assert_eq!(
@@ -3290,7 +3290,7 @@ mod tests {
     fn cloud_json_body_explains_html_from_wrong_endpoint() {
         assert_eq!(
             parse_cloud_json_body("<!doctype html><html></html>").unwrap_err(),
-            "Cloud GET failed: server returned HTML instead of Mindwtr sync data — check the Self-Hosted URL, host, and port"
+            "Cloud GET failed: server returned HTML instead of Tiny Bubbles sync data — check the Self-Hosted URL, host, and port"
         );
     }
 
@@ -3301,8 +3301,8 @@ mod tests {
             "https://example.com/v1/data"
         );
         assert_eq!(
-            normalize_cloud_url("https://example.com/mindwtr/"),
-            "https://example.com/mindwtr/v1/data"
+            normalize_cloud_url("https://example.com/tinybubbles/"),
+            "https://example.com/tinybubbles/v1/data"
         );
         assert_eq!(
             normalize_cloud_url("https://example.com/v2"),
@@ -3321,16 +3321,16 @@ mod tests {
     #[test]
     fn normalize_webdav_url_strips_cache_busting_query() {
         assert_eq!(
-            normalize_webdav_url("https://dav.example.com/mindwtr?_=1782668355219"),
-            "https://dav.example.com/mindwtr/data.json"
+            normalize_webdav_url("https://dav.example.com/tinybubbles?_=1782668355219"),
+            "https://dav.example.com/tinybubbles/data.json"
         );
         assert_eq!(
-            normalize_webdav_url("https://dav.example.com/mindwtr/data.json?_=1782668355219"),
-            "https://dav.example.com/mindwtr/data.json"
+            normalize_webdav_url("https://dav.example.com/tinybubbles/data.json?_=1782668355219"),
+            "https://dav.example.com/tinybubbles/data.json"
         );
         assert_eq!(
-            normalize_webdav_url("https://dav.example.com/mindwtr/#sync"),
-            "https://dav.example.com/mindwtr/data.json#sync"
+            normalize_webdav_url("https://dav.example.com/tinybubbles/#sync"),
+            "https://dav.example.com/tinybubbles/data.json#sync"
         );
     }
 
@@ -3358,7 +3358,7 @@ mod tests {
     #[test]
     fn webdav_request_rejects_public_http_from_inconsistent_stored_config() {
         let config = AppConfigToml {
-            webdav_url: Some("http://dav.example.com/mindwtr".to_string()),
+            webdav_url: Some("http://dav.example.com/tinybubbles".to_string()),
             webdav_allow_insecure_http: Some("false".to_string()),
             ..AppConfigToml::default()
         };
@@ -3399,9 +3399,9 @@ mod tests {
     fn parent_webdav_collection_url_strips_query_and_hash() {
         assert_eq!(
             parent_webdav_collection_url(
-                "https://example.com/remote.php/dav/files/user/mindwtr/data.json?foo=1#frag"
+                "https://example.com/remote.php/dav/files/user/tinybubbles/data.json?foo=1#frag"
             ),
-            Some("https://example.com/remote.php/dav/files/user/mindwtr".to_string())
+            Some("https://example.com/remote.php/dav/files/user/tinybubbles".to_string())
         );
     }
 
@@ -3411,7 +3411,7 @@ mod tests {
         let mut attempt = 0usize;
 
         let result = ensure_webdav_parent_collections_with(
-            "https://example.com/remote.php/dav/files/user/mindwtr/nested/data.json",
+            "https://example.com/remote.php/dav/files/user/tinybubbles/nested/data.json",
             &mut |url| {
                 calls.push(url.to_string());
                 attempt += 1;
@@ -3428,9 +3428,9 @@ mod tests {
         assert_eq!(
             calls,
             vec![
-                "https://example.com/remote.php/dav/files/user/mindwtr/nested".to_string(),
-                "https://example.com/remote.php/dav/files/user/mindwtr".to_string(),
-                "https://example.com/remote.php/dav/files/user/mindwtr/nested".to_string(),
+                "https://example.com/remote.php/dav/files/user/tinybubbles/nested".to_string(),
+                "https://example.com/remote.php/dav/files/user/tinybubbles".to_string(),
+                "https://example.com/remote.php/dav/files/user/tinybubbles/nested".to_string(),
             ]
         );
     }
@@ -3468,7 +3468,7 @@ mod tests {
     #[test]
     fn format_error_with_source_chain_includes_nested_causes() {
         let error = TestError {
-            message: "error sending request for url (https://mindwtr.private.tld/v1/data)",
+            message: "error sending request for url (https://tinybubbles.private.tld/v1/data)",
             source: Some(Box::new(TestError {
                 message: "client error (Connect)",
                 source: Some(Box::new(TestError {
@@ -3483,7 +3483,7 @@ mod tests {
 
         assert_eq!(
             formatted,
-            "Cloud request failed [connect]: error sending request for url (https://mindwtr.private.tld/v1/data) (caused by: client error (Connect) -> invalid peer certificate: UnknownIssuer)"
+            "Cloud request failed [connect]: error sending request for url (https://tinybubbles.private.tld/v1/data) (caused by: client error (Connect) -> invalid peer certificate: UnknownIssuer)"
         );
     }
 
@@ -3565,7 +3565,7 @@ mod tests {
     fn missing_sync_file_recovers_valid_backup_before_seed() {
         let dir = tempfile::tempdir().expect("temp dir");
         let backup = dir.path().join("data.json.bak");
-        let seed = dir.path().join("mindwtr-backup-2026-01-01.json");
+        let seed = dir.path().join("tinybubbles-backup-2026-01-01.json");
         fs::write(&backup, br#"{"tasks":[{"id":"backup"}]}"#).expect("write backup");
         fs::write(&seed, br#"{"tasks":[{"id":"seed"}]}"#).expect("write seed");
 
@@ -3714,13 +3714,13 @@ mod tests {
         )
         .expect("write invalid legacy candidate");
         fs::write(
-            dir.path().join("mindwtr-backup-older.json"),
+            dir.path().join("tinybubbles-backup-older.json"),
             br#"{"tasks":[{"id":"older-valid"}]}"#,
         )
         .expect("write older valid seed");
         std::thread::sleep(Duration::from_millis(20));
         fs::write(
-            dir.path().join("mindwtr-backup-newest.json"),
+            dir.path().join("tinybubbles-backup-newest.json"),
             br#"{"tasks":[{}]}"#,
         )
         .expect("write newest invalid seed");
@@ -3761,7 +3761,7 @@ mod tests {
         )
         .expect("write wrong-shape previous backup");
         fs::write(
-            dir.path().join("mindwtr-backup-2026-08-09.json"),
+            dir.path().join("tinybubbles-backup-2026-08-09.json"),
             br#"{"tasks":[{"id":"seed-backup"}]}"#,
         )
         .expect("write valid seed backup");
@@ -3942,7 +3942,7 @@ mod tests {
     #[test]
     fn expired_lease_content_cannot_break_an_active_sync_lock() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let lock_path = dir.path().join(".mindwtr.lock");
+        let lock_path = dir.path().join(".tinybubbles.lock");
         fs::write(
             &lock_path,
             br#"{"ownerToken":"clock-skewed-peer","pid":42,"expiresAtMs":0}"#,
@@ -3963,7 +3963,7 @@ mod tests {
     #[test]
     fn unlocked_legacy_lock_file_is_reused_without_stale_takeover() {
         let dir = tempfile::tempdir().expect("temp dir");
-        let lock_path = dir.path().join(".mindwtr.lock");
+        let lock_path = dir.path().join(".tinybubbles.lock");
         fs::write(&lock_path, b"pid=42 ts=1").expect("write legacy lock metadata");
 
         let owner = acquire_sync_lock(dir.path()).expect("unlocked legacy file can be reused");
@@ -7496,7 +7496,7 @@ fn is_sync_lock_contention(error: &std::io::Error) -> bool {
 }
 
 fn acquire_sync_lock(sync_dir: &Path) -> Result<SyncFileLock, String> {
-    let lock_path = sync_dir.join(".mindwtr.lock");
+    let lock_path = sync_dir.join(".tinybubbles.lock");
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -7790,7 +7790,7 @@ fn read_sync_file_with_source_from_dir(sync_dir: &Path) -> Result<SyncFileRead, 
                 continue;
             };
             let lower = name.to_ascii_lowercase();
-            if !(lower.starts_with("mindwtr-backup-") || lower.starts_with("data-backup-")) {
+            if !(lower.starts_with("tinybubbles-backup-") || lower.starts_with("data-backup-")) {
                 continue;
             }
             if !lower.ends_with(".json") {

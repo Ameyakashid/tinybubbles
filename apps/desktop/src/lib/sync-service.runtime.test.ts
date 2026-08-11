@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { computeStableValueFingerprint, computeSyncPayloadFingerprint, type AppData } from '@mindwtr/core';
+import { computeStableValueFingerprint, computeSyncPayloadFingerprint, type AppData } from '@tinybubbles/core';
 
 type MockStoreState = {
     _allTasks: AppData['tasks'];
@@ -622,7 +622,7 @@ describe('desktop sync-service runtime', () => {
             configOverride: {
                 backend: 'webdav',
                 webdav: {
-                    url: 'https://pending.example.com/mindwtr',
+                    url: 'https://pending.example.com/tinybubbles',
                     username: 'pending-user',
                     password: 'pending-password',
                     allowInsecureHttp: false,
@@ -636,7 +636,7 @@ describe('desktop sync-service runtime', () => {
         expect(invokeMock).not.toHaveBeenCalledWith('webdav_get_json', undefined);
         expect(invokeMock).not.toHaveBeenCalledWith('webdav_put_json', expect.anything());
         expect(httpFetchMock).toHaveBeenCalledWith(
-            'https://pending.example.com/mindwtr/data.json',
+            'https://pending.example.com/tinybubbles/data.json',
             expect.objectContaining({
                 headers: expect.objectContaining({
                     Authorization: `Basic ${btoa('pending-user:pending-password')}`,
@@ -714,7 +714,7 @@ describe('desktop sync-service runtime', () => {
             configOverride: {
                 backend: 'webdav',
                 webdav: {
-                    url: 'https://pending.example.com/mindwtr',
+                    url: 'https://pending.example.com/tinybubbles',
                     username: 'pending-user',
                     password: 'pending-password',
                     allowInsecureHttp: false,
@@ -863,7 +863,7 @@ describe('desktop sync-service runtime', () => {
 
         invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
             if (command === 'get_sync_backend') return 'file';
-            if (command === 'get_sync_path') return 'C:\\Users\\Pjuter\\Documents\\Mindwtr_sync\\data.json';
+            if (command === 'get_sync_path') return 'C:\\Users\\Pjuter\\Documents\\Tiny Bubbles_sync\\data.json';
             if (command === 'create_data_snapshot') return undefined;
             if (command === 'get_data') return structuredClone(localData);
             if (command === 'save_data') return undefined;
@@ -880,12 +880,12 @@ describe('desktop sync-service runtime', () => {
 
         expect(result).toEqual({ success: true, skipped: 'requeued' });
         expect(fsMocks.writeFile).toHaveBeenCalledWith(
-            expect.stringMatching(/^\\\\\?\\C:\\Users\\Pjuter\\Documents\\Mindwtr_sync\\attachments\\att-1\.txt\.tmp-/),
+            expect.stringMatching(/^\\\\\?\\C:\\Users\\Pjuter\\Documents\\Tiny Bubbles_sync\\attachments\\att-1\.txt\.tmp-/),
             expect.any(Uint8Array),
         );
         expect(fsMocks.rename).toHaveBeenCalledWith(
-            expect.stringMatching(/^\\\\\?\\C:\\Users\\Pjuter\\Documents\\Mindwtr_sync\\attachments\\att-1\.txt\.tmp-/),
-            '\\\\?\\C:\\Users\\Pjuter\\Documents\\Mindwtr_sync\\attachments\\att-1.txt',
+            expect.stringMatching(/^\\\\\?\\C:\\Users\\Pjuter\\Documents\\Tiny Bubbles_sync\\attachments\\att-1\.txt\.tmp-/),
+            '\\\\?\\C:\\Users\\Pjuter\\Documents\\Tiny Bubbles_sync\\attachments\\att-1.txt',
         );
     });
 
@@ -1135,7 +1135,7 @@ describe('desktop sync-service runtime', () => {
             settings: {},
         };
         getInMemoryAppDataSnapshotMock.mockReturnValue(syncedData);
-        localStorage.setItem('mindwtr-fast-sync-state-v1', JSON.stringify({
+        localStorage.setItem('tinybubbles-fast-sync-state-v1', JSON.stringify({
             scope,
             localFingerprint: computeSyncPayloadFingerprint(syncedData),
             remoteFingerprint,
@@ -1171,7 +1171,7 @@ describe('desktop sync-service runtime', () => {
         )).toBe(true);
         expect(headFetchMock.mock.calls).toHaveLength(1);
         expect(invokeMock.mock.calls.some(([command]) => command === 'save_data')).toBe(false);
-        expect(JSON.parse(localStorage.getItem('mindwtr-local-sync-status-v1') ?? '{}')).toMatchObject({
+        expect(JSON.parse(localStorage.getItem('tinybubbles-local-sync-status-v1') ?? '{}')).toMatchObject({
             lastSyncStatus: 'success',
         });
         expect(storeStateRef.current.updateSettings).not.toHaveBeenCalled();
@@ -1217,7 +1217,7 @@ describe('desktop sync-service runtime', () => {
             settings: {},
         };
         getInMemoryAppDataSnapshotMock.mockReturnValue(syncedData);
-        localStorage.setItem('mindwtr-fast-sync-state-v1', JSON.stringify({
+        localStorage.setItem('tinybubbles-fast-sync-state-v1', JSON.stringify({
             scope,
             localFingerprint: computeSyncPayloadFingerprint(syncedData),
             remoteFingerprint: cachedRemoteFingerprint,

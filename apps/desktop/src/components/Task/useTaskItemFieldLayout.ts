@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import type { AppData, Task, TaskDraft, TaskEditorFieldId } from '@mindwtr/core';
+import type { AppData, Task, TaskDraft, TaskEditorFieldId } from '@tinybubbles/core';
 import {
     DEFAULT_TASK_EDITOR_HIDDEN,
     DEFAULT_TASK_EDITOR_ORDER,

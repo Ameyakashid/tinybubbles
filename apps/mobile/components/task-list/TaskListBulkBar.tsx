@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { ClipboardCheck, X } from 'lucide-react-native';
-import { tFallback, type TaskStatus } from '@mindwtr/core';
+import { tFallback, type TaskStatus } from '@tinybubbles/core';
 
 import { styles } from './task-list.styles';
 import { useFilledButtonColors } from '@/hooks/use-filled-button-colors';

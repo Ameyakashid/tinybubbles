@@ -1,6 +1,6 @@
 import React from 'react';
 import { Image, Modal, Pressable, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { type Attachment } from '@mindwtr/core';
+import { type Attachment } from '@tinybubbles/core';
 
 import { projectsScreenStyles as styles } from '@/components/projects-screen/projects-screen.styles';
 import { useAndroidKeyboardInset } from '../../lib/use-android-keyboard-inset';

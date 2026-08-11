@@ -10,7 +10,7 @@ import {
   tFallback,
   type Task,
   type TaskStatus,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { useTheme } from '../../contexts/theme-context';
 import { useLanguage } from '../../contexts/language-context';
 import { useMobileAreaFilter } from '@/hooks/use-mobile-area-filter';

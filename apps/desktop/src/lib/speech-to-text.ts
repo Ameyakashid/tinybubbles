@@ -2,13 +2,13 @@ import type {
     AiSettings,
     SpeechToTaskCaptureConfig,
     SpeechToTaskResult,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     GEMINI_DEFAULT_MODEL,
     normalizeSpeechLanguage,
     runRemoteSpeechToTaskCapture,
     runSpeechToTaskCapture,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { loadAIKey } from './ai-config';
 import { isTauriRuntime } from './runtime';

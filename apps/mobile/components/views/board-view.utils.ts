@@ -1,4 +1,4 @@
-import type { FilterCriteria } from '@mindwtr/core';
+import type { FilterCriteria } from '@tinybubbles/core';
 
 export const STATUS_DRAG_STEP_PX = 72;
 export const STATUS_DRAG_TRIGGER_PX = 28;

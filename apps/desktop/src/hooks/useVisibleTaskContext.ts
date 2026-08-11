@@ -7,7 +7,7 @@ import {
     type AreaVisibilityContext,
     type Project,
     type Task,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 /** Desktop always has the area lookup, so it is not optional here. */
 export type DesktopAreaVisibility = AreaVisibilityContext & {

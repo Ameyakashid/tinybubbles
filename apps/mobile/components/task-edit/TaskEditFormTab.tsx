@@ -17,8 +17,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { parseRRuleString, tFallback, type Attachment, type Task, type TaskEditorFieldId, type TaskEditorSectionId, type TimeEstimate } from '@mindwtr/core';
-import type { TaskDraft } from '@mindwtr/core/task-draft';
+import { parseRRuleString, tFallback, type Attachment, type Task, type TaskEditorFieldId, type TaskEditorSectionId, type TimeEstimate } from '@tinybubbles/core';
+import type { TaskDraft } from '@tinybubbles/core/task-draft';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { CollapsibleSection } from './CollapsibleSection';
 

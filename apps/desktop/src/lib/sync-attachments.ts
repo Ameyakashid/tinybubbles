@@ -1,7 +1,7 @@
 import {
     runAttachmentTransferLifecycle,
     type AttachmentTransferLifecycleOptions,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { createCooperativeYield, stripFileScheme } from './sync-service-utils';
 
 export {
@@ -11,7 +11,7 @@ export {
     normalizePendingRemoteDeletes,
     reportProgress,
     validateAttachmentHash,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 type BasicRemoteAttachmentSyncOptions = Omit<
     AttachmentTransferLifecycleOptions,

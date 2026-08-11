@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ObsidianSourceRef } from '@mindwtr/core';
+import type { ObsidianSourceRef } from '@tinybubbles/core';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
@@ -167,7 +167,7 @@ describe('obsidian-service helpers', () => {
             vaultPath: '/Vault',
             vaultName: 'Vault',
             scanFolders: ['/'],
-            inboxFile: 'Mindwtr/Inbox.md',
+            inboxFile: 'Tiny Bubbles/Inbox.md',
             taskNotesIncludeArchived: false,
             dataviewMetadataEnabled: false,
             newTaskFormat: 'auto',
@@ -197,7 +197,7 @@ describe('obsidian-service helpers', () => {
             vaultPath: '/Vault',
             vaultName: 'Vault',
             scanFolders: ['/'],
-            inboxFile: 'Mindwtr/Inbox.md',
+            inboxFile: 'Tiny Bubbles/Inbox.md',
             taskNotesIncludeArchived: false,
             dataviewMetadataEnabled: false,
             newTaskFormat: 'auto',
@@ -231,7 +231,7 @@ describe('obsidian-service helpers', () => {
         });
         await ObsidianService.createTask({
             vaultPath: '/Vault',
-            relativeFilePath: 'Mindwtr/Inbox.md',
+            relativeFilePath: 'Tiny Bubbles/Inbox.md',
             taskText: 'Capture task',
         });
         await ObsidianService.toggleTaskNotesTask({
@@ -254,7 +254,7 @@ describe('obsidian-service helpers', () => {
         });
         expect(invokeMock).toHaveBeenNthCalledWith(2, 'obsidian_create_task', {
             vaultPath: '/Vault',
-            relativeFilePath: 'Mindwtr/Inbox.md',
+            relativeFilePath: 'Tiny Bubbles/Inbox.md',
             taskText: 'Capture task',
         });
         expect(invokeMock).toHaveBeenNthCalledWith(3, 'obsidian_toggle_tasknotes', {

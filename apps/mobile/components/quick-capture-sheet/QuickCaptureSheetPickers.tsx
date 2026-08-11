@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityIndicator, FlatList, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import type { Area, Project, TaskPriority } from '@mindwtr/core';
+import type { Area, Project, TaskPriority } from '@tinybubbles/core';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 import { styles } from './quick-capture-sheet.styles';
 

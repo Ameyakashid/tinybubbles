@@ -3,7 +3,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskItem } from '../components/TaskItem';
-import { Area, Project, Task, configureDateFormatting, safeFormatDate, useTaskStore } from '@mindwtr/core';
+import { Area, Project, Task, configureDateFormatting, safeFormatDate, useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 
@@ -1124,7 +1124,7 @@ describe('TaskItem', () => {
             });
         });
         const onNavigate = vi.fn();
-        window.addEventListener('mindwtr:navigate', onNavigate as EventListener);
+        window.addEventListener('tinybubbles:navigate', onNavigate as EventListener);
 
         try {
             const { getByRole } = render(
@@ -1147,7 +1147,7 @@ describe('TaskItem', () => {
                 expect.objectContaining({ detail: { view: 'inbox' } }),
             );
         } finally {
-            window.removeEventListener('mindwtr:navigate', onNavigate as EventListener);
+            window.removeEventListener('tinybubbles:navigate', onNavigate as EventListener);
         }
     });
 
@@ -1313,7 +1313,7 @@ describe('TaskItem', () => {
         );
 
         const row = container.querySelector('[data-task-id="shortcut-focus-next-task"]');
-        fireEvent(row!, new CustomEvent('mindwtr:task-row-action', { detail: 'toggle-focus' }));
+        fireEvent(row!, new CustomEvent('tinybubbles:task-row-action', { detail: 'toggle-focus' }));
 
         await waitFor(() => {
             const updatedTask = useTaskStore.getState()._allTasks.find((task) => task.id === nextTask.id);
@@ -1329,7 +1329,7 @@ describe('TaskItem', () => {
         );
 
         const row = container.querySelector('[data-task-id="1"]');
-        fireEvent(row!, new CustomEvent('mindwtr:task-row-action', { detail: 'rename-title' }));
+        fireEvent(row!, new CustomEvent('tinybubbles:task-row-action', { detail: 'rename-title' }));
 
         expect(getByRole('textbox', { name: /rename task/i })).toHaveValue('Test Task');
     });
@@ -1819,7 +1819,7 @@ describe('TaskItem', () => {
 
     it('does not navigate away when adding today focus', () => {
         const onNavigate = vi.fn();
-        window.addEventListener('mindwtr:navigate', onNavigate as EventListener);
+        window.addEventListener('tinybubbles:navigate', onNavigate as EventListener);
         try {
             const { getByRole } = render(
                 <LanguageProvider>
@@ -1838,7 +1838,7 @@ describe('TaskItem', () => {
             fireEvent.click(getByRole('button', { name: /add.*focus/i }));
             expect(onNavigate).not.toHaveBeenCalled();
         } finally {
-            window.removeEventListener('mindwtr:navigate', onNavigate as EventListener);
+            window.removeEventListener('tinybubbles:navigate', onNavigate as EventListener);
         }
     });
 

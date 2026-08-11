@@ -119,7 +119,7 @@ fn parse_macos_eventkit_json(raw: *mut c_char) -> Result<Value, String> {
     let text = unsafe { CStr::from_ptr(raw) }
         .to_string_lossy()
         .into_owned();
-    unsafe { mindwtr_macos_calendar_free_string(raw) };
+    unsafe { tinybubbles_macos_calendar_free_string(raw) };
     serde_json::from_str::<Value>(&text)
         .map_err(|error| format!("Failed to parse EventKit bridge output: {error}"))
 }
@@ -129,7 +129,7 @@ pub(crate) fn get_macos_calendar_permission_status() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
         let value =
-            parse_macos_eventkit_json(unsafe { mindwtr_macos_calendar_permission_status_json() })?;
+            parse_macos_eventkit_json(unsafe { tinybubbles_macos_calendar_permission_status_json() })?;
         let status = value
             .get("status")
             .and_then(|item| item.as_str())
@@ -147,7 +147,7 @@ pub(crate) async fn request_macos_calendar_permission() -> Result<String, String
     #[cfg(target_os = "macos")]
     {
         let value = tauri::async_runtime::spawn_blocking(|| {
-            parse_macos_eventkit_json(unsafe { mindwtr_macos_calendar_request_permission_json() })
+            parse_macos_eventkit_json(unsafe { tinybubbles_macos_calendar_request_permission_json() })
         })
         .await
         .map_err(|error| format!("EventKit permission request task failed: {error}"))??;
@@ -177,7 +177,7 @@ pub(crate) fn get_macos_calendar_events(
         let end = CString::new(range_end.as_str())
             .map_err(|error| format!("Invalid calendar range end: {error}"))?;
         let value = parse_macos_eventkit_json(unsafe {
-            mindwtr_macos_calendar_events_json(start.as_ptr(), end.as_ptr())
+            tinybubbles_macos_calendar_events_json(start.as_ptr(), end.as_ptr())
         })?;
         let parsed = serde_json::from_value::<MacOsCalendarReadResult>(value)
             .map_err(|error| format!("Failed to decode EventKit payload: {error}"))?;
@@ -199,7 +199,7 @@ pub(crate) fn get_macos_calendar_events(
 pub(crate) fn get_macos_writable_calendars() -> Result<Vec<MacOsCalendarPushTarget>, String> {
     #[cfg(target_os = "macos")]
     {
-        let value = parse_macos_eventkit_json(unsafe { mindwtr_macos_writable_calendars_json() })?;
+        let value = parse_macos_eventkit_json(unsafe { tinybubbles_macos_writable_calendars_json() })?;
         let parsed = serde_json::from_value::<Vec<MacOsCalendarPushTarget>>(value)
             .map_err(|error| format!("Failed to decode writable EventKit calendars: {error}"))?;
         return Ok(parsed);
@@ -211,7 +211,7 @@ pub(crate) fn get_macos_writable_calendars() -> Result<Vec<MacOsCalendarPushTarg
 }
 
 #[tauri::command]
-pub(crate) fn ensure_macos_mindwtr_calendar(
+pub(crate) fn ensure_macos_tinybubbles_calendar(
     stored_calendar_id: Option<String>,
 ) -> Result<Option<MacOsCalendarPushTarget>, String> {
     #[cfg(target_os = "macos")]
@@ -219,13 +219,13 @@ pub(crate) fn ensure_macos_mindwtr_calendar(
         let stored = CString::new(stored_calendar_id.unwrap_or_default())
             .map_err(|error| format!("Invalid stored calendar ID: {error}"))?;
         let value = parse_macos_eventkit_json(unsafe {
-            mindwtr_macos_ensure_mindwtr_calendar_json(stored.as_ptr())
+            tinybubbles_macos_ensure_tinybubbles_calendar_json(stored.as_ptr())
         })?;
         if value.is_null() {
             return Ok(None);
         }
         let parsed = serde_json::from_value::<MacOsCalendarPushTarget>(value)
-            .map_err(|error| format!("Failed to decode Mindwtr EventKit calendar: {error}"))?;
+            .map_err(|error| format!("Failed to decode TinyBubbles EventKit calendar: {error}"))?;
         return Ok(Some(parsed));
     }
     #[cfg(not(target_os = "macos"))]
@@ -252,7 +252,7 @@ pub(crate) fn create_macos_calendar_event(
     {
         let event_json = encode_macos_calendar_event_payload(&details)?;
         let value = parse_macos_eventkit_json(unsafe {
-            mindwtr_macos_create_calendar_event_json(event_json.as_ptr())
+            tinybubbles_macos_create_calendar_event_json(event_json.as_ptr())
         })?;
         let parsed = serde_json::from_value::<MacOsCalendarEventWriteResult>(value)
             .map_err(|error| format!("Failed to decode EventKit create result: {error}"))?;
@@ -280,7 +280,7 @@ pub(crate) fn update_macos_calendar_event(
             .map_err(|error| format!("Invalid EventKit event ID: {error}"))?;
         let event_json = encode_macos_calendar_event_payload(&details)?;
         let value = parse_macos_eventkit_json(unsafe {
-            mindwtr_macos_update_calendar_event_json(event_id.as_ptr(), event_json.as_ptr())
+            tinybubbles_macos_update_calendar_event_json(event_id.as_ptr(), event_json.as_ptr())
         })?;
         let parsed = serde_json::from_value::<MacOsCalendarEventWriteResult>(value)
             .map_err(|error| format!("Failed to decode EventKit update result: {error}"))?;
@@ -307,7 +307,7 @@ pub(crate) fn delete_macos_calendar_event(
         let event_id = CString::new(event_id.as_str())
             .map_err(|error| format!("Invalid EventKit event ID: {error}"))?;
         let value = parse_macos_eventkit_json(unsafe {
-            mindwtr_macos_delete_calendar_event_json(event_id.as_ptr())
+            tinybubbles_macos_delete_calendar_event_json(event_id.as_ptr())
         })?;
         let parsed = serde_json::from_value::<MacOsCalendarEventWriteResult>(value)
             .map_err(|error| format!("Failed to decode EventKit delete result: {error}"))?;
@@ -332,7 +332,7 @@ fn parse_cloudkit_json(raw: *mut c_char) -> Result<Value, String> {
     let text = unsafe { CStr::from_ptr(raw) }
         .to_string_lossy()
         .into_owned();
-    unsafe { mindwtr_cloudkit_free_string(raw) };
+    unsafe { tinybubbles_cloudkit_free_string(raw) };
     let value: Value = serde_json::from_str(&text)
         .map_err(|error| format!("Failed to parse CloudKit bridge output: {error}"))?;
     if let Some(err) = value.get("error").and_then(|e| e.as_str()) {
@@ -346,7 +346,7 @@ pub(crate) async fn cloudkit_account_status() -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
         let value = tauri::async_runtime::spawn_blocking(|| {
-            parse_cloudkit_json(unsafe { mindwtr_cloudkit_account_status() })
+            parse_cloudkit_json(unsafe { tinybubbles_cloudkit_account_status() })
         })
         .await
         .map_err(|error| format!("CloudKit account status task failed: {error}"))??;
@@ -367,7 +367,7 @@ pub(crate) async fn cloudkit_ensure_zone() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
         tauri::async_runtime::spawn_blocking(|| {
-            parse_cloudkit_json(unsafe { mindwtr_cloudkit_ensure_zone() })
+            parse_cloudkit_json(unsafe { tinybubbles_cloudkit_ensure_zone() })
         })
         .await
         .map_err(|error| format!("CloudKit ensure zone task failed: {error}"))??;
@@ -384,7 +384,7 @@ pub(crate) async fn cloudkit_ensure_subscription() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
         tauri::async_runtime::spawn_blocking(|| {
-            parse_cloudkit_json(unsafe { mindwtr_cloudkit_ensure_subscription() })
+            parse_cloudkit_json(unsafe { tinybubbles_cloudkit_ensure_subscription() })
         })
         .await
         .map_err(|error| format!("CloudKit ensure subscription task failed: {error}"))??;
@@ -403,7 +403,7 @@ pub(crate) async fn cloudkit_fetch_all_records(record_type: String) -> Result<Va
         let value = tauri::async_runtime::spawn_blocking(move || {
             let c_type = CString::new(record_type.as_str())
                 .map_err(|e| format!("Invalid record type: {e}"))?;
-            parse_cloudkit_json(unsafe { mindwtr_cloudkit_fetch_all_records(c_type.as_ptr()) })
+            parse_cloudkit_json(unsafe { tinybubbles_cloudkit_fetch_all_records(c_type.as_ptr()) })
         })
         .await
         .map_err(|error| format!("CloudKit fetch all records task failed: {error}"))??;
@@ -426,7 +426,7 @@ pub(crate) async fn cloudkit_fetch_changes(change_token: Option<String>) -> Resu
                 .map(|s| CString::new(s).ok())
                 .flatten();
             let ptr = c_token.as_ref().map_or(std::ptr::null(), |c| c.as_ptr());
-            parse_cloudkit_json(unsafe { mindwtr_cloudkit_fetch_changes(ptr) })
+            parse_cloudkit_json(unsafe { tinybubbles_cloudkit_fetch_changes(ptr) })
         })
         .await
         .map_err(|error| format!("CloudKit fetch changes task failed: {error}"))??;
@@ -452,7 +452,7 @@ pub(crate) async fn cloudkit_save_records(
             let c_json = CString::new(records_json.as_str())
                 .map_err(|e| format!("Invalid records JSON: {e}"))?;
             parse_cloudkit_json(unsafe {
-                mindwtr_cloudkit_save_records(c_type.as_ptr(), c_json.as_ptr())
+                tinybubbles_cloudkit_save_records(c_type.as_ptr(), c_json.as_ptr())
             })
         })
         .await
@@ -482,7 +482,7 @@ pub(crate) async fn cloudkit_save_attachment_asset(
             let c_metadata = CString::new(metadata_json.as_str())
                 .map_err(|e| format!("Invalid attachment metadata JSON: {e}"))?;
             parse_cloudkit_json(unsafe {
-                mindwtr_cloudkit_save_attachment_asset(
+                tinybubbles_cloudkit_save_attachment_asset(
                     c_record_name.as_ptr(),
                     c_file_path.as_ptr(),
                     c_metadata.as_ptr(),
@@ -514,7 +514,7 @@ pub(crate) async fn cloudkit_fetch_attachment_asset(
             let c_target_path = CString::new(target_path.as_str())
                 .map_err(|e| format!("Invalid attachment target path: {e}"))?;
             parse_cloudkit_json(unsafe {
-                mindwtr_cloudkit_fetch_attachment_asset(
+                tinybubbles_cloudkit_fetch_attachment_asset(
                     c_record_name.as_ptr(),
                     c_target_path.as_ptr(),
                 )
@@ -547,7 +547,7 @@ pub(crate) async fn cloudkit_delete_records(
             let c_ids = CString::new(ids_json.as_str())
                 .map_err(|e| format!("Invalid record IDs JSON: {e}"))?;
             parse_cloudkit_json(unsafe {
-                mindwtr_cloudkit_delete_records(c_type.as_ptr(), c_ids.as_ptr())
+                tinybubbles_cloudkit_delete_records(c_type.as_ptr(), c_ids.as_ptr())
             })
         })
         .await
@@ -566,7 +566,7 @@ pub(crate) async fn cloudkit_delete_records(
 pub(crate) fn cloudkit_consume_pending_remote_change() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        let had_change = unsafe { mindwtr_cloudkit_consume_pending_remote_change() };
+        let had_change = unsafe { tinybubbles_cloudkit_consume_pending_remote_change() };
         return Ok(had_change != 0);
     }
     #[cfg(not(target_os = "macos"))]
@@ -579,7 +579,7 @@ pub(crate) fn cloudkit_consume_pending_remote_change() -> Result<bool, String> {
 pub(crate) fn cloudkit_register_for_notifications() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        unsafe { mindwtr_cloudkit_register_for_remote_notifications() };
+        unsafe { tinybubbles_cloudkit_register_for_remote_notifications() };
         return Ok(true);
     }
     #[cfg(not(target_os = "macos"))]
@@ -681,10 +681,10 @@ pub(crate) fn get_managed_data_dir(app: tauri::AppHandle) -> String {
 }
 
 fn legacy_webview_data_root() -> Option<PathBuf> {
-    dirs::data_dir().map(|dir| dir.join("mindwtr"))
+    dirs::data_dir().map(|dir| dir.join("tinybubbles"))
 }
 
-// A standard (installed) copy of Mindwtr on the same machine stores its data
+// A standard (installed) copy of TinyBubbles on the same machine stores its data
 // under the OS data dir; its attachment files must never be moved away by a
 // portable copy that references the same paths.
 fn standard_install_present(legacy_root: &Path) -> bool {
@@ -844,13 +844,13 @@ mod tests {
 
     #[test]
     fn path_is_under_allowed_root_respects_boundaries() {
-        let root = PathBuf::from("/tmp/mindwtr");
+        let root = PathBuf::from("/tmp/tinybubbles");
         assert!(path_is_under_allowed_root(
-            Path::new("/tmp/mindwtr/attachments/a.pdf"),
+            Path::new("/tmp/tinybubbles/attachments/a.pdf"),
             &[root.clone()]
         ));
         assert!(!path_is_under_allowed_root(
-            Path::new("/tmp/mindwtr-other/a.pdf"),
+            Path::new("/tmp/tinybubbles-other/a.pdf"),
             &[root]
         ));
     }

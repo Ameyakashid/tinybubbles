@@ -149,21 +149,10 @@ export function SettingsAboutPage({
                 <div data-settings-key="github" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.github}</span>
                     <button
-                        onClick={() => onOpenLink('https://github.com/dongdongbh/Mindwtr')}
+                        onClick={() => onOpenLink('https://github.com/tinybubbles-app/tinybubbles')}
                         className="text-info hover:underline cursor-pointer flex items-center gap-1"
                     >
-                        github.com/dongdongbh/Mindwtr
-                        <ExternalLink className="w-3 h-3" />
-                    </button>
-                </div>
-                <div className="border-t border-border/50"></div>
-                <div data-settings-key="sponsorProject" className="flex justify-between items-center">
-                    <span className="text-muted-foreground">{t.sponsorProject}</span>
-                    <button
-                        onClick={() => onOpenLink('https://mindwtr.app/donate?src=app_about')}
-                        className="text-info hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                        mindwtr.app/donate
+                        github.com/tinybubbles-app/tinybubbles
                         <ExternalLink className="w-3 h-3" />
                     </button>
                 </div>
@@ -177,7 +166,7 @@ export function SettingsAboutPage({
                 isConfigured={feedbackConfigured}
                 isOpen={feedbackOpen}
                 onClose={() => setFeedbackOpen(false)}
-                onOpenIssue={() => onOpenLink('https://github.com/dongdongbh/Mindwtr/issues/new/choose')}
+                onOpenIssue={() => onOpenLink('https://github.com/tinybubbles-app/tinybubbles/issues/new/choose')}
                 onSubmit={onSubmitFeedback}
                 t={t}
             />

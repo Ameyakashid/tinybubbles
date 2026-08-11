@@ -1,14 +1,14 @@
-import type { AIProviderConfig, AIProviderId, AppData } from '@mindwtr/core';
+import type { AIProviderConfig, AIProviderId, AppData } from '@tinybubbles/core';
 import {
     buildAIConfig as buildCoreAIConfig,
     buildCopilotConfig as buildCoreCopilotConfig,
     getAIKeyStorageKey,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { logError } from './app-log';
 import { invokeNative } from './tauri-invoke';
 
-const AI_SECRET_KEY = 'mindwtr-ai-key-secret';
+const AI_SECRET_KEY = 'tinybubbles-ai-key-secret';
 
 type Fetcher = typeof fetch;
 

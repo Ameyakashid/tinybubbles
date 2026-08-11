@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
-import { resolveThemeColorScheme, useTaskStore } from '@mindwtr/core';
+import { resolveThemeColorScheme, useTaskStore } from '@tinybubbles/core';
 import { logError } from '../lib/app-log';
 import { markStartupPhase, measureStartupPhase } from '../lib/startup-profiler';
 
@@ -21,8 +21,8 @@ export interface ThemeContextType {
     isReady: boolean;
 }
 
-const THEME_STORAGE_KEY = '@mindwtr_theme';
-const THEME_STYLE_STORAGE_KEY = '@mindwtr_theme_style';
+const THEME_STORAGE_KEY = '@tinybubbles_theme';
+const THEME_STYLE_STORAGE_KEY = '@tinybubbles_theme_style';
 
 export const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 

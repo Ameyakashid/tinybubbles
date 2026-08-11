@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { createTaskDraft, type Task, type TaskDraft } from '@mindwtr/core';
+import { createTaskDraft, type Task, type TaskDraft } from '@tinybubbles/core';
 
 import { DEFAULT_TASK_EDITOR_ORDER } from './task-item-helpers';
 import { useTaskItemFieldLayout } from './useTaskItemFieldLayout';

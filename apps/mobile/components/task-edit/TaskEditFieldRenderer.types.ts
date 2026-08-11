@@ -19,8 +19,8 @@ import type {
     MarkdownSelection,
     MarkdownToolbarResult,
     Person,
-} from '@mindwtr/core';
-import type { TaskDraft, TaskDraftSetter } from '@mindwtr/core/task-draft';
+} from '@tinybubbles/core';
+import type { TaskDraft, TaskDraftSetter } from '@tinybubbles/core/task-draft';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 
 export type ShowDatePickerMode = 'start' | 'start-time' | 'due' | 'due-time' | 'review' | 'recurrence-end' | null;

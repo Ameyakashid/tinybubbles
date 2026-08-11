@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern char *mindwtr_cloudkit_round_trip_task_json(const char *json_utf8);
+extern char *tinybubbles_cloudkit_round_trip_task_json(const char *json_utf8);
 
 static void print_json(NSDictionary *object) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:object
@@ -41,7 +41,7 @@ int main(int argc, const char *argv[]) {
             return 1;
         }
         NSString *inputJSON = [[NSString alloc] initWithData:inputData encoding:NSUTF8StringEncoding];
-        char *outputJSON = mindwtr_cloudkit_round_trip_task_json(inputJSON.UTF8String);
+        char *outputJSON = tinybubbles_cloudkit_round_trip_task_json(inputJSON.UTF8String);
         if (!outputJSON) {
             fprintf(stderr, "Objective-C mapper rejected the fixture\n");
             return 1;

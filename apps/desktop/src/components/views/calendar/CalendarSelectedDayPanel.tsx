@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import type { DragEvent } from 'react';
 import { Check, Clock, MoreHorizontal, Plus, X } from 'lucide-react';
-import { getTaskCalendarOccurrenceDate, hasTimeComponent, isProjectedRecurringTask, safeFormatDate, safeParseDate, type Task } from '@mindwtr/core';
+import { getTaskCalendarOccurrenceDate, hasTimeComponent, isProjectedRecurringTask, safeFormatDate, safeParseDate, type Task } from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
 import { reportError } from '../../../lib/report-error';

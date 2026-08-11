@@ -1,7 +1,7 @@
 import { createRef } from 'react';
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { MarkdownSelection, MarkdownToolbarActionId } from '@mindwtr/core';
+import type { MarkdownSelection, MarkdownToolbarActionId } from '@tinybubbles/core';
 
 import { DescriptionField } from './DescriptionField';
 

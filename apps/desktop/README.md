@@ -1,6 +1,6 @@
-# Mindwtr Desktop
+# Tiny Bubbles Desktop
 
-Tauri v2 desktop app for the Mindwtr productivity system.
+Tauri v2 desktop app for the Tiny Bubbles productivity system.
 
 ## Features
 
@@ -99,21 +99,27 @@ bun run build
 # Output in src-tauri/target/release/
 ```
 
-Windows release builds also publish `mindwtr_<version>_windows_x64_portable.zip`.
-Extract it to a writable folder and keep `portable.txt` next to `mindwtr.exe`.
+Windows release builds also publish `tinybubbles_<version>_windows_x64_portable.zip`.
+Extract it to a writable folder and keep `portable.txt` next to `tinybubbles.exe`.
 
 ## Data Storage
 
 Tasks are saved to:
 
-- **Linux data**: `~/.local/share/mindwtr/data.json`
-- **Linux config**: `~/.config/mindwtr/config.toml`
+- **Linux data**: `~/.local/share/tinybubbles/data.json`
+- **Linux config**: `~/.config/tinybubbles/config.toml`
 
-Desktop Settings → Sync → Local Data shows the exact paths for your OS. If you used very early builds, data may exist under legacy Tauri directories like `~/.config/tech.dongdongbh.mindwtr/` and `~/.local/share/tech.dongdongbh.mindwtr/` and will be migrated automatically.
+Desktop Settings → Sync → Local Data shows the exact paths for your OS.
+
+> Tiny Bubbles has never shipped a release, so there are no legacy directories from earlier
+> versions of it. The legacy-path migration inherited from upstream is retained but is inert.
+> Note that Tiny Bubbles uses its own application identifier (`app.tinybubbles`), so it does
+> **not** read data belonging to an existing Mindwtr install — move data across with
+> Export/Import rather than expecting it to be picked up automatically.
 
 Portable Windows builds store local state beside the executable:
 
-- **Portable data**: `profile/data/mindwtr.db`, `profile/data/data.json`, logs, snapshots, and audio captures
+- **Portable data**: `profile/data/tinybubbles.db`, `profile/data/data.json`, logs, snapshots, and audio captures
 - **Portable config**: `profile/config/config.toml` and `profile/config/secrets.toml`
 
 Portable mode stores secrets in the local `profile/config/secrets.toml` file instead of the OS keychain/keyring. Windows WebView2 is still required.

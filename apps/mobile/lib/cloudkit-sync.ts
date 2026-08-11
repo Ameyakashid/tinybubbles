@@ -8,7 +8,7 @@
  */
 import { requireNativeModule, type NativeModule } from 'expo-modules-core';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CLOUDKIT_ATTACHMENT_RECORD_TYPE, type AppData } from '@mindwtr/core';
+import { CLOUDKIT_ATTACHMENT_RECORD_TYPE, type AppData } from '@tinybubbles/core';
 import { logInfo, logWarn, logError } from './app-log';
 import { CLOUDKIT_CHANGE_TOKEN_KEY, CLOUDKIT_SEEDED_KEY, CLOUDKIT_ZONE_CREATED_KEY } from './sync-constants';
 
@@ -50,12 +50,12 @@ try {
 
 // Record type names (must match CloudKitRecordMapper.swift)
 const RECORD_TYPES = {
-    task: 'MindwtrTask',
-    project: 'MindwtrProject',
-  section: 'MindwtrSection',
-  area: 'MindwtrArea',
-  person: 'MindwtrPerson',
-  settings: 'MindwtrSettings',
+    task: 'TinyBubblesTask',
+    project: 'TinyBubblesProject',
+  section: 'TinyBubblesSection',
+  area: 'TinyBubblesArea',
+  person: 'TinyBubblesPerson',
+  settings: 'TinyBubblesSettings',
 } as const;
 
 type AccountStatus = 'available' | 'noAccount' | 'restricted' | 'temporarilyUnavailable' | 'unknown';

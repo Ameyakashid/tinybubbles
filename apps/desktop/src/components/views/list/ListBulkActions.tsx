@@ -1,5 +1,5 @@
 import { ClipboardCheck } from 'lucide-react';
-import { tFallback, type TaskEnergyLevel, type TaskStatus } from '@mindwtr/core';
+import { tFallback, type TaskEnergyLevel, type TaskStatus } from '@tinybubbles/core';
 
 type ListBulkActionsProps = {
     selectionCount: number;

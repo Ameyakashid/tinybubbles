@@ -2,7 +2,7 @@ import React from 'react';
 import { Text } from 'react-native';
 import renderer, { act } from 'react-test-renderer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { configureDateFormatting } from '@mindwtr/core';
+import { configureDateFormatting } from '@tinybubbles/core';
 
 import { useTaskEditDates } from './use-task-edit-dates';
 

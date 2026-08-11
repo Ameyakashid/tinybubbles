@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 import type { ComponentProps } from 'react';
 
 import { LanguageProvider } from '../contexts/language-context';
@@ -118,10 +118,10 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'First capture' },
             }));
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Second capture' },
             }));
             await Promise.resolve();
@@ -144,7 +144,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal({ standaloneWindow: true });
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Fast capture' },
             }));
             await Promise.resolve();
@@ -178,7 +178,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal({ standaloneWindow: true });
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Fast capture' },
             }));
             await Promise.resolve();
@@ -235,7 +235,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Area filtered capture' },
             }));
             await Promise.resolve();
@@ -257,7 +257,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal({ standaloneWindow: true });
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Close quietly' },
             }));
             await Promise.resolve();
@@ -283,7 +283,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'File Q3 estimated tax payment' },
             }));
             await Promise.resolve();
@@ -335,7 +335,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Plan campaign +Launch !Work' },
             }));
             await Promise.resolve();
@@ -361,12 +361,12 @@ describe('QuickAddModal', () => {
                 addTask,
             }));
         });
-        window.addEventListener('mindwtr:navigate', navigateListener);
+        window.addEventListener('tinybubbles:navigate', navigateListener);
 
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: {
                     initialValue: 'Draft launch brief',
                     initialProps: { projectId: 'project-launch', status: 'next' },
@@ -389,7 +389,7 @@ describe('QuickAddModal', () => {
         expect(navigateListener).toHaveBeenCalledWith(expect.objectContaining({
             detail: { view: 'projects' },
         }));
-        window.removeEventListener('mindwtr:navigate', navigateListener);
+        window.removeEventListener('tinybubbles:navigate', navigateListener);
     });
 
     it('flashes the created row on a plain save from a project-preset capture (#916)', async () => {
@@ -401,7 +401,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: {
                     initialValue: 'Draft launch brief',
                     initialProps: { projectId: 'project-launch', status: 'next' },
@@ -427,7 +427,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: {
                     initialValue: 'Loose thought',
                     initialProps: { status: 'inbox' },
@@ -456,7 +456,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Draft launch brief' },
             }));
             await Promise.resolve();
@@ -485,7 +485,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'First batch entry' },
             }));
             await Promise.resolve();
@@ -508,7 +508,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Check tab stops' },
             }));
             await Promise.resolve();
@@ -548,7 +548,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Capture receipt' },
             }));
             await Promise.resolve();
@@ -567,11 +567,11 @@ describe('QuickAddModal', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
         await waitFor(() => expect(addTask).toHaveBeenCalled());
-        expect(fsMocks.mkdir).toHaveBeenCalledWith('/data/mindwtr/quick-add-images', {
+        expect(fsMocks.mkdir).toHaveBeenCalledWith('/data/tinybubbles/quick-add-images', {
             recursive: true,
         });
         expect(fsMocks.writeFile).toHaveBeenCalledWith(
-            expect.stringMatching(/^\/data\/mindwtr\/quick-add-images\/mindwtr-paste-/),
+            expect.stringMatching(/^\/data\/tinybubbles\/quick-add-images\/tinybubbles-paste-/),
             expect.any(Uint8Array),
         );
         expect(addTask).toHaveBeenCalledWith('Capture receipt', expect.objectContaining({
@@ -579,7 +579,7 @@ describe('QuickAddModal', () => {
                 expect.objectContaining({
                     kind: 'file',
                     title: expect.stringContaining('Screenshot'),
-                    uri: expect.stringContaining('/data/mindwtr/quick-add-images/mindwtr-paste-'),
+                    uri: expect.stringContaining('/data/tinybubbles/quick-add-images/tinybubbles-paste-'),
                     mimeType: 'image/png',
                     size: 3,
                 }),
@@ -599,7 +599,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add'));
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add'));
             await Promise.resolve();
         });
 
@@ -644,7 +644,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add'));
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add'));
             await Promise.resolve();
         });
 
@@ -683,7 +683,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: {
                     initialProps: {
                         projectId: 'project-id',
@@ -728,7 +728,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add'));
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add'));
             await Promise.resolve();
         });
 
@@ -757,7 +757,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Voice note' },
             }));
             await Promise.resolve();
@@ -809,7 +809,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', {
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', {
                 detail: { initialValue: 'Voice note' },
             }));
             await Promise.resolve();
@@ -833,7 +833,7 @@ describe('QuickAddModal', () => {
         renderQuickAddModal();
 
         await act(async () => {
-            window.dispatchEvent(new CustomEvent('mindwtr:quick-add', { detail: {} }));
+            window.dispatchEvent(new CustomEvent('tinybubbles:quick-add', { detail: {} }));
             await Promise.resolve();
         });
 

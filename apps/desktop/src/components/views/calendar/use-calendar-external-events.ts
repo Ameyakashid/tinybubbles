@@ -14,13 +14,13 @@ import {
     useTaskStore,
     type ExternalCalendarEvent,
     type ExternalCalendarSubscription,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { logError } from '../../../lib/app-log';
 import { fetchExternalCalendarEvents, summarizeExternalCalendarWarnings } from '../../../lib/external-calendar-events';
 import { dayKey } from './calendar-primitives';
 
-const HIDDEN_EXTERNAL_CALENDAR_IDS_STORAGE_KEY = 'mindwtr.calendar.hiddenExternalCalendars';
+const HIDDEN_EXTERNAL_CALENDAR_IDS_STORAGE_KEY = 'tinybubbles.calendar.hiddenExternalCalendars';
 
 /**
  * User pick > feed-provided color > deterministic palette hash (#974), then a

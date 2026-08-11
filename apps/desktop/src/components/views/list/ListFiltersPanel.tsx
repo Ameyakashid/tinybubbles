@@ -1,7 +1,7 @@
 import { Filter } from 'lucide-react';
-import { tFallback } from '@mindwtr/core';
+import { tFallback } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
-import type { TaskPriority, TimeEstimate } from '@mindwtr/core';
+import type { TaskPriority, TimeEstimate } from '@tinybubbles/core';
 
 interface ListFiltersPanelProps {
     t: (key: string) => string;

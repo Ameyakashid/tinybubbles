@@ -105,7 +105,7 @@ const getStarterTaskKeyByTitle = (): Map<string, StarterTaskKey> => {
     map.set('여기서 시작: 첫 수집함 항목 처리하기', 'process-inbox');
     map.set('한 줄로 작업 기록하기', 'quick-capture');
     map.set('오늘의 포커스에 작업을 최대 3개 별표하기', 'focus');
-    map.set('mindwtr를 내 것으로: 안 쓰는 것 숨기기', 'simplify');
+    map.set('tinybubbles를 내 것으로: 안 쓰는 것 숨기기', 'simplify');
     map.set('다른 앱에서 작업 가져오기', 'import');
     starterTaskKeyByTitleCache = map;
     return map;

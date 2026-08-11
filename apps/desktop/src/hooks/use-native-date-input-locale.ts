@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { normalizeWeekStartSetting, useTaskStore } from '@mindwtr/core';
+import { normalizeWeekStartSetting, useTaskStore } from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 import { resolveNativeDateInputLocale } from '../lib/native-date-input-locale';

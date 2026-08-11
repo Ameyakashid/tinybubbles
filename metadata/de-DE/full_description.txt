@@ -1,6 +1,6 @@
-Dein Kopf erinnert dich immer im falschen Moment an offene Dinge. Mindwtr gibt ihnen ein sicheres Zuhause.
+Dein Kopf erinnert dich immer im falschen Moment an offene Dinge. Tiny Bubbles gibt ihnen ein sicheres Zuhause.
 
-Mindwtr ist eine kostenlose Open-Source-To-do-App nach der Getting-Things-Done-Methode (GTD). Schreib jede Aufgabe und Idee sofort auf, sortiere sie in Sekunden und sieh nur das, was du jetzt tun kannst. Kein Konto, kein Abo, und deine Daten bleiben auf deinem Geraet.
+Tiny Bubbles ist eine kostenlose Open-Source-To-do-App nach der Getting-Things-Done-Methode (GTD). Schreib jede Aufgabe und Idee sofort auf, sortiere sie in Sekunden und sieh nur das, was du jetzt tun kannst. Kein Konto, kein Abo, und deine Daten bleiben auf deinem Geraet.
 
 SO FUNKTIONIERT ES
 
@@ -9,9 +9,9 @@ SO FUNKTIONIERT ES
 3. Erledigen. Die Focus-Ansicht zeigt nur, was du jetzt tun kannst, sonst nichts.
 4. Woechentlich aufraeumen. Ein gefuehrter Wochenrueckblick faengt lose Enden ein, damit die Liste vertrauenswuerdig bleibt und dein Kopf frei.
 
-Neu bei GTD? Die Idee ist einfach: Dein Kopf ist zum Denken da, nicht zum Merken. Mindwtr fuehrt dich durch jeden Schritt.
+Neu bei GTD? Die Idee ist einfach: Dein Kopf ist zum Denken da, nicht zum Merken. Tiny Bubbles fuehrt dich durch jeden Schritt.
 
-WARUM MINDWTR
+WARUM TINYBUBBLES
 
 - Funktioniert komplett offline. Kein Konto noetig.
 - Deine Aufgaben bleiben auf deinem Geraet. Sync ist optional, und du bestimmst wohin: Dropbox, ein eigener Ordner, WebDAV, dein eigener Server oder iCloud auf Apple-Geraeten.
@@ -26,4 +26,4 @@ EINFACH ALS STANDARD, STARK BEI BEDARF
 
 Weniger Felder, weniger Schalter, kein Ballast. Fortgeschrittenes wie Kanban-Board, Automatisierung und ein optionaler KI-Assistent (mit deinem eigenen KI-Konto) bleibt unsichtbar, bis du es brauchst.
 
-Mindwtr heisst "mind like water": die Ruhe, wenn dir nichts mehr im Kopf herumschwirrt.
+Tiny Bubbles heisst "mind like water": die Ruhe, wenn dir nichts mehr im Kopf herumschwirrt.

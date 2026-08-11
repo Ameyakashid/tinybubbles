@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-Mindwtr supports desktop and mobile clients with the same GTD concepts, sync rules, and storage model. Duplicating store logic per platform would increase drift risk in critical areas such as:
+Tiny Bubbles supports desktop and mobile clients with the same GTD concepts, sync rules, and storage model. Duplicating store logic per platform would increase drift risk in critical areas such as:
 
 - task/project/area mutation behavior
 - recurrence and checklist rules

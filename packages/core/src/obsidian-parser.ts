@@ -19,7 +19,7 @@ export type ObsidianTaskNotesStatus = Extract<TaskStatus, 'inbox' | 'next' | 'wa
 
 export type ObsidianTaskNotesData = {
     rawStatus: string;
-    mindwtrStatus: ObsidianTaskNotesStatus;
+    tinybubblesStatus: ObsidianTaskNotesStatus;
     priority: TaskPriority | null;
     dueDate: string | null;
     scheduledDate: string | null;

@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import type { AIProviderId, AppData } from '@mindwtr/core';
-import { buildAIConfig, buildCopilotConfig, getAIKeyStorageKey, loadAIKeyFromStorage, saveAIKeyToStorage } from '@mindwtr/core';
+import type { AIProviderId, AppData } from '@tinybubbles/core';
+import { buildAIConfig, buildCopilotConfig, getAIKeyStorageKey, loadAIKeyFromStorage, saveAIKeyToStorage } from '@tinybubbles/core';
 
 import {
     deleteSessionSecret,

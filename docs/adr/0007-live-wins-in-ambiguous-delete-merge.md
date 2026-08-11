@@ -7,7 +7,7 @@ Status: Accepted
 
 ADR 0003 established revision-aware sync with tombstones and deterministic tie-breakers. Its original delete-vs-live rule preferred the tombstone when operation times were equal.
 
-After more real-world sync traffic, that rule proved too aggressive around close-together edits and clock-skewed devices. Mindwtr 0.8.2 changed the shipped behavior and release notes to prefer live data in ambiguous delete-vs-live merges.
+After more real-world sync traffic, that rule proved too aggressive around close-together edits and clock-skewed devices. Tiny Bubbles 0.8.2 changed the shipped behavior and release notes to prefer live data in ambiguous delete-vs-live merges.
 
 ## Decision
 

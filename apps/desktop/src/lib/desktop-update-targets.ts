@@ -85,7 +85,7 @@ export const getDesktopUpdateTarget = (
         case 'winget':
             return { label: UPDATE_NOW_ACTION_LABEL, url: WINGET_PACKAGE_URL };
         case 'scoop':
-            // `scoop update mindwtr` does the install; point at the release notes.
+            // `scoop update tinybubbles` does the install; point at the release notes.
             return { label: VIEW_RELEASE_ACTION_LABEL, url: GITHUB_RELEASES_URL };
         case 'chocolatey':
             return { label: UPDATE_NOW_ACTION_LABEL, url: CHOCOLATEY_PACKAGE_URL };

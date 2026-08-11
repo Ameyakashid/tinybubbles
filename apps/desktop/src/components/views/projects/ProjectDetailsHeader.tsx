@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { safeParseDate, tFallback, type Project } from '@mindwtr/core';
+import { safeParseDate, tFallback, type Project } from '@tinybubbles/core';
 import { Archive as ArchiveIcon, Calendar, CalendarClock, ChevronDown, ChevronRight, Copy, FolderOpenDot, HelpCircle, ListOrdered, Loader2, RotateCcw, Signal, Trash2 } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LocalSyncAbort, type AppData } from '@mindwtr/core';
+import { LocalSyncAbort, type AppData } from '@tinybubbles/core';
 
 import * as FileSystem from './file-system';
 import { runMobileAttachmentCleanup } from './sync-attachment-cleanup';
@@ -64,7 +64,7 @@ const buildCleanupOptions = (appData: AppData) => ({
   webdavConfig: null,
   cloudConfig: null,
   cloudProvider: 'selfhosted' as const,
-  fileSyncPath: '/sync/mindwtr.json',
+  fileSyncPath: '/sync/tinybubbles.json',
   fetcher: vi.fn() as unknown as typeof fetch,
   ensureLocalSnapshotFresh: vi.fn(),
   deleteDropboxAttachment: vi.fn(async () => undefined),

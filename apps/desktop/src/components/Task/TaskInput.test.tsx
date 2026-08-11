@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { act, createEvent, fireEvent, render, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Project } from '@mindwtr/core';
+import type { Project } from '@tinybubbles/core';
 
 import { TaskInput } from './TaskInput';
 

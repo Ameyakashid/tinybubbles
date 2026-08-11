@@ -23,8 +23,8 @@ function runScript(args) {
 }
 
 describe('csv-to-quickadd-text', () => {
-  it('converts common CSV columns into Mindwtr quick-add lines', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'mindwtr-csv-quickadd-'));
+  it('converts common CSV columns into Tiny Bubbles quick-add lines', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tinybubbles-csv-quickadd-'));
     const input = join(dir, 'tasks.csv');
     const output = join(dir, 'tasks.txt');
     await writeFile(input, [
@@ -61,7 +61,7 @@ describe('csv-to-quickadd-text', () => {
   });
 
   it('escapes quick-add tokens that appear in the source title', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'mindwtr-csv-quickadd-'));
+    const dir = await mkdtemp(join(tmpdir(), 'tinybubbles-csv-quickadd-'));
     const input = join(dir, 'tasks.csv');
     await writeFile(input, [
       'Title,Project,Due',
@@ -75,7 +75,7 @@ describe('csv-to-quickadd-text', () => {
   });
 
   it('reports missing required columns', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'mindwtr-csv-quickadd-'));
+    const dir = await mkdtemp(join(tmpdir(), 'tinybubbles-csv-quickadd-'));
     const input = join(dir, 'tasks.csv');
     await writeFile(input, 'Name\nTask one\n');
 

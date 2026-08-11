@@ -313,7 +313,7 @@ const operations: BudgetedOperation[] = [
     },
 ];
 
-const describePerf = process.env.MINDWTR_PERF_TEST === '1' ? describe : describe.skip;
+const describePerf = process.env.TINYBUBBLES_PERF_TEST === '1' ? describe : describe.skip;
 
 describePerf('large-store performance budgets', () => {
     it('builds a 5k-item Trash timeline within budget', () => {

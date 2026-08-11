@@ -7,11 +7,11 @@ Status: Accepted (implemented 2026-07-13)
 
 Desktop and mobile both run the same sync orchestration shape: read local state, dispatch to file/WebDAV/cloud/Dropbox backends, reconcile warnings, update status, and surface notifications. Today those flows live in app-specific services, so fixes often need to be applied twice.
 
-The merge algorithm is already shared in `@mindwtr/core`; the remaining duplication is the orchestration state machine around backend IO and UI notification.
+The merge algorithm is already shared in `@tinybubbles/core`; the remaining duplication is the orchestration state machine around backend IO and UI notification.
 
 ## Decision
 
-Plan a follow-up refactor that moves the platform-independent sync orchestration state machine into `@mindwtr/core`.
+Plan a follow-up refactor that moves the platform-independent sync orchestration state machine into `@tinybubbles/core`.
 
 The core package should own:
 

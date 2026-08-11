@@ -24,13 +24,13 @@ describe('quick-capture-preferences', () => {
         expect(await readQuickCaptureAddAnother()).toBe(false);
 
         await writeQuickCaptureAddAnother(true);
-        expect(mockSetItem).toHaveBeenCalledWith('mindwtr:quickCapture:addAnother', 'true');
+        expect(mockSetItem).toHaveBeenCalledWith('tinybubbles:quickCapture:addAnother', 'true');
 
         mockGetItem.mockResolvedValue('true');
         expect(await readQuickCaptureAddAnother()).toBe(true);
 
         await writeQuickCaptureAddAnother(false);
-        expect(mockRemoveItem).toHaveBeenCalledWith('mindwtr:quickCapture:addAnother');
+        expect(mockRemoveItem).toHaveBeenCalledWith('tinybubbles:quickCapture:addAnother');
     });
 
     it('treats storage failures as preference off', async () => {

@@ -1,6 +1,6 @@
-# Mindwtr Mobile
+# Tiny Bubbles Mobile
 
-React Native mobile app for the Mindwtr productivity system.
+React Native mobile app for the Tiny Bubbles productivity system.
 
 ## Features
 
@@ -54,7 +54,7 @@ React Native mobile app for the Mindwtr productivity system.
 
 - React Native + Expo SDK 54
 - TypeScript
-- Zustand (shared with desktop via @mindwtr/core)
+- Zustand (shared with desktop via @tinybubbles/core)
 - Expo Router (file-based navigation)
 
 ## Quick Start
@@ -143,7 +143,7 @@ export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
 ```
 
 ### Build (ABI-split APKs)
-Mindwtr builds **split APKs per ABI** (arm64-v8a, armeabi-v7a, x86, x86_64) so the arm64 file stays under store size limits like F-Droid/Izzy.
+Tiny Bubbles builds **split APKs per ABI** (arm64-v8a, armeabi-v7a, x86, x86_64) so the arm64 file stays under store size limits like F-Droid/Izzy.
 
 If you already have `apps/mobile/android` on disk, run prebuild so the ABI split config is applied:
 
@@ -166,10 +166,10 @@ apps/mobile/build/
 For IzzyOnDroid, upload the versioned arm64 build:
 
 ```
-mindwtr-<version>-arm64-v8a.apk
+tinybubbles-<version>-arm64-v8a.apk
 ```
 
-The build script may also write the raw Gradle output (e.g. `app-arm64-v8a-release.apk`), but you only need the `mindwtr-<version>-arm64-v8a.apk` file for releases.
+The build script may also write the raw Gradle output (e.g. `app-arm64-v8a-release.apk`), but you only need the `tinybubbles-<version>-arm64-v8a.apk` file for releases.
 
 To change which ABIs are built by default, edit the `architectures` list for `./plugins/abi-splits` in `apps/mobile/app.json`.
 
@@ -179,10 +179,10 @@ After building, upload the APK to GitHub releases using `gh` CLI:
 
 ```bash
 # Upload to existing release
-gh release upload vX.Y.Z build/mindwtr-<version>-arm64-v8a.apk --clobber
+gh release upload vX.Y.Z build/tinybubbles-<version>-arm64-v8a.apk --clobber
 
 # Or create new release with APK
-gh release create vX.Y.Z build/mindwtr-<version>-arm64-v8a.apk --title "vX.Y.Z" --notes "Release notes here"
+gh release create vX.Y.Z build/tinybubbles-<version>-arm64-v8a.apk --title "vX.Y.Z" --notes "Release notes here"
 
 # View releases
 gh release list
@@ -243,7 +243,7 @@ cd apps/mobile
 EXPO_PUBLIC_STARTUP_PROFILING=1 npx expo run:android --variant release
 ```
 
-This enables JS startup markers (`[MindwtrStartup] ...`) while keeping normal builds quiet.
+This enables JS startup markers (`[TinyBubblesStartup] ...`) while keeping normal builds quiet.
 If native Android files already exist, run `npx expo prebuild --clean --platform android` first so config plugins re-apply startup tracing patches.
 
 ### 2. Run repeatable startup benchmark loops
@@ -264,7 +264,7 @@ RUNS=15 MODE=cold bash apps/mobile/scripts/android_startup_benchmark.sh
 RUNS=15 MODE=warm bash apps/mobile/scripts/android_startup_benchmark.sh
 
 # custom package/activity
-PACKAGE=tech.dongdongbh.mindwtr ACTIVITY=.MainActivity bash apps/mobile/scripts/android_startup_benchmark.sh
+PACKAGE=app.tinybubbles ACTIVITY=.MainActivity bash apps/mobile/scripts/android_startup_benchmark.sh
 ```
 
 Outputs are written to:
@@ -292,16 +292,16 @@ Notes:
 While reproducing a slow cold start:
 
 ```bash
-adb shell perfetto -o /data/misc/perfetto-traces/mindwtr-startup.pftrace -t 12s \
+adb shell perfetto -o /data/misc/perfetto-traces/tinybubbles-startup.pftrace -t 12s \
   sched freq idle am wm gfx view binder_driver hal dalvik input res memory
-adb pull /data/misc/perfetto-traces/mindwtr-startup.pftrace
+adb pull /data/misc/perfetto-traces/tinybubbles-startup.pftrace
 ```
 
-Then open https://ui.perfetto.dev and correlate `MindwtrStartup` log phases with main-thread blocking, I/O, and GC sections.
+Then open https://ui.perfetto.dev and correlate `TinyBubblesStartup` log phases with main-thread blocking, I/O, and GC sections.
 
 ## Data Storage
 
-Tasks are stored in AsyncStorage and synced via the shared @mindwtr/core package.
+Tasks are stored in AsyncStorage and synced via the shared @tinybubbles/core package.
 
 ## Project Structure
 
@@ -352,22 +352,22 @@ For frequent multi-device edits, WebDAV is recommended over folder sync tools.
 If you use Syncthing, prefer `Send & Receive` + `Watch for Changes`, keep scan intervals short, and run **Sync** before switching devices.
 
 ### WebDAV / Cloud
-Mindwtr also supports WebDAV and Cloud sync backends in **Settings → Sync**:
+Tiny Bubbles also supports WebDAV and Cloud sync backends in **Settings → Sync**:
 - `Self-hosted` (existing `/data` endpoint + token)
 - `Dropbox` OAuth (App Folder)
 
 #### Dropbox OAuth setup
 1. Create a Dropbox app with **Scoped access** + **App folder**.
 2. Enable scopes: `files.content.read`, `files.content.write`, `files.metadata.read`.
-3. Add redirect URI: `mindwtr://redirect`.
+3. Add redirect URI: `tinybubbles://redirect`.
 4. Set env var before starting Expo:
    - `DROPBOX_APP_KEY=<your-dropbox-app-key>`
 5. Restart app and connect in **Settings → Sync → Cloud → Dropbox**.
 6. Use a development/release build for OAuth. Expo Go is not supported for Dropbox OAuth redirects.
 
 Dropbox backend syncs:
-- `/Apps/Mindwtr/data.json`
-- `/Apps/Mindwtr/attachments/*` (file attachments)
+- `/Apps/Tiny Bubbles/data.json`
+- `/Apps/Tiny Bubbles/attachments/*` (file attachments)
 
 ## Troubleshooting
 
@@ -391,7 +391,7 @@ rm -rf .expo node_modules/.cache
 
 ```bash
 # Reinstall dependencies
-cd /path/to/Mindwtr
+cd /path/to/Tiny Bubbles
 rm -rf node_modules apps/mobile/node_modules
 bun install
 ```

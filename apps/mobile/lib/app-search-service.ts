@@ -1,4 +1,4 @@
-import { nameNotifyListener, useTaskStore } from '@mindwtr/core';
+import { nameNotifyListener, useTaskStore } from '@tinybubbles/core';
 
 import { logWarn } from '@/lib/app-log';
 import {

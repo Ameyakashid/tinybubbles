@@ -30,8 +30,8 @@ import { useTaskStore,
     PRESET_CONTEXTS,
     PRESET_TAGS,
     shallow,
-    translateWithFallback, tFallback, } from '@mindwtr/core';
-import { computeGlobalSearchResults } from '@mindwtr/core/global-search-filter';
+    translateWithFallback, tFallback, } from '@tinybubbles/core';
+import { computeGlobalSearchResults } from '@tinybubbles/core/global-search-filter';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useLanguage } from '../contexts/language-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';

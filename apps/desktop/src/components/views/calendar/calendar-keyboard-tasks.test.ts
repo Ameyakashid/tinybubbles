@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getProjectedRecurringTaskId, useTaskStore } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { getProjectedRecurringTaskId, useTaskStore } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 
 import { createTaskListScope } from '../list/task-list-scope';
 import { collectCalendarKeyboardTasks } from './calendar-keyboard-tasks';

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { cn } from '../../../lib/utils';
 import type { TaskGroup } from './next-grouping';
 

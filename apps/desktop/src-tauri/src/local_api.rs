@@ -1653,11 +1653,11 @@ fn create_next_recurring_task_for_local_api(
         next_task.insert("showFutureRecurrence".to_string(), Value::Bool(true));
     }
     if task
-        .get("suppressMindwtrReminders")
+        .get("suppressTinyBubblesReminders")
         .and_then(|value| value.as_bool())
         == Some(true)
     {
-        next_task.insert("suppressMindwtrReminders".to_string(), Value::Bool(true));
+        next_task.insert("suppressTinyBubblesReminders".to_string(), Value::Bool(true));
     }
     next_task.insert(
         "tags".to_string(),
@@ -2054,7 +2054,7 @@ fn normalize_created_reference_task(task: &mut Map<String, Value>) {
         "recurrence",
         "priority",
         "timeEstimate",
-        "suppressMindwtrReminders",
+        "suppressTinyBubblesReminders",
         "repeatReminderMinutes",
         "showFutureRecurrence",
         "focusOrder",
@@ -2530,7 +2530,7 @@ fn sanitize_task_patch_map(patch: &mut Map<String, Value>) -> Result<(), String>
                 value.is_null() || value.as_str().is_some_and(valid_iso_date_like)
             }
             "timeEstimate" => value.is_null() || valid_time_estimate(value),
-            "showFutureRecurrence" | "isFocusedToday" | "suppressMindwtrReminders" => {
+            "showFutureRecurrence" | "isFocusedToday" | "suppressTinyBubblesReminders" => {
                 value.is_boolean()
             }
             "pushCount" | "timeSpentMinutes" => {
@@ -3018,7 +3018,7 @@ fn parse_supported_rrule(value: &str) -> Option<RecurrenceSchedule> {
             }
             "COUNT" => schedule.count = Some(parse_positive_integer(raw)?),
             "UNTIL" => schedule.until = Some(parse_rrule_until(raw)?),
-            "X-MINDWTR-SERIES-ID" => {}
+            "X-TINYBUBBLES-SERIES-ID" => {}
             _ => return None,
         }
     }
@@ -3717,7 +3717,7 @@ mod tests {
             json!({ "contexts": ["\t"] }),
             json!({ "isFocusedToday": null }),
             json!({ "showFutureRecurrence": null }),
-            json!({ "suppressMindwtrReminders": null }),
+            json!({ "suppressTinyBubblesReminders": null }),
         ] {
             let mut patch = patch.as_object().expect("patch object").clone();
             assert!(sanitize_task_patch_map(&mut patch).is_err(), "{patch:?}");
@@ -4008,7 +4008,7 @@ mod tests {
                     "recurrence": { "rule": "daily" },
                     "priority": "high",
                     "timeEstimate": "30min",
-                    "suppressMindwtrReminders": true,
+                    "suppressTinyBubblesReminders": true,
                     "repeatReminderMinutes": 15,
                     "showFutureRecurrence": true,
                     "isFocusedToday": true,
@@ -4035,7 +4035,7 @@ mod tests {
             "recurrence",
             "priority",
             "timeEstimate",
-            "suppressMindwtrReminders",
+            "suppressTinyBubblesReminders",
             "repeatReminderMinutes",
             "showFutureRecurrence",
             "focusOrder",

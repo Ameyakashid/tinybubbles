@@ -17,7 +17,7 @@ import {
   type TaskPriority,
   type TaskStatus,
   type TimeEstimate,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import FocusScreen from '../app/(drawer)/(tabs)/focus';
 import ArchivedScreen from '../app/(drawer)/archived';
@@ -97,8 +97,8 @@ type LargeStoreData = {
   tasks: Task[];
 };
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   const react = await import('react');
 
   const selectionMatches = (

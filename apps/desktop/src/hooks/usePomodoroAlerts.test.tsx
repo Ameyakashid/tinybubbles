@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
-import { createPomodoroState, DEFAULT_POMODORO_DURATIONS, sanitizePomodoroSessionHistory, useTaskStore } from '@mindwtr/core';
+import { createPomodoroState, DEFAULT_POMODORO_DURATIONS, sanitizePomodoroSessionHistory, useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { DESKTOP_POMODORO_SESSION_STORAGE_KEY, usePomodoroStore } from '../store/pomodoro-store';
 import { usePomodoroAlerts } from './usePomodoroAlerts';

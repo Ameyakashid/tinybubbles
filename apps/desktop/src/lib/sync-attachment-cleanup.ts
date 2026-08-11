@@ -9,7 +9,7 @@ import {
     runAttachmentCleanupLifecycle,
     SYNC_FILE_NAME,
     webdavDeleteFile,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { deleteDropboxFile, DropboxFileNotFoundError, DropboxUnauthorizedError } from './dropbox-sync';
 import { getBaseSyncUrl, getCloudBaseUrl } from './sync-attachments';

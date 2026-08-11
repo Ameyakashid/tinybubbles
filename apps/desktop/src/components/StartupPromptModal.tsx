@@ -1,4 +1,4 @@
-import type { AppAnnouncement, AppAnnouncementAction } from '@mindwtr/core';
+import type { AppAnnouncement, AppAnnouncementAction } from '@tinybubbles/core';
 import { AppAnnouncementModal } from './AppAnnouncementModal';
 
 /**

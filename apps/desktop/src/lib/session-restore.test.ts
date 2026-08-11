@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SESSION_RESTORE_WINDOW_MS } from '@mindwtr/core';
+import { SESSION_RESTORE_WINDOW_MS } from '@tinybubbles/core';
 
 import { persistLastView, readRestorableLastView } from './session-restore';
 
@@ -37,9 +37,9 @@ describe('desktop session restore', () => {
     });
 
     it('ignores unknown views and malformed payloads', () => {
-        window.localStorage.setItem('mindwtr-last-view', JSON.stringify({ view: 'not-a-view', at: Date.now() }));
+        window.localStorage.setItem('tinybubbles-last-view', JSON.stringify({ view: 'not-a-view', at: Date.now() }));
         expect(readRestorableLastView()).toBeNull();
-        window.localStorage.setItem('mindwtr-last-view', 'not json');
+        window.localStorage.setItem('tinybubbles-last-view', 'not json');
         expect(readRestorableLastView()).toBeNull();
     });
 });

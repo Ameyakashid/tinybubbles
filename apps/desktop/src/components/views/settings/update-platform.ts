@@ -85,18 +85,18 @@ export const buildLinuxPostDownloadNotice = ({
 }: LinuxPostDownloadNoticeArgs): string => {
   if (linuxFlavor === "arch") {
     if (installSource === "aur-source") {
-      return `${downloadAURHint}: yay -Syu mindwtr / paru -Syu mindwtr`;
+      return `${downloadAURHint}: yay -Syu tinybubbles / paru -Syu tinybubbles`;
     }
     if (installSource === "aur-bin") {
-      return `${downloadAURHint}: yay -Syu mindwtr-bin / paru -Syu mindwtr-bin`;
+      return `${downloadAURHint}: yay -Syu tinybubbles-bin / paru -Syu tinybubbles-bin`;
     }
-    return `${downloadAURHint}: yay -Syu mindwtr / paru -Syu mindwtr`;
+    return `${downloadAURHint}: yay -Syu tinybubbles / paru -Syu tinybubbles`;
   }
   if (linuxFlavor === "debian") {
-    return `${linuxUpdateHint} APT repo update: sudo apt update && sudo apt install --only-upgrade mindwtr. Local file install: sudo apt install ./<downloaded-file>.deb`;
+    return `${linuxUpdateHint} APT repo update: sudo apt update && sudo apt install --only-upgrade tinybubbles. Local file install: sudo apt install ./<downloaded-file>.deb`;
   }
   if (linuxFlavor === "rpm") {
-    return `${linuxUpdateHint} Repo update: sudo dnf upgrade mindwtr. Local file install: sudo dnf install ./<downloaded-file>.rpm`;
+    return `${linuxUpdateHint} Repo update: sudo dnf upgrade tinybubbles. Local file install: sudo dnf install ./<downloaded-file>.rpm`;
   }
   return `${linuxUpdateHint} AppImage tip: chmod +x <downloaded-file>.AppImage && ./<downloaded-file>.AppImage`;
 };

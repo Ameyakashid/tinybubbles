@@ -10,7 +10,7 @@ import {
     getRecurrenceUntilValue,
     parseRRuleString,
     WEEKDAY_ORDER,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 export const MAX_SUGGESTED_TAGS = 8;
 export const MAX_VISIBLE_SUGGESTIONS = 4;

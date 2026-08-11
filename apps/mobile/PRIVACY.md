@@ -1,14 +1,14 @@
 # Privacy Policy
 
-The official, up-to-date Mindwtr privacy policy lives on the website:
+The Tiny Bubbles privacy policy is maintained in one place, in this repository:
 
-**https://mindwtr.app/privacy**
+**[`docs/PRIVACY.md`](../../docs/PRIVACY.md)** —
+<https://github.com/tinybubbles-app/tinybubbles/blob/main/docs/PRIVACY.md>
 
-In short: Mindwtr is local-first and minimizes data collection by design. Your
-tasks, notes, and projects stay on your device. Sync, in-app feedback, and
-bring-your-own-key AI use the network only when you choose those features.
-Configured builds may also send a small anonymous usage heartbeat once per day;
-you can turn it off in Settings.
+In short: Tiny Bubbles is local-first. Your tasks, notes, and projects stay on your device.
+There are no accounts, no servers we operate, and no analytics. Sync, AI assist, calendar
+integration and audio transcription use the network only when you turn them on, and each
+sends data only to the provider you choose.
 
-Please see **https://mindwtr.app/privacy** for the complete, current policy,
-including exactly what each of those features sends and your choices.
+See the full policy linked above for exactly what each feature sends and what your choices
+are.

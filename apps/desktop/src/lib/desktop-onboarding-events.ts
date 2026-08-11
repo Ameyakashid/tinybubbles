@@ -1,7 +1,7 @@
-import type { SyncBackend } from '@mindwtr/core';
+import type { SyncBackend } from '@tinybubbles/core';
 
-export const MINDWTR_DESKTOP_ONBOARDING_EVENT = 'mindwtr:desktop-onboarding';
-const DESKTOP_ONBOARDING_HANDOFF_HINT_KEY_PREFIX = 'mindwtr:desktop:onboarding-handoff-hint:v1:';
+export const TINYBUBBLES_DESKTOP_ONBOARDING_EVENT = 'tinybubbles:desktop-onboarding';
+const DESKTOP_ONBOARDING_HANDOFF_HINT_KEY_PREFIX = 'tinybubbles:desktop:onboarding-handoff-hint:v1:';
 
 export type DesktopOnboardingHandoffPage = 'sync' | 'data';
 
@@ -36,7 +36,7 @@ export function shouldOpenDesktopFirstRunOnboarding({
 
 export function dispatchDesktopOnboardingEvent(): void {
     if (typeof window === 'undefined') return;
-    window.dispatchEvent(new CustomEvent(MINDWTR_DESKTOP_ONBOARDING_EVENT));
+    window.dispatchEvent(new CustomEvent(TINYBUBBLES_DESKTOP_ONBOARDING_EVENT));
 }
 
 export function subscribeDesktopOnboardingEvent(handler: () => void): () => void {
@@ -45,8 +45,8 @@ export function subscribeDesktopOnboardingEvent(handler: () => void): () => void
     }
 
     const listener: EventListener = () => handler();
-    window.addEventListener(MINDWTR_DESKTOP_ONBOARDING_EVENT, listener);
-    return () => window.removeEventListener(MINDWTR_DESKTOP_ONBOARDING_EVENT, listener);
+    window.addEventListener(TINYBUBBLES_DESKTOP_ONBOARDING_EVENT, listener);
+    return () => window.removeEventListener(TINYBUBBLES_DESKTOP_ONBOARDING_EVENT, listener);
 }
 
 function getDesktopOnboardingHintKey(hint: DesktopOnboardingHint): string {

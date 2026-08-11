@@ -22,7 +22,7 @@ describe('RichMarkdown', () => {
     it('preserves intentional blank lines between blocks', () => {
         const { container } = render(<RichMarkdown markdown={'line 1\n\nline 2'} />);
 
-        expect(container.querySelectorAll('.mindwtr-markdown-blank-line')).toHaveLength(1);
+        expect(container.querySelectorAll('.tinybubbles-markdown-blank-line')).toHaveLength(1);
     });
 
     it('adds an accessible copy button to fenced code blocks', () => {

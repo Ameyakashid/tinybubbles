@@ -18,8 +18,8 @@ const {
   sendMobileImmediateNotification: vi.fn(async () => undefined),
 }));
 
-vi.mock('@mindwtr/core', async () => {
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+vi.mock('@tinybubbles/core', async () => {
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
     ...actual,
     useTaskStore: {
@@ -86,7 +86,7 @@ describe('useRootLayoutContextAutomation', () => {
     await act(async () => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://contexts?token=%40parents&contextAction=activate"
+          incomingUrl="tinybubbles://contexts?token=%40parents&contextAction=activate"
           returnToBackground={returnToBackground}
         />
       );
@@ -110,7 +110,7 @@ describe('useRootLayoutContextAutomation', () => {
     await act(async () => {
       create(
         <TestHarness
-          incomingUrl="mindwtr:///context/deactivate/parents"
+          incomingUrl="tinybubbles:///context/deactivate/parents"
           returnToBackground={returnToBackground}
         />
       );
@@ -137,7 +137,7 @@ describe('useRootLayoutContextAutomation', () => {
     await act(async () => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://contexts?token=%40parents&contextAction=activate"
+          incomingUrl="tinybubbles://contexts?token=%40parents&contextAction=activate"
           returnToBackground={returnToBackground}
         />
       );
@@ -164,14 +164,14 @@ describe('useRootLayoutContextAutomation', () => {
     await act(async () => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://contexts?token=%40parents&contextAction=activate"
+          incomingUrl="tinybubbles://contexts?token=%40parents&contextAction=activate"
           returnToBackground={returnToBackground}
         />
       );
       await Promise.resolve();
       create(
         <TestHarness
-          incomingUrl="mindwtr://contexts?token=%40parents&contextAction=activate"
+          incomingUrl="tinybubbles://contexts?token=%40parents&contextAction=activate"
           returnToBackground={returnToBackground}
         />
       );
@@ -202,7 +202,7 @@ describe('useRootLayoutContextAutomation', () => {
     await act(async () => {
       create(
         <TestHarness
-          incomingUrl="mindwtr://contexts?token=%40family&contextAction=activate"
+          incomingUrl="tinybubbles://contexts?token=%40family&contextAction=activate"
           returnToBackground={returnToBackground}
           resolveText={resolveText}
         />

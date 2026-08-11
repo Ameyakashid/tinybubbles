@@ -1,6 +1,6 @@
 import { fireEvent, render, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useTaskStore } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
 
 import { LanguageProvider } from '../../../contexts/language-context';
 import { KeybindingProvider } from '../../../contexts/keybinding-context';
@@ -38,7 +38,7 @@ vi.mock('../../../lib/app-log', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../../../lib/app-log')>()),
     clearLog: vi.fn().mockResolvedValue(undefined),
     collectFeedbackDiagnostics: vi.fn().mockResolvedValue(null),
-    getLogPath: vi.fn().mockResolvedValue('/tmp/mindwtr.log'),
+    getLogPath: vi.fn().mockResolvedValue('/tmp/tinybubbles.log'),
 }));
 
 vi.mock('../../../lib/settings-open-diagnostics', () => ({

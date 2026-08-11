@@ -26,7 +26,7 @@ type WebviewZoomOptions = {
     onError?: (error: unknown) => void;
 };
 
-export const WEBVIEW_ZOOM_STORAGE_KEY = 'mindwtr:webview-zoom:v1';
+export const WEBVIEW_ZOOM_STORAGE_KEY = 'tinybubbles:webview-zoom:v1';
 export const DEFAULT_WEBVIEW_ZOOM = 1;
 export const MIN_WEBVIEW_ZOOM = 0.5;
 export const MAX_WEBVIEW_ZOOM = 2;

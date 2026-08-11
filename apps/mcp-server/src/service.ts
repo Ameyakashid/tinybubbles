@@ -9,9 +9,9 @@ import {
   type Project as CoreProject,
   type Section as CoreSection,
   type RelativeStartOffset,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
-import { closeDb, openMindwtrDb, type DbOptions } from './db.js';
+import { closeDb, openTinyBubblesDb, type DbOptions } from './db.js';
 import { ValidationError } from './errors.js';
 import { filterUndefined } from './filter-undefined.js';
 import {
@@ -59,7 +59,7 @@ import { runCoreService } from './core-adapter.js';
 import { pickDefinedTaskFields, TASK_CREATE_FIELD_NAMES, TASK_PATCH_FIELD_NAMES } from './task-write-fields.js';
 
 type ServiceDeps = {
-  openMindwtrDb: typeof openMindwtrDb;
+  openTinyBubblesDb: typeof openTinyBubblesDb;
   closeDb: typeof closeDb;
   listTasks: typeof listTasks;
   listProjects: typeof listProjects;
@@ -75,7 +75,7 @@ type ServiceDeps = {
 };
 
 const defaultServiceDeps: ServiceDeps = {
-  openMindwtrDb,
+  openTinyBubblesDb,
   closeDb,
   listTasks,
   listProjects,
@@ -130,15 +130,15 @@ const runCoreWriteWithRetries = async <T>(
 };
 
 const createDbAccessor = (options: DbOptions, deps: ServiceDeps) => {
-  let dbHandlePromise: Promise<Awaited<ReturnType<typeof openMindwtrDb>>> | null = null;
+  let dbHandlePromise: Promise<Awaited<ReturnType<typeof openTinyBubblesDb>>> | null = null;
   const getDbHandle = async () => {
     if (!dbHandlePromise) {
-      dbHandlePromise = deps.openMindwtrDb(options);
+      dbHandlePromise = deps.openTinyBubblesDb(options);
     }
     return await dbHandlePromise;
   };
   const withDb = async <T>(
-    fn: (db: Awaited<ReturnType<typeof openMindwtrDb>>['db']) => T | Promise<T>,
+    fn: (db: Awaited<ReturnType<typeof openTinyBubblesDb>>['db']) => T | Promise<T>,
   ): Promise<T> => {
     const { db } = await getDbHandle();
     return await fn(db);
@@ -239,7 +239,7 @@ const buildTaskUpdates = (input: UpdateTaskInput): Partial<Task> => {
     } else if (name === 'repeatReminderMinutes') {
       updates.repeatReminderMinutes = normalizeNullableTaskRepeatReminderMinutes(value as number | null) ?? undefined;
     } else if (typeof value === 'boolean') {
-      // Booleans (showFutureRecurrence/isFocusedToday/suppressMindwtrReminders) have no
+      // Booleans (showFutureRecurrence/isFocusedToday/suppressTinyBubblesReminders) have no
       // "clear it" state distinct from false, so — unlike every other generated field —
       // they're never nullable on input (see task-field-schemas.ts) and pass through as-is.
       (updates as Record<string, unknown>)[name] = value;
@@ -367,12 +367,12 @@ const validateSectionTitle = (title: string): string => {
   return trimmed;
 };
 
-export type MindwtrService = {
+export type TinyBubblesService = {
   /**
    * Both adapters (local SQLite in queries.ts, cloud REST in cloud-service.ts) must satisfy
    * the same sort/filter semantics — see `service-conformance.test.ts`, which runs one
    * fixture table against both. Stated rules:
-   * - `sortBy: 'priority'` ranks by @mindwtr/core's `PRIORITY_RANK` (urgent > high > medium >
+   * - `sortBy: 'priority'` ranks by @tinybubbles/core's `PRIORITY_RANK` (urgent > high > medium >
    *   low), never the raw text column. A task with no priority ranks as 0 (below 'low') in
    *   both directions.
    * - Equal sort keys break ties by `id` ascending, and that tie-break does not flip with
@@ -413,7 +413,7 @@ export type MindwtrService = {
   close: () => Promise<void>;
 };
 
-export const createService = (options: DbOptions, deps: ServiceDeps = defaultServiceDeps): MindwtrService => {
+export const createService = (options: DbOptions, deps: ServiceDeps = defaultServiceDeps): TinyBubblesService => {
   const { withDb, close } = createDbAccessor(options, deps);
   return {
     listTasks: async (input) => withDb((db) => deps.listTasks(db, input)),

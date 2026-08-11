@@ -148,7 +148,7 @@ export function createSyncBackendIO(ctx: SyncBackendContext, transport: SyncTran
                 if (!ctx.dropboxAppKey) {
                     throw new Error('Dropbox app key is not configured');
                 }
-                ctx.syncUrl = 'dropbox:///Apps/Mindwtr/data.json';
+                ctx.syncUrl = 'dropbox:///Apps/TinyBubbles/data.json';
                 const remote = await runDropboxWithAuthRetry((token) => transport.dropboxDownload(token));
                 ctx.dropboxRev = remote.rev;
                 return remote.data;

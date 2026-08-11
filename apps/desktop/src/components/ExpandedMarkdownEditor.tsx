@@ -6,7 +6,7 @@ import { MarkdownFormatToolbar } from './MarkdownFormatToolbar';
 import { MarkdownReferenceAutocompleteMenu, useMarkdownReferenceAutocomplete } from './MarkdownReferenceAutocomplete';
 import { RichMarkdown } from './RichMarkdown';
 import { Dialog, DialogHeader } from './ui/Dialog';
-import type { MarkdownSelection, MarkdownToolbarActionId, MarkdownToolbarResult } from '@mindwtr/core';
+import type { MarkdownSelection, MarkdownToolbarActionId, MarkdownToolbarResult } from '@tinybubbles/core';
 
 type ExpandedMarkdownEditorProps = {
     isOpen: boolean;

@@ -1,4 +1,4 @@
-import { formatI18nTemplate, tFallback } from '@mindwtr/core';
+import { formatI18nTemplate, tFallback } from '@tinybubbles/core';
 
 export const taskEditorLabelClassName = 'text-xs text-muted-foreground font-semibold';
 

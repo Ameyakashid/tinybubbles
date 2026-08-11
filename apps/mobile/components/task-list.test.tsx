@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppSettings, Area, Project, Task } from '@mindwtr/core';
+import type { AppSettings, Area, Project, Task } from '@tinybubbles/core';
 
 const addTaskMock = vi.hoisted(() => vi.fn());
 const updateTaskMock = vi.hoisted(() => vi.fn());
@@ -148,7 +148,7 @@ vi.mock('react-native-draggable-flatlist', () => ({
 // Spread the real module and replace only the store hook (see
 // test-support/mock-core.ts). The old hand-listed mock returned nothing else, so
 // every core export the component tree grew afterwards arrived as undefined.
-vi.mock('@mindwtr/core', async (importOriginal) => {
+vi.mock('@tinybubbles/core', async (importOriginal) => {
   const { mockCore } = await import('../test-support/mock-core');
   return mockCore(importOriginal as () => Promise<Record<string, unknown>>, () => storeState, {
     getTranslationsSync: vi.fn(() => ({ 'trash.restoreToInbox': 'Restore' })),

@@ -1,87 +1,40 @@
 <div align="center">
 
-<img src="apps/mobile/assets/images/icon.png" width="120" alt="Mindwtr Logo">
+# Tiny Bubbles
 
-# Mindwtr
+**Get everything out of your head.** Tiny Bubbles is a free, open-source to-do app built on
+the Getting Things Done (GTD) method: it captures every task and idea in seconds, then shows
+you the one next thing to do. No account, no subscription, and your data stays on your
+device.
 
-English | [中文](./README_zh.md)
-
-**Get everything out of your head.** Mindwtr™ is a free, open-source to-do app built on the Getting Things Done (GTD) method: it captures every task and idea in seconds, then shows you the one next thing to do. No account, no subscription, and your data stays on your device.
-
-_Mindwtr = "mind like water": the calm you get when nothing is rattling around in your head._
-
-[Getting Started](https://docs.mindwtr.app/start/getting-started) · [FAQ](https://docs.mindwtr.app/start/faq) · [Docs](https://docs.mindwtr.app/) · [Data & Sync](https://docs.mindwtr.app/data-sync/) · [Cloud Deployment](https://docs.mindwtr.app/data-sync/cloud-deployment) · [MCP Server](https://docs.mindwtr.app/power-users/mcp)
-
-[![CI](https://github.com/dongdongbh/Mindwtr/actions/workflows/ci.yml/badge.svg)](https://github.com/dongdongbh/Mindwtr/actions/workflows/ci.yml)
-[![GitHub license](https://img.shields.io/github/license/dongdongbh/Mindwtr?color=brightgreen)](LICENSE)
-[![GitHub downloads](https://img.shields.io/github/downloads/dongdongbh/Mindwtr/total)](https://github.com/dongdongbh/Mindwtr/releases)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/gc4h5t58PR)
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub-ff5f5f?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/dongdongbh)
-[![Ko-fi](https://img.shields.io/badge/Sponsor-Ko--fi-29abe0?logo=kofi&logoColor=white)](https://ko-fi.com/D1D01T20WK)
-
-<p align="center" style="text-align: center;">
-  <a href="https://apps.microsoft.com/detail/9n0v5b0b6frx?ocid=webpdpshare" target="_blank">
-    <img src="https://developer.microsoft.com/store/badges/images/English_get-it-from-MS.png"
-         align="center"
-         alt="Microsoft Store"
-         style="height: 50px"
-         height="50" />
-  </a>
-  <a href="https://play.google.com/store/apps/details?id=tech.dongdongbh.mindwtr" target="_blank">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
-         align="center"
-         alt="Google Play"
-         style="height: 74px"
-         height="74" />
-  </a>
-  <a href="https://apps.apple.com/app/mindwtr/id6758597144" target="_blank">
-    <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83"
-         align="center"
-         alt="App Store"
-         style="height: 50px"
-         height="50" />
-  </a>
-  <a href="https://flathub.org/apps/tech.dongdongbh.mindwtr" target="_blank">
-    <img alt="Get it on Flathub"
-         src="https://flathub.org/api/badge?locale=en"
-         align="center"
-         style="height: 50px"
-         height="50" />
-  </a>
-  <a href="https://apt.izzysoft.de/packages/tech.dongdongbh.mindwtr" target="_blank">
-    <img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png"
-         align="center"
-         alt="Get it at IzzyOnDroid"
-         style="height: 74px"
-         height="74" />
-  </a>
-  <a href="https://f-droid.org/en/packages/tech.dongdongbh.mindwtr/" target="_blank">
-    <img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-         align="center"
-         alt="Get it on F-Droid"
-         style="height: 74px"
-         height="74" />
-  </a>
-  <a href="https://snapcraft.io/mindwtr" target="_blank">
-    <img alt="Get it from the Snap Store"
-         src="https://snapcraft.io/en/dark/install.svg"
-         align="center"
-         style="height: 50px"
-         height="50" />
-  </a>
-</p>
+[![GitHub license](https://img.shields.io/badge/license-AGPL--3.0-brightgreen)](LICENSE)
 
 </div>
 
-<div align="center">
-  <video src="https://github.com/user-attachments/assets/e62ac128-467d-4e2f-beb0-7fc3c947bfeb" width="60%" autoplay loop muted playsinline></video>
-  
-  <video src="https://github.com/user-attachments/assets/d6688a01-989f-41b9-b190-94b21b0ae821" width="25%" autoplay loop muted playsinline></video>
+---
 
-  <p>
-    <i>Local-First GTD on Arch Linux & Android</i>
-  </p>
-</div>
+> ### 🫧 This is a fork
+>
+> Tiny Bubbles is a modified version of **[Mindwtr](https://github.com/dongdongbh/Mindwtr)**
+> by dongdongbh and the Mindwtr contributors, used under the AGPL-3.0 licence and forked at
+> commit [`08b1822`](https://github.com/dongdongbh/Mindwtr/commit/08b18222d8eaf5403d2b05b9a0be39a30008d5d2).
+> All credit for the original design and implementation is theirs.
+>
+> **If you want the polished, actively released, app-store-published product, use
+> [Mindwtr](https://github.com/dongdongbh/Mindwtr) — not this.** This fork exists to grow in
+> a different direction and is not a replacement for upstream.
+>
+> See [`NOTICE.md`](NOTICE.md) for full attribution, licence obligations and the statement of
+> changes.
+
+> ### ⚠️ Status: early
+>
+> Tiny Bubbles does not yet publish binaries. There is no App Store, Play Store, Flathub,
+> F-Droid, Snap or Microsoft Store listing for it, and no installer to download. To try it
+> you must build from source. The only currently released work is a rebrand of upstream —
+> the features below are inherited from Mindwtr and behave as they do there.
+
+---
 
 ## Sound familiar?
 
@@ -94,26 +47,31 @@ _Mindwtr = "mind like water": the calm you get when nothing is rattling around i
 
 ## How it works
 
-Your head is for having ideas, not for holding them (David Allen, who wrote the book on this). Mindwtr holds them for you:
+Your head is for having ideas, not for holding them (David Allen, who wrote the book on
+this). Tiny Bubbles holds them for you:
 
 1. **Dump it.** A task, an idea, a worry: type it (or speak it) and it lands in your Inbox. Global hotkey on desktop, widget and share sheet on your phone.
 2. **Sort it.** A short guided pass over the Inbox. Takes two minutes? Do it now. Has a date? Schedule it. Waiting on someone else? Track it. Just a maybe? Shelve it for someday.
 3. **Do it.** Open Focus and see only what you can act on right now. Everything else stays out of sight.
 4. **Reset weekly.** A guided review catches loose ends, so the list stays trustworthy and your head stays clear.
 
-If you know GTD: that is Capture, Clarify, Organize, Engage, and Reflect, end to end. If you don't, no problem: Mindwtr walks you through each step, and [GTD in 15 minutes](https://hamberg.no/gtd) is a friendly introduction whenever you're curious.
+If you know GTD: that is Capture, Clarify, Organize, Engage, and Reflect, end to end. If you
+don't, no problem: Tiny Bubbles walks you through each step, and
+[GTD in 15 minutes](https://hamberg.no/gtd) is a friendly introduction whenever you're curious.
 
 ## Philosophy
 
 **Don't show me a cockpit when I just want to ride a bike.**
 
-Mindwtr is simple by default and powerful when you need it:
+Tiny Bubbles is simple by default and powerful when you need it:
 
 - Advanced options stay hidden until they matter.
 - Fewer fields, fewer knobs, fewer distractions.
 - Clarity beats clutter: we say no to feature creep.
 
 ## Features
+
+*Inherited from upstream Mindwtr.*
 
 - The full GTD loop, guided: capture, sort, do, review.
 - Focus view puts today's schedule and your next actions on one screen.
@@ -122,9 +80,7 @@ Mindwtr is simple by default and powerful when you need it:
 - Import tasks from your Obsidian notes, with links back to the source (desktop).
 - Optional AI helper: connect your own OpenAI, Gemini, or Claude account, or run a private AI on your own computer. Off by default.
 - Apps for Windows, macOS, Linux, iPhone, and Android, plus a web app that works offline.
-- For developers: a local REST API, a CLI, and the [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) server so AI assistants can manage your tasks.
-
-[![MCP Toplist](https://mcptoplist.com/badge/io.github.dongdongbh%2Fmindwtr.svg)](https://mcptoplist.com/server/io.github.dongdongbh%2Fmindwtr)
+- For developers: a local REST API, a CLI, and an MCP server so AI assistants can manage your tasks.
 
 <details>
 <summary>See all features</summary>
@@ -170,12 +126,12 @@ Mindwtr is simple by default and powerful when you need it:
 
 ### Data & Sync
 
-- 🔄 **Sync Options** - See the [Data & Sync docs](https://docs.mindwtr.app/data-sync/) for supported backends and setup
+- 🔄 **Sync Options** - Multiple backends; see the docs in [`docs/`](docs/)
 - 🍎 **iCloud Sync** - Built-in sync on supported iPhone, iPad, and macOS builds (CloudKit)
-- ☁️ **Dropbox Sync (Optional)** - Sign in with Dropbox and sync through a private app folder (store builds; not in FOSS builds)
+- ☁️ **Dropbox Sync (Optional)** - Sign in with Dropbox and sync through a private app folder
 - 📤 **Export/Backup** - Export data to JSON
-- ♻️ **Restore from Backup** - Replace local data from a validated Mindwtr backup with a recovery snapshot first
-- 📥 **TickTick + Todoist + DGT GTD + OmniFocus + Apple Reminders + CSV Import** - Import TickTick CSV/ZIP, Todoist CSV/ZIP, DGT GTD JSON/ZIP, OmniFocus exports, incomplete Apple Reminders, or any app via a documented generic CSV format into Mindwtr
+- ♻️ **Restore from Backup** - Replace local data from a validated backup with a recovery snapshot first
+- 📥 **TickTick + Todoist + DGT GTD + OmniFocus + Apple Reminders + CSV Import** - Import TickTick CSV/ZIP, Todoist CSV/ZIP, DGT GTD JSON/ZIP, OmniFocus exports, incomplete Apple Reminders, or any app via a documented generic CSV format
 - 🔗 **Obsidian Integration** - Desktop vault task import with deep links back to source notes
 - 🗓️ **External Calendars (System + ICS)** - Mobile reads system calendars and pushes dated tasks; macOS desktop reads Apple Calendar and can push dated tasks; desktop/web also support ICS subscriptions and task creation from events
 
@@ -184,14 +140,16 @@ Mindwtr is simple by default and powerful when you need it:
 - 🔌 **CLI** - Add, list, complete, search from terminal by running the repo helper
 - 🌐 **REST API** - Optional desktop localhost API server for token-authenticated scripting
 - 🌍 **Web App** - Runs in your browser, works offline (PWA)
-- 🧠 **MCP Server** - Lets AI assistants read and manage your tasks (a local Model Context Protocol server), available as [`mindwtr-mcp`](https://www.npmjs.com/package/mindwtr-mcp) and in the [MCP Registry](https://registry.modelcontextprotocol.io/)
+- 🧠 **MCP Server** - Lets AI assistants read and manage your tasks (a local Model Context Protocol server), built from [`apps/mcp-server/`](apps/mcp-server/) in this repo
 
-Desktop builds can start the local REST API from **Settings -> Advanced** on `127.0.0.1` with default port `3456` and a generated bearer token. The CLI remains a repo helper; the stdio MCP server can be installed from npm with `npm install -g mindwtr-mcp` or launched by MCP clients with `npx -y mindwtr-mcp`.
+Desktop builds can start the local REST API from **Settings -> Advanced** on `127.0.0.1`
+with default port `3456` and a generated bearer token. The CLI remains a repo helper; the
+stdio MCP server is built from source in this repo.
 
 ### Cross-Platform
 
 - 🖥️ **Desktop** - Tauri v2 (macOS, Linux, Windows)
-- 📱 **Mobile** - React Native/Expo (iOS via App Store/TestFlight, Android) with in-app tips for gestures and app shortcuts
+- 📱 **Mobile** - React Native/Expo (iOS, Android) with in-app tips for gestures and app shortcuts
 - 📲 **Android Widget** - Home screen focus/next widget
 - ⌨️ **Keyboard Shortcuts** - Standard (Gmail-style), Vim, and Emacs presets
 - 🎨 **Themes** - Light, Dark, OLED, Nord, Sepia, E-ink, and Material 3
@@ -200,137 +158,51 @@ Desktop builds can start the local REST API from **Settings -> Advanced** on `12
 
 </details>
 
-## Why Mindwtr (Quick Comparison)
-
-Mindwtr is for people who want the full GTD method in one app, with data they own and no lock-in. Here is a brief, respectful comparison with mainstream task apps and GTD-focused alternatives.
-
-| Capability                                                              | Mindwtr | Todoist | TickTick | Everdo | NirvanaHQ |
-| ----------------------------------------------------------------------- | ------- | ------- | -------- | ------ | --------- |
-| Open source                                                             | ✅      | ❌      | ❌       | ❌     | ❌        |
-| Follows the full GTD method out of the box                              | ✅      | ⚠️      | ⚠️       | ✅     | ✅        |
-| Works everywhere: Windows, Mac, Linux, iPhone, Android, web             | ✅      | ✅      | ✅       | ⚠️     | ⚠️        |
-| Works offline, no account needed                                        | ✅      | ❌      | ❌       | ✅     | ❌        |
-| Optional AI helper (your own AI account, or one on your computer)       | ✅      | ❌      | ❌       | ❌     | ❌        |
-| You pick where your data syncs (Dropbox, your server, a folder, WebDAV) | ✅      | ❌      | ❌       | ⚠️     | ❌        |
-| Completely free                                                         | ✅      | ❌      | ❌       | ❌     | ❌        |
-
-Legend: `✅` = yes, `❌` = no, `⚠️` = partial/limited support.
-
-_This comparison is based on the current public capabilities of each product. If any entry is outdated, feel free to open an issue or PR with sources._
-
 ## Installation
 
-For the complete and current install guides, see [Desktop Installation](https://docs.mindwtr.app/start/desktop-installation) and [Mobile Installation](https://docs.mindwtr.app/start/mobile-installation).
-
-Quick options:
-
-- Windows: Microsoft Store, Winget, Chocolatey, Scoop, or GitHub Releases.
-- macOS: Mac App Store, Homebrew, TestFlight beta, or GitHub Releases.
-- Linux: Flathub, Snap, AUR, APT/RPM repos, or GitHub Releases.
-- Android: Google Play, F-Droid, IzzyOnDroid, or GitHub Releases APK.
-- iOS: App Store or TestFlight beta.
-- Web / self-hosted: [Cloud Deployment](https://docs.mindwtr.app/data-sync/cloud-deployment) or the [Docker guide](docker/README.md).
-
-Windows builds: free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/) — application approved, certificate pending issuance. See the [code signing policy](https://mindwtr.app/signing).
-
-<details>
-<summary>Package manager quick commands</summary>
+**There are no published Tiny Bubbles builds yet.** Build from source:
 
 ```bash
-flatpak install flathub tech.dongdongbh.mindwtr
-yay -S mindwtr-bin
-brew install --cask mindwtr
+bun install
+bun run dev
 ```
 
-```powershell
-winget install dongdongbh.Mindwtr
-```
+See [`docs/`](docs/) for the inherited build and deployment guides, and
+[`docker/README.md`](docker/README.md) for the Docker setup.
 
-For APT/RPM repo setup, source builds, portable ZIPs, mobile store variants, and Docker setup, use the full install guides above.
+If you want a ready-to-install GTD app today, install
+[Mindwtr](https://github.com/dongdongbh/Mindwtr) instead — it is published on the major app
+stores and package managers.
 
-</details>
+## Contributing
 
-## Community
+Start with [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
-Mindwtr is shaped by its users and contributors. Thank you for helping improve it.
+- **Report bugs and request features:** [GitHub Issues](https://github.com/tinybubbles-app/tinybubbles/issues)
+- **Help with translations:** [`packages/core/src/i18n/locales/`](packages/core/src/i18n/locales/)
+- **Contribute code/docs:** open a pull request and follow the contribution guide and commit conventions.
 
-### :hearts: Contributing & Support
-
-If you want to get involved for coding, start with [CONTRIBUTING.md](docs/CONTRIBUTING.md).
-
-You can help in several ways:
-
-1. **Spread the word:** Share Mindwtr with friends and communities, and support it on [Product Hunt](https://www.producthunt.com/products/mindwtr) and [AlternativeTo](https://alternativeto.net/software/mindwtr/).
-2. **Leave store reviews:** A good rating/review on the [App Store](https://apps.apple.com/app/mindwtr/id6758597144), [Google Play](https://play.google.com/store/apps/details?id=tech.dongdongbh.mindwtr), or [Microsoft Store](https://apps.microsoft.com/detail/9n0v5b0b6frx?ocid=webpdpshare) helps a lot.
-3. **Star and share:** Star the repo and post about Mindwtr on [X](https://twitter.com/intent/tweet?text=I%20like%20Mindwtr%20https%3A%2F%2Fgithub.com%2Fdongdongbh%2FMindwtr), [Reddit](https://www.reddit.com/submit?url=https%3A%2F%2Fgithub.com%2Fdongdongbh%2FMindwtr&title=I%20like%20Mindwtr), or [LinkedIn](https://www.linkedin.com/shareArticle?mini=true&url=https%3A%2F%2Fgithub.com%2Fdongdongbh%2FMindwtr&title=I%20like%20Mindwtr).
-4. **Report bugs and request features:** Open issues on [GitHub Issues](https://github.com/dongdongbh/Mindwtr/issues).
-5. **Join the community chat:** Come to [Discord](https://discord.gg/gc4h5t58PR).
-6. **Help with translations:** Contribute locale updates in [`packages/core/src/i18n/locales/`](packages/core/src/i18n/locales/).
-7. **Contribute code/docs:** Open a pull request and follow the [contribution guide](docs/CONTRIBUTING.md) and commit conventions.
-8. **Pick and build:** Community members are welcome to pick any open issue and submit a PR.
-9. **Sponsor the project:** Support ongoing development via [GitHub Sponsors](https://github.com/sponsors/dongdongbh) or [Ko-fi](https://ko-fi.com/D1D01T20WK).
+Bugs that also affect upstream are best reported to
+[Mindwtr](https://github.com/dongdongbh/Mindwtr/issues) as well, so its users benefit too.
 
 ## Documentation
 
-- 📚 [Official Docs](https://docs.mindwtr.app/)
-- 🚀 [Getting Started](https://docs.mindwtr.app/start/getting-started)
-- ❓ [FAQ](https://docs.mindwtr.app/start/faq)
-- 🔄 [Data & Sync](https://docs.mindwtr.app/data-sync/)
-- 🛠️ [Cloud Deployment](https://docs.mindwtr.app/data-sync/cloud-deployment)
-- ☁️ [Cloud API](https://docs.mindwtr.app/developers/cloud-api)
-- 🧠 [MCP Server](https://docs.mindwtr.app/power-users/mcp)
+- 📚 [Docs in this repo](docs/)
 - 📝 [Release Notes Index](docs/release-notes/README.md)
+- 🔒 [Security Policy](SECURITY.md)
+- ⚖️ [Attribution, licence and changes](NOTICE.md)
 
-## Star History
+Upstream Mindwtr's hosted documentation at <https://docs.mindwtr.app/> covers the shared
+functionality in more depth. It documents upstream, not this fork, so anything Tiny Bubbles
+has changed will differ.
 
-<a href="https://www.star-history.com/?repos=dongdongbh%2FMindwtr&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&theme=dark&legend=top-left&sealed_token=FEttB-7Usxl2vOdPE6oWOyGuWDgtvmBXqdm8XO1JLHtvdji48vvbX3VAbe-G2M9IM90c_1UQwn39SrfxZB0n8vLkP7f9GWn_5K1veBdx4ka7HvnXOAYnlK-Td8KI9HVjBVQeMHMcFRhIKjL5y0knWi4BBhdfqUPCSvtWExdJ9cXo4UlRaLaoW12OxQqk" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&legend=top-left&sealed_token=FEttB-7Usxl2vOdPE6oWOyGuWDgtvmBXqdm8XO1JLHtvdji48vvbX3VAbe-G2M9IM90c_1UQwn39SrfxZB0n8vLkP7f9GWn_5K1veBdx4ka7HvnXOAYnlK-Td8KI9HVjBVQeMHMcFRhIKjL5y0knWi4BBhdfqUPCSvtWExdJ9cXo4UlRaLaoW12OxQqk" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=dongdongbh/Mindwtr&type=date&legend=top-left&sealed_token=FEttB-7Usxl2vOdPE6oWOyGuWDgtvmBXqdm8XO1JLHtvdji48vvbX3VAbe-G2M9IM90c_1UQwn39SrfxZB0n8vLkP7f9GWn_5K1veBdx4ka7HvnXOAYnlK-Td8KI9HVjBVQeMHMcFRhIKjL5y0knWi4BBhdfqUPCSvtWExdJ9cXo4UlRaLaoW12OxQqk" />
- </picture>
-</a>
+## Licence
 
-## Sponsors
+Tiny Bubbles is licensed under the **GNU Affero General Public License v3.0 only**
+(AGPL-3.0-only), inherited from upstream Mindwtr. The full text is in [`LICENSE`](LICENSE).
 
-Thanks to these monthly sponsors for supporting Mindwtr.
+Note that AGPL §13 applies to network use: if you deploy the optional sync server in
+`apps/cloud/` and let others use it, you must offer them the complete corresponding source
+of your modified version. See [`NOTICE.md`](NOTICE.md).
 
-<p align="center">
-  <a href="https://github.com/jarrydstan" title="@jarrydstan">
-    <img src="docs/assets/sponsors/jarrydstan.png" width="60" height="60" alt="@jarrydstan" />
-  </a>
-  <a href="https://github.com/ronmolenda" title="@ronmolenda">
-    <img src="docs/assets/sponsors/ronmolenda.png" width="60" height="60" alt="@ronmolenda" />
-  </a>
-  <a href="https://github.com/karl1990" title="@karl1990">
-    <img src="docs/assets/sponsors/karl1990.png" width="60" height="60" alt="@karl1990" />
-  </a>
-  <a href="https://github.com/srijan" title="@srijan">
-    <img src="docs/assets/sponsors/srijan.png" width="60" height="60" alt="@srijan" />
-  </a>
-  <a href="https://github.com/davibicudo" title="@davibicudo">
-    <img src="docs/assets/sponsors/davibicudo.png" width="60" height="60" alt="@davibicudo" />
-  </a>
-  <a href="https://github.com/PLPeeters" title="@PLPeeters">
-    <img src="docs/assets/sponsors/plpeeters-avatar.png" width="60" height="60" alt="@PLPeeters" />
-  </a>
-  <a href="https://github.com/danhs" title="@danhs">
-    <img src="docs/assets/sponsors/danhs.png" width="60" height="60" alt="@danhs" />
-  </a>
-  <a href="https://github.com/NikoScotch" title="@NikoScotch">
-    <img src="docs/assets/sponsors/nikoscotch.png" width="60" height="60" alt="@NikoScotch" />
-  </a>
-  <a href="https://github.com/nicopico-dev" title="@nicopico-dev">
-    <img src="docs/assets/sponsors/nicopico-dev.png" width="60" height="60" alt="@nicopico-dev" />
-  </a>
-</p>
-
-<p align="center">
-  <sub><a href="https://github.com/jarrydstan">@jarrydstan</a> · <a href="https://github.com/ronmolenda">@ronmolenda</a> · <a href="https://github.com/karl1990">@karl1990</a> · <a href="https://github.com/srijan">@srijan</a> · <a href="https://github.com/davibicudo">@davibicudo</a> · <a href="https://github.com/PLPeeters">@PLPeeters</a> · <a href="https://github.com/danhs">@danhs</a> · <a href="https://github.com/NikoScotch">@NikoScotch</a> · <a href="https://github.com/nicopico-dev">@nicopico-dev</a></sub>
-</p>
-
----
-
-<p align="center">
-  <sub>Mindwtr™ and the Mindwtr logo are trademarks of the Mindwtr project. Official website: <a href="https://mindwtr.app">mindwtr.app</a></sub>
-</p>
+*"Mindwtr" is the upstream project's name and is not claimed by this fork.*

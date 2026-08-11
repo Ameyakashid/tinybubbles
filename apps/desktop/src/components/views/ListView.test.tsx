@@ -1,6 +1,6 @@
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react';
-import type { Task } from '@mindwtr/core';
-import { useTaskStore } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
+import { useTaskStore } from '@tinybubbles/core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../contexts/language-context';
@@ -20,7 +20,7 @@ vi.mock('../../lib/report-error', () => ({
 const initialTaskState = useTaskStore.getState();
 const initialUiState = useUiStore.getState();
 const now = new Date().toISOString();
-const referenceViewStateStorageKey = 'mindwtr:view:reference:v1';
+const referenceViewStateStorageKey = 'tinybubbles:view:reference:v1';
 
 const makeTask = (id: string, overrides: Partial<Task> = {}): Task => ({
   id,
@@ -55,7 +55,7 @@ describe('ListView', () => {
   beforeEach(() => {
     reportErrorMock.mockReset();
     window.localStorage.removeItem(referenceViewStateStorageKey);
-    window.localStorage.removeItem('mindwtr:view:list:next:v1');
+    window.localStorage.removeItem('tinybubbles:view:list:next:v1');
 
     useTaskStore.setState(initialTaskState, true);
     useUiStore.setState(initialUiState, true);
@@ -287,7 +287,7 @@ describe('ListView', () => {
     ['someday', 'Someday'],
   ] as const)('opens the default quick-add pane from the %s view using a', (statusFilter, title) => {
     const quickAddListener = vi.fn();
-    window.addEventListener('mindwtr:quick-add', quickAddListener);
+    window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
     renderListView(statusFilter, title);
 
@@ -296,7 +296,7 @@ describe('ListView', () => {
     expect(quickAddListener).toHaveBeenCalledTimes(1);
     expect((quickAddListener.mock.calls[0]?.[0] as CustomEvent).detail).toBeUndefined();
 
-    window.removeEventListener('mindwtr:quick-add', quickAddListener);
+    window.removeEventListener('tinybubbles:quick-add', quickAddListener);
   });
 
   it('keeps future-start inbox tasks visible while hiding future-start next actions', async () => {
@@ -590,7 +590,7 @@ describe('ListView', () => {
   // it out of visibleTasks entirely, so search sent the user to Done and
   // nothing happened (#991).
   it('expands the collapsed group holding a task sent here by global search', () => {
-    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+    window.localStorage.removeItem('tinybubbles:view:list:done:v1');
     useTaskStore.setState({
       _allTasks: [
         makeTask('1', { title: 'Work done', status: 'done', contexts: ['@work'], completedAt: now }),
@@ -616,11 +616,11 @@ describe('ListView', () => {
 
     expect(view.getByRole('button', { name: /@work\s*1/i })).toHaveAttribute('aria-expanded', 'true');
     expect(view.getByText('Work done')).toBeInTheDocument();
-    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+    window.localStorage.removeItem('tinybubbles:view:list:done:v1');
   });
 
   it('keeps other collapsed groups folded when a highlighted task appears in more than one', () => {
-    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+    window.localStorage.removeItem('tinybubbles:view:list:done:v1');
     useTaskStore.setState({
       _allTasks: [
         makeTask('1', {
@@ -652,7 +652,7 @@ describe('ListView', () => {
 
     expect([alpha(), beta()].filter((group) => group.getAttribute('aria-expanded') === 'true')).toHaveLength(1);
     expect(view.getAllByText('Dual-tag done')).toHaveLength(1);
-    window.localStorage.removeItem('mindwtr:view:list:done:v1');
+    window.localStorage.removeItem('tinybubbles:view:list:done:v1');
   });
 
   it('collapses groups on any status list, not just Reference (#963)', () => {
@@ -679,7 +679,7 @@ describe('ListView', () => {
     expect(firstRender.getByText('Home next')).toBeInTheDocument();
 
     // Per status, so folding Next cannot fold another list.
-    const persisted = JSON.parse(window.localStorage.getItem('mindwtr:view:list:next:v1') ?? '{}') as {
+    const persisted = JSON.parse(window.localStorage.getItem('tinybubbles:view:list:next:v1') ?? '{}') as {
       collapsedGroups?: Record<string, string[]>;
     };
     expect(persisted.collapsedGroups?.context).toEqual(['context:@work']);

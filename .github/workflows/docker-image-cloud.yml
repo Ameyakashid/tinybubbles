@@ -21,8 +21,11 @@ concurrency:
 
 jobs:
   build-and-push-image:
+    # Tiny Bubbles fork: releases are disabled until the project publishes builds.
+    # Set repository variable ENABLE_RELEASE_WORKFLOWS=true to re-enable.
+    if: vars.ENABLE_RELEASE_WORKFLOWS == 'true'
     uses: ./.github/workflows/docker-image-reusable.yml
     with:
-      image_name: mindwtr-cloud
+      image_name: tinybubbles-cloud
       dockerfile: ./docker/cloud/Dockerfile
       tag: ${{ github.event.inputs.tag || '' }}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mindwtr-pwa-v2';
+const CACHE_NAME = 'tinybubbles-pwa-v2';
 const PRECACHE_URLS = ['/', '/index.html', '/manifest.webmanifest', '/icon.png', '/logo.png'];
 const STATIC_DESTINATIONS = new Set(['script', 'style', 'image', 'font', 'manifest', 'worker']);
 

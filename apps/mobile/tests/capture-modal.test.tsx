@@ -48,9 +48,9 @@ vi.mock('expo-router', () => ({
   useRouter: () => routerMocks,
 }));
 
-vi.mock('@mindwtr/core', async () => {
+vi.mock('@tinybubbles/core', async () => {
   // The shared capture transaction runs real; only its store actions are substituted.
-  const actual = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+  const actual = await vi.importActual<typeof import('@tinybubbles/core')>('@tinybubbles/core');
   return {
   executeCaptureTransaction: actual.executeCaptureTransaction,
   prepareCaptureTask: actual.prepareCaptureTask,
@@ -161,7 +161,7 @@ vi.mock('@/lib/task-meta-navigation', () => ({
 }));
 
 vi.mock('@/lib/attachment-sync-utils', () => ({
-  getAttachmentsDir: vi.fn(async () => 'file:///data/mindwtr/attachments/'),
+  getAttachmentsDir: vi.fn(async () => 'file:///data/tinybubbles/attachments/'),
 }));
 
 const findTouchableByText = (tree: ReturnType<typeof create>, label: string) => {
@@ -338,7 +338,7 @@ describe('CaptureScreen', () => {
             id: 'att-1',
             kind: 'file',
             title: 'report.pdf',
-            uri: 'file:///data/mindwtr/attachments/att-1.pdf',
+            uri: 'file:///data/tinybubbles/attachments/att-1.pdf',
             mimeType: 'application/pdf',
             size: 1024,
             createdAt: '2026-07-12T00:00:00.000Z',
@@ -380,7 +380,7 @@ describe('CaptureScreen', () => {
       id: 'att-1',
       kind: 'file',
       title: 'report.pdf',
-      uri: 'file:///data/mindwtr/attachments/att-1.pdf',
+      uri: 'file:///data/tinybubbles/attachments/att-1.pdf',
       mimeType: 'application/pdf',
       size: 1024,
     });

@@ -29,7 +29,7 @@ afterEach(() => {
     delete (window as any).__TAURI_INTERNALS__;
 });
 
-const options: DesktopShellSyncOptions = { showTray: true, trayTooltip: 'Mindwtr', closeBehavior: 'tray' };
+const options: DesktopShellSyncOptions = { showTray: true, trayTooltip: 'Tiny Bubbles', closeBehavior: 'tray' };
 
 describe('useDesktopShellSync', () => {
     it('invokes nothing off Tauri', () => {
@@ -42,7 +42,7 @@ describe('useDesktopShellSync', () => {
         renderHook(() => useDesktopShellSync(options));
         expect(invoked).toEqual([
             ['set_tray_visible', { visible: true }],
-            ['set_tray_tooltip', { tooltip: 'Mindwtr' }],
+            ['set_tray_tooltip', { tooltip: 'Tiny Bubbles' }],
             ['set_macos_activation_policy', { accessory: true }],
         ]);
     });
@@ -80,9 +80,9 @@ describe('useDesktopShellSync', () => {
         });
         invoked.length = 0;
 
-        rerender({ ...options, trayTooltip: 'Mindwtr — 2 focused' });
+        rerender({ ...options, trayTooltip: 'Tiny Bubbles — 2 focused' });
 
-        expect(invoked).toEqual([['set_tray_tooltip', { tooltip: 'Mindwtr — 2 focused' }]]);
+        expect(invoked).toEqual([['set_tray_tooltip', { tooltip: 'Tiny Bubbles — 2 focused' }]]);
     });
 
     it('issues each command once per unchanged render', () => {

@@ -181,20 +181,20 @@ function readOptionalEnvFile(env: Record<string, string | undefined>, fileVarNam
 
 export function resolveAllowedAuthTokensFromEnv(env: Record<string, string | undefined>): AllowedAuthTokens | null {
     const values = [
-        env.MINDWTR_CLOUD_AUTH_TOKENS,
-        readOptionalEnvFile(env, 'MINDWTR_CLOUD_AUTH_TOKENS_FILE'),
-        env.MINDWTR_CLOUD_TOKEN,
-        readOptionalEnvFile(env, 'MINDWTR_CLOUD_TOKEN_FILE'),
+        env.TINYBUBBLES_CLOUD_AUTH_TOKENS,
+        readOptionalEnvFile(env, 'TINYBUBBLES_CLOUD_AUTH_TOKENS_FILE'),
+        env.TINYBUBBLES_CLOUD_TOKEN,
+        readOptionalEnvFile(env, 'TINYBUBBLES_CLOUD_TOKEN_FILE'),
     ]
         .map((value) => String(value || '').trim())
         .filter((value) => value.length > 0);
     if (values.length === 0) {
-        if (parseBoolEnv(env.MINDWTR_CLOUD_ALLOW_ANY_TOKEN)) {
-            logWarn('MINDWTR_CLOUD_ALLOW_ANY_TOKEN is enabled. Prefer MINDWTR_CLOUD_AUTH_TOKENS for stronger access control.');
+        if (parseBoolEnv(env.TINYBUBBLES_CLOUD_ALLOW_ANY_TOKEN)) {
+            logWarn('TINYBUBBLES_CLOUD_ALLOW_ANY_TOKEN is enabled. Prefer TINYBUBBLES_CLOUD_AUTH_TOKENS for stronger access control.');
             return null;
         }
         throw new Error(
-            'Cloud auth is not configured. Set MINDWTR_CLOUD_AUTH_TOKENS (or legacy MINDWTR_CLOUD_TOKEN), or explicitly set MINDWTR_CLOUD_ALLOW_ANY_TOKEN=true to enable token namespace mode.'
+            'Cloud auth is not configured. Set TINYBUBBLES_CLOUD_AUTH_TOKENS (or legacy TINYBUBBLES_CLOUD_TOKEN), or explicitly set TINYBUBBLES_CLOUD_ALLOW_ANY_TOKEN=true to enable token namespace mode.'
         );
     }
     return parseAllowedAuthTokens(values.join(','));

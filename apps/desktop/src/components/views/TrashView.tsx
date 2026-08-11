@@ -8,8 +8,8 @@ import {
     taskMatchesAreaFilterSelection,
     tFallback,
     useTaskStore,
-} from '@mindwtr/core';
-import type { Project, Task } from '@mindwtr/core';
+} from '@tinybubbles/core';
+import type { Project, Task } from '@tinybubbles/core';
 import { Undo2, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/language-context';
 import { useOptionalKeybindings } from '../../contexts/keybinding-context';

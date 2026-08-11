@@ -19,8 +19,8 @@ import {
     type StoreActionResult,
     type Task,
     type TaskStatus,
-} from '@mindwtr/core';
-import { joinDateTime, splitDateTime } from '@mindwtr/core/date-draft';
+} from '@tinybubbles/core';
+import { joinDateTime, splitDateTime } from '@tinybubbles/core/date-draft';
 
 import { reportError } from '../../lib/report-error';
 import { cn } from '../../lib/utils';

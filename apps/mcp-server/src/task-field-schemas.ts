@@ -1,4 +1,4 @@
-// Builds the Zod object shapes for mindwtr_add_task/mindwtr_update_task's generic per-field
+// Builds the Zod object shapes for tinybubbles_add_task/tinybubbles_update_task's generic per-field
 // inputs from TASK_CREATE_FIELD_NAMES/TASK_PATCH_FIELD_NAMES (task-write-fields.ts), which are
 // themselves derived from TASK_SYNC_FIELD_SCHEMA. Adding a field to that descriptor with
 // cloudWrite 'create-patch'/'patch' means adding ONE entry to TASK_FIELD_ZOD_SCHEMAS below —
@@ -35,7 +35,7 @@ const TASK_FIELD_ZOD_SCHEMAS: Partial<Record<keyof Task, z.ZodTypeAny>> = {
   areaId: z.string().describe('Area ID (only used when the task has no projectId)'),
   isFocusedToday: z.boolean().describe("Marked as today's focus list"),
   timeSpentMinutes: z.number().int().nonnegative().describe('Total minutes worked on the task'),
-  suppressMindwtrReminders: z.boolean().describe('Skip Mindwtr start/due reminders for this task'),
+  suppressTinyBubblesReminders: z.boolean().describe('Skip Tiny Bubbles start/due reminders for this task'),
   repeatReminderMinutes: z.number().int().nonnegative().describe(
     'Repeat the due-time reminder every N minutes (presets 5|10|15|30|60); 0/absent = off'
   ),
@@ -56,9 +56,9 @@ const fieldSchemaFor = (name: keyof Task): z.ZodTypeAny => {
 // Booleans have no "clear it" state distinct from false, so — unlike every other generated
 // field — they stay plain `.optional()` on update rather than `.nullable().optional()`
 // (matches the pre-existing hand-written `isFocusedToday: z.boolean().optional()`).
-const BOOLEAN_FIELD_NAMES = new Set<keyof Task>(['showFutureRecurrence', 'isFocusedToday', 'suppressMindwtrReminders']);
+const BOOLEAN_FIELD_NAMES = new Set<keyof Task>(['showFutureRecurrence', 'isFocusedToday', 'suppressTinyBubblesReminders']);
 
-/** Shape for mindwtr_add_task's generated fields (merge into the tool's z.object alongside title/quickAdd). */
+/** Shape for tinybubbles_add_task's generated fields (merge into the tool's z.object alongside title/quickAdd). */
 export const buildTaskCreateFieldsShape = (): Record<string, z.ZodTypeAny> => {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const name of TASK_CREATE_FIELD_NAMES) {
@@ -67,7 +67,7 @@ export const buildTaskCreateFieldsShape = (): Record<string, z.ZodTypeAny> => {
   return shape;
 };
 
-/** Shape for mindwtr_update_task's generated fields (merge into the tool's z.object alongside id/title). */
+/** Shape for tinybubbles_update_task's generated fields (merge into the tool's z.object alongside id/title). */
 export const buildTaskUpdateFieldsShape = (): Record<string, z.ZodTypeAny> => {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const name of TASK_PATCH_FIELD_NAMES) {

@@ -1,5 +1,5 @@
 import { Dimensions } from 'react-native';
-import { type TaskEditorFieldId, type TaskEditorSectionId, type TaskEditorSettings, type TaskStatus } from '@mindwtr/core';
+import { type TaskEditorFieldId, type TaskEditorSectionId, type TaskEditorSettings, type TaskStatus } from '@tinybubbles/core';
 import { logError, logWarn } from '../../lib/app-log';
 
 export const STATUS_OPTIONS: TaskStatus[] = ['inbox', 'next', 'waiting', 'someday', 'done', 'reference'];

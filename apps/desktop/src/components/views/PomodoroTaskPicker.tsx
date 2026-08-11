@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import type { Task } from '@mindwtr/core';
+import type { Task } from '@tinybubbles/core';
 import { ChevronDown, Timer } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { ModalPortal } from '../ModalPortal';

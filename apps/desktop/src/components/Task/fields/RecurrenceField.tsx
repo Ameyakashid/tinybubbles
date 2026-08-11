@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { buildRRuleString, parseRRuleString, RECURRENCE_INTERVAL_MAX, safeParseDate, tFallback, type RecurrenceByDay, type RecurrenceRule, type RecurrenceStrategy } from '@mindwtr/core';
+import { buildRRuleString, parseRRuleString, RECURRENCE_INTERVAL_MAX, safeParseDate, tFallback, type RecurrenceByDay, type RecurrenceRule, type RecurrenceStrategy } from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
 import { DateField } from '../../ui/DateField';

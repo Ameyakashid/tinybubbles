@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { normalizeTimeSpentMinutes, tFallback } from '@mindwtr/core';
+import { normalizeTimeSpentMinutes, tFallback } from '@tinybubbles/core';
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 
 type CompletedAtPickerProps = {

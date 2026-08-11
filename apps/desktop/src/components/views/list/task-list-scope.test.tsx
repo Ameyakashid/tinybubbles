@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useTaskStore } from '@mindwtr/core';
-import type { Task } from '@mindwtr/core';
+import { useTaskStore } from '@tinybubbles/core';
+import type { Task } from '@tinybubbles/core';
 
 import { useUiStore } from '../../../store/ui-store';
 import { takeUndoableAction, clearUndoableAction } from '../../../lib/undo-registry';
@@ -380,7 +380,7 @@ describe.each(SCOPE_CASES)('createTaskListScope — $name', ({ extraDeps }) => {
         const scope = build();
         const events: string[] = [];
         document.querySelector('[data-task-id="1"]')!
-            .addEventListener('mindwtr:task-row-action', (event) => {
+            .addEventListener('tinybubbles:task-row-action', (event) => {
                 events.push((event as CustomEvent<string>).detail);
             });
 

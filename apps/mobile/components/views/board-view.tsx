@@ -10,8 +10,8 @@ import Animated, {
   runOnJS,
   type SharedValue,
 } from 'react-native-reanimated';
-import { shallow, sortTasksByBoardOrder, useTaskStore, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, tFallback, projectMatchesAreaFilterSelection, SAVED_FILTER_NO_PROJECT_ID } from '@mindwtr/core';
-import type { Task, TaskStatus, FilterCriteria } from '@mindwtr/core';
+import { shallow, sortTasksByBoardOrder, useTaskStore, createTaskFilterPredicate, hasActiveFilterCriteria, getUsedTaskTokens, tFallback, projectMatchesAreaFilterSelection, SAVED_FILTER_NO_PROJECT_ID } from '@tinybubbles/core';
+import type { Task, TaskStatus, FilterCriteria } from '@tinybubbles/core';
 import { useToast } from '@/contexts/toast-context';
 import { useVisibleTaskContext } from '@/hooks/use-visible-tasks';
 import { useThemeColors, type ThemeColors } from '@/hooks/use-theme-colors';

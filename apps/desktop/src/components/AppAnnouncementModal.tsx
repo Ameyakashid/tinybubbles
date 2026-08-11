@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { ExternalLink, Megaphone, MessageSquare, X } from 'lucide-react';
 
-import type { AppAnnouncement, AppAnnouncementAction } from '@mindwtr/core';
+import type { AppAnnouncement, AppAnnouncementAction } from '@tinybubbles/core';
 import { Button } from './ui/Button';
 import { Dialog, DialogBody, DialogFooter } from './ui/Dialog';
 

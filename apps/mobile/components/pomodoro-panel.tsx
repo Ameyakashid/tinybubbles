@@ -17,7 +17,7 @@ import {
   sanitizePomodoroSessionHistory,
   tFallback,
   useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { useLanguage } from '../contexts/language-context';
 import { useThemeColors } from '@/hooks/use-theme-colors';

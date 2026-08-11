@@ -9,7 +9,7 @@ from pathlib import Path
 
 XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 REPO_ROOT = Path(__file__).resolve().parents[2]
-METADATA_PATH = REPO_ROOT / "apps/desktop/src-tauri/linux/Mindwtr.metainfo.xml"
+METADATA_PATH = REPO_ROOT / "apps/desktop/src-tauri/linux/Tiny Bubbles.metainfo.xml"
 
 
 def normalized_text(element: ET.Element | None) -> str:

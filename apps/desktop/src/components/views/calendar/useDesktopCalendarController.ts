@@ -32,14 +32,14 @@ import {
     type ExternalCalendarEvent,
     type Task,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
     buildCalendarDayItems,
     buildTimedCalendarLayouts,
     getTaskCompletionInstant,
     isCompletedCalendarTask,
     isSchedulableCalendarTask,
-} from '@mindwtr/core/calendar-day-items';
+} from '@tinybubbles/core/calendar-day-items';
 
 import { checkBudget } from '../../../config/performanceBudgets';
 import { useLanguage } from '../../../contexts/language-context';
@@ -63,7 +63,7 @@ import { useCalendarScheduleFeedback, useCalendarSelectedDay } from './use-calen
 
 /** Per-device like the planning panel and the timeline day count: revealing the
  *  look-back is a property of this window, not of the user's data. */
-const CALENDAR_SHOW_COMPLETED_KEY = 'mindwtr.calendar.showCompleted';
+const CALENDAR_SHOW_COMPLETED_KEY = 'tinybubbles.calendar.showCompleted';
 
 const readShowCompletedPreference = (): boolean => {
     if (typeof window === 'undefined') return false;

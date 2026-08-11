@@ -27,7 +27,7 @@ import {
     isConnectionAllowed,
     SYNC_LOCAL_INSECURE_URL_OPTIONS,
     type SyncBackend,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { SyncService } from '../../../lib/sync-service';
 import { useUiStore } from '../../../store/ui-store';
 import { isValidHttpUrl } from './sync/sync-page-utils';

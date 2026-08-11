@@ -14,7 +14,7 @@ import {
     themeExternalCalendarDisplayColor,
     type ExternalCalendarSubscription,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import {
     fetchExternalCalendarEvents,
@@ -30,7 +30,7 @@ import {
 } from '@/lib/external-calendar';
 import {
     CALENDAR_PUSH_COLOR_OPTIONS,
-    deleteMindwtrCalendar,
+    deleteTinyBubblesCalendar,
     getCalendarPushColor,
     getCalendarPushEnabled,
     getCalendarPushTargetCalendarId,
@@ -42,7 +42,7 @@ import {
     setCalendarPushTargetCalendarId,
     startCalendarPushSync,
     stopCalendarPushSync,
-    updateMindwtrCalendarColor,
+    updateTinyBubblesCalendarColor,
     type CalendarPushTargetCalendar,
 } from '@/lib/calendar-push-sync';
 import { useTheme } from '@/contexts/theme-context';
@@ -124,7 +124,7 @@ export function CalendarSettingsScreen() {
     const [calendarPushTargets, setCalendarPushTargets] = useState<CalendarPushTargetCalendar[]>([]);
     const [calendarPushColor, setCalendarPushColorState] = useState('#3B82F6');
     const [isCalendarPushTargetLoading, setIsCalendarPushTargetLoading] = useState(false);
-    const [isDeletingMindwtrCalendar, setIsDeletingMindwtrCalendar] = useState(false);
+    const [isDeletingTinyBubblesCalendar, setIsDeletingTinyBubblesCalendar] = useState(false);
     const [calendarPushOpen, setCalendarPushOpen] = useState(false);
 
     const loadCalendarPushTargetState = useCallback(async () => {
@@ -218,34 +218,34 @@ export function CalendarSettingsScreen() {
     };
 
     const handleSelectCalendarPushColor = async (color: string) => {
-        const updated = await updateMindwtrCalendarColor(color);
+        const updated = await updateTinyBubblesCalendarColor(color);
         setCalendarPushColorState(color);
         await loadCalendarPushTargetState();
         showToast({
             title: tFallback(t, 'settings.calendarMobile.calendarColorUpdated', 'Calendar color updated'),
             message: updated
-                ? tFallback(t, 'settings.calendarMobile.calendarColorUpdatedMessage', 'Mindwtr calendar color was updated.')
-                : tFallback(t, 'settings.calendarMobile.calendarColorSavedMessage', 'Mindwtr will use this color when it creates the calendar.'),
+                ? tFallback(t, 'settings.calendarMobile.calendarColorUpdatedMessage', 'Tiny Bubbles calendar color was updated.')
+                : tFallback(t, 'settings.calendarMobile.calendarColorSavedMessage', 'Tiny Bubbles will use this color when it creates the calendar.'),
             tone: 'success',
             durationMs: 3000,
         });
     };
 
-    const performDeleteMindwtrCalendar = useCallback(async () => {
-        if (isDeletingMindwtrCalendar) return;
-        setIsDeletingMindwtrCalendar(true);
+    const performDeleteTinyBubblesCalendar = useCallback(async () => {
+        if (isDeletingTinyBubblesCalendar) return;
+        setIsDeletingTinyBubblesCalendar(true);
         try {
             // Disable push sync first so the calendar is not recreated on the next
             // startup or task change.
             await setCalendarPushEnabled(false);
             setCalendarPushEnabledState(false);
             stopCalendarPushSync();
-            await deleteMindwtrCalendar();
+            await deleteTinyBubblesCalendar();
             setCalendarPushTargetCalendarIdState(null);
             await loadCalendarPushTargetState();
             showToast({
                 title: tr('settings.calendarMobile.calendarDeleted'),
-                message: tr('settings.calendarMobile.theMindwtrCalendarAndAllItsEventsHaveBeenRemoved'),
+                message: tr('settings.calendarMobile.theTinyBubblesCalendarAndAllItsEventsHaveBeenRemoved'),
                 tone: 'success',
                 durationMs: 3500,
             });
@@ -258,14 +258,14 @@ export function CalendarSettingsScreen() {
                 durationMs: 4200,
             });
         } finally {
-            setIsDeletingMindwtrCalendar(false);
+            setIsDeletingTinyBubblesCalendar(false);
         }
-    }, [isDeletingMindwtrCalendar, loadCalendarPushTargetState, tr, showToast]);
+    }, [isDeletingTinyBubblesCalendar, loadCalendarPushTargetState, tr, showToast]);
 
-    const handleDeleteMindwtrCalendar = useCallback(() => {
-        if (isDeletingMindwtrCalendar) return;
+    const handleDeleteTinyBubblesCalendar = useCallback(() => {
+        if (isDeletingTinyBubblesCalendar) return;
         Alert.alert(
-            tr('settings.calendarMobile.deleteMindwtrCalendar'),
+            tr('settings.calendarMobile.deleteTinyBubblesCalendar'),
             tr('settings.calendarMobile.removeTheDedicatedCalendarAndItsPushedEventsFromThis'),
             [
                 { text: t('common.cancel'), style: 'cancel' },
@@ -273,12 +273,12 @@ export function CalendarSettingsScreen() {
                     text: t('common.delete'),
                     style: 'destructive',
                     onPress: () => {
-                        void performDeleteMindwtrCalendar();
+                        void performDeleteTinyBubblesCalendar();
                     },
                 },
             ],
         );
-    }, [isDeletingMindwtrCalendar, performDeleteMindwtrCalendar, t, tr]);
+    }, [isDeletingTinyBubblesCalendar, performDeleteTinyBubblesCalendar, t, tr]);
 
     const loadSystemCalendarState = useCallback(async (requestAccess = false) => {
         setIsSystemCalendarLoading(true);
@@ -524,17 +524,17 @@ export function CalendarSettingsScreen() {
         : null;
     const selectedSharedAccountCalendarForPush = Boolean(
         selectedCalendarPushTarget
-        && !selectedCalendarPushTarget.isMindwtrDedicated
+        && !selectedCalendarPushTarget.isTinyBubblesDedicated
         && !selectedCalendarPushTarget.isLocalOnly
     );
     const selectedLocalCalendarForPush = calendarPushTargetCalendarId === null || Boolean(selectedCalendarPushTarget?.isLocalOnly);
-    const selectedManagedMindwtrCalendarForPush = calendarPushTargetCalendarId === null
-        || selectedCalendarPushTarget?.isMindwtrManaged === true;
+    const selectedManagedTinyBubblesCalendarForPush = calendarPushTargetCalendarId === null
+        || selectedCalendarPushTarget?.isTinyBubblesManaged === true;
     const hasDedicatedAccountCalendarForPush = calendarPushTargets.some((calendar) =>
-        calendar.isMindwtrDedicated && !calendar.isLocalOnly
+        calendar.isTinyBubblesDedicated && !calendar.isLocalOnly
     );
     const getCalendarPushTargetDescription = (calendar: CalendarPushTargetCalendar): string => {
-        const kind = calendar.isMindwtrDedicated
+        const kind = calendar.isTinyBubblesDedicated
             ? calendar.isLocalOnly
                 ? tr('settings.calendarMobile.dedicatedLocalCalendar')
                 : tr('settings.calendarMobile.dedicatedAccountCalendar')
@@ -545,7 +545,7 @@ export function CalendarSettingsScreen() {
     };
     const defaultLocalTargetOption = {
         id: null as string | null,
-        name: tr('settings.calendarMobile.mindwtrCalendar'),
+        name: tr('settings.calendarMobile.tinybubblesCalendar'),
         description: tr('settings.calendarMobile.dedicatedLocalCalendar'),
         color: calendarPushColor,
     };
@@ -560,10 +560,10 @@ export function CalendarSettingsScreen() {
             : []),
         ...calendarPushTargets
             .filter((calendar) => {
-                if (calendar.isMindwtrManaged && calendar.id !== calendarPushTargetCalendarId) return false;
+                if (calendar.isTinyBubblesManaged && calendar.id !== calendarPushTargetCalendarId) return false;
                 if (
                     hasDedicatedAccountCalendarForPush
-                    && calendar.isMindwtrDedicated
+                    && calendar.isTinyBubblesDedicated
                     && calendar.isLocalOnly
                     && calendar.id !== calendarPushTargetCalendarId
                 ) {
@@ -639,7 +639,7 @@ export function CalendarSettingsScreen() {
                                     const selected = target.id === calendarPushTargetCalendarId;
                                     return (
                                         <TouchableOpacity
-                                            key={target.id ?? 'mindwtr-managed'}
+                                            key={target.id ?? 'tinybubbles-managed'}
                                             accessibilityRole="button"
                                             accessibilityLabel={`${target.name}. ${target.description}`}
                                             accessibilityState={{ selected }}
@@ -675,13 +675,13 @@ export function CalendarSettingsScreen() {
                                 })
                             )}
 
-                            {selectedManagedMindwtrCalendarForPush && (
+                            {selectedManagedTinyBubblesCalendarForPush && (
                                 <View style={[styles.settingRowColumn, { borderTopWidth: 1, borderTopColor: tc.border }]}>
                                     <Text style={[styles.settingLabel, { color: tc.text }]}>
-                                        {tFallback(t, 'settings.calendarMobile.mindwtrCalendarColor', 'Mindwtr calendar color')}
+                                        {tFallback(t, 'settings.calendarMobile.tinybubblesCalendarColor', 'Tiny Bubbles calendar color')}
                                     </Text>
                                     <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
-                                        {tFallback(t, 'settings.calendarMobile.mindwtrCalendarColorDesc', 'Applies to the Mindwtr-created calendar; shared account calendars keep their own color.')}
+                                        {tFallback(t, 'settings.calendarMobile.tinybubblesCalendarColorDesc', 'Applies to the Tiny Bubbles-created calendar; shared account calendars keep their own color.')}
                                     </Text>
                                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
                                         {CALENDAR_PUSH_COLOR_OPTIONS.map((color) => {
@@ -690,7 +690,7 @@ export function CalendarSettingsScreen() {
                                                 <TouchableOpacity
                                                     key={color}
                                                     accessibilityRole="button"
-                                                    accessibilityLabel={`${tFallback(t, 'settings.calendarMobile.mindwtrCalendarColor', 'Mindwtr calendar color')} ${color}`}
+                                                    accessibilityLabel={`${tFallback(t, 'settings.calendarMobile.tinybubblesCalendarColor', 'Tiny Bubbles calendar color')} ${color}`}
                                                     accessibilityState={{ selected }}
                                                     onPress={() => void handleSelectCalendarPushColor(color)}
                                                     style={{
@@ -727,27 +727,27 @@ export function CalendarSettingsScreen() {
 
                             <TouchableOpacity
                                 accessibilityRole="button"
-                                accessibilityLabel={tr('settings.calendarMobile.deleteMindwtrCalendar')}
-                                onPress={handleDeleteMindwtrCalendar}
-                                disabled={isDeletingMindwtrCalendar}
+                                accessibilityLabel={tr('settings.calendarMobile.deleteTinyBubblesCalendar')}
+                                onPress={handleDeleteTinyBubblesCalendar}
+                                disabled={isDeletingTinyBubblesCalendar}
                                 style={[
                                     styles.settingRow,
                                     {
                                         borderTopWidth: 1,
                                         borderTopColor: tc.border,
-                                        opacity: isDeletingMindwtrCalendar ? 0.6 : 1,
+                                        opacity: isDeletingTinyBubblesCalendar ? 0.6 : 1,
                                     },
                                 ]}
                             >
                                 <View style={styles.settingInfo}>
                                     <Text style={[styles.settingLabel, { color: '#EF4444' }]}>
-                                        {tr('settings.calendarMobile.deleteMindwtrCalendar')}
+                                        {tr('settings.calendarMobile.deleteTinyBubblesCalendar')}
                                     </Text>
                                     <Text style={[styles.settingDescription, { color: tc.secondaryText }]}>
                                         {tr('settings.calendarMobile.removeTheDedicatedCalendarAndItsPushedEventsFromThis')}
                                     </Text>
                                 </View>
-                                {isDeletingMindwtrCalendar ? (
+                                {isDeletingTinyBubblesCalendar ? (
                                     <ActivityIndicator color="#EF4444" />
                                 ) : (
                                     <Ionicons color="#EF4444" name="trash-outline" size={20} />

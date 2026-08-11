@@ -9,12 +9,12 @@ enum CloudKitRecordMapper {
 
     // MARK: - Record type names
 
-    static let taskType = "MindwtrTask"
-    static let projectType = "MindwtrProject"
-    static let sectionType = "MindwtrSection"
-    static let areaType = "MindwtrArea"
-    static let personType = "MindwtrPerson"
-    static let settingsType = "MindwtrSettings"
+    static let taskType = "TinyBubblesTask"
+    static let projectType = "TinyBubblesProject"
+    static let sectionType = "TinyBubblesSection"
+    static let areaType = "TinyBubblesArea"
+    static let personType = "TinyBubblesPerson"
+    static let settingsType = "TinyBubblesSettings"
 
     static let allTypes = [taskType, projectType, sectionType, areaType, personType, settingsType]
 
@@ -134,7 +134,7 @@ enum CloudKitRecordMapper {
         FieldSpec(jsKey: "timeEstimate", ckKey: "timeEstimate", kind: .string),
         FieldSpec(jsKey: "timeSpentMinutes", ckKey: "timeSpentMinutes", kind: .int),
         FieldSpec(jsKey: "focusOrder", ckKey: "focusOrder", kind: .int),
-        FieldSpec(jsKey: "suppressMindwtrReminders", ckKey: "suppressMindwtrReminders", kind: .bool),
+        FieldSpec(jsKey: "suppressTinyBubblesReminders", ckKey: "suppressTinyBubblesReminders", kind: .bool),
         FieldSpec(jsKey: "repeatReminderMinutes", ckKey: "repeatReminderMinutes", kind: .int),
         FieldSpec(jsKey: "reviewAt", ckKey: "reviewAt", kind: .date),
         FieldSpec(jsKey: "completedAt", ckKey: "completedAt", kind: .date),

@@ -1,39 +1,39 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.dongdongbh/mindwtr",
-  "title": "Mindwtr",
-  "description": "Task and project automation for local Mindwtr data, with read-only self-hosted Cloud access.",
+  "name": "io.github.tinybubbles-app/tinybubbles",
+  "title": "Tiny Bubbles",
+  "description": "Task and project automation for local Tiny Bubbles data, with read-only self-hosted Cloud access.",
   "version": "1.1.4",
-  "websiteUrl": "https://docs.mindwtr.app/power-users/mcp",
+  "websiteUrl": "https://github.com/tinybubbles-app/tinybubbles/tree/main/apps/mcp-server",
   "repository": {
-    "url": "https://github.com/dongdongbh/Mindwtr",
+    "url": "https://github.com/tinybubbles-app/tinybubbles",
     "source": "github",
-    "id": "1111978380",
+    "id": "REPO_ID_PLACEHOLDER",
     "subfolder": "apps/mcp-server"
   },
   "packages": [
     {
       "registryType": "npm",
-      "identifier": "mindwtr-mcp",
+      "identifier": "tinybubbles-mcp",
       "version": "1.1.4",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "name": "MINDWTR_DB_PATH",
-          "description": "Optional path to the local Mindwtr SQLite database.",
+          "name": "TINYBUBBLES_DB_PATH",
+          "description": "Optional path to the local Tiny Bubbles SQLite database.",
           "format": "filepath",
           "isRequired": false
         },
         {
-          "name": "MINDWTR_MCP_CLOUD_URL",
-          "description": "Optional self-hosted Mindwtr Cloud base URL for read-only Cloud mode.",
+          "name": "TINYBUBBLES_MCP_CLOUD_URL",
+          "description": "Optional self-hosted Tiny Bubbles Cloud base URL for read-only Cloud mode.",
           "isRequired": false
         },
         {
-          "name": "MINDWTR_MCP_CLOUD_TOKEN",
-          "description": "Bearer token for read-only self-hosted Mindwtr Cloud mode.",
+          "name": "TINYBUBBLES_MCP_CLOUD_TOKEN",
+          "description": "Bearer token for read-only self-hosted Tiny Bubbles Cloud mode.",
           "isRequired": false
         }
       ]

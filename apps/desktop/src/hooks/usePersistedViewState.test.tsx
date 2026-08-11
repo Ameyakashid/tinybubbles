@@ -9,10 +9,10 @@ describe('usePersistedViewState', () => {
     });
 
     it('restores sanitized view state from local storage', () => {
-        window.localStorage.setItem('mindwtr:test:view', JSON.stringify({ showArchived: true }));
+        window.localStorage.setItem('tinybubbles:test:view', JSON.stringify({ showArchived: true }));
 
         const { result } = renderHook(() => usePersistedViewState(
-            'mindwtr:test:view',
+            'tinybubbles:test:view',
             { showArchived: false },
             (value, fallback) => {
                 const parsed = value && typeof value === 'object' && !Array.isArray(value)
@@ -31,7 +31,7 @@ describe('usePersistedViewState', () => {
 
     it('persists updates when view state changes', () => {
         const { result } = renderHook(() => usePersistedViewState(
-            'mindwtr:test:view',
+            'tinybubbles:test:view',
             { showArchived: false }
         ));
 
@@ -39,33 +39,33 @@ describe('usePersistedViewState', () => {
             result.current[1]((current) => ({ ...current, showArchived: true }));
         });
 
-        expect(JSON.parse(window.localStorage.getItem('mindwtr:test:view') || '{}')).toEqual({
+        expect(JSON.parse(window.localStorage.getItem('tinybubbles:test:view') || '{}')).toEqual({
             showArchived: true,
         });
     });
 
     it('loads and writes the new view state when its storage key changes', () => {
-        window.localStorage.setItem('mindwtr:test:inbox', JSON.stringify({ collapsed: ['inbox-group'] }));
-        window.localStorage.setItem('mindwtr:test:done', JSON.stringify({ collapsed: ['done-group'] }));
+        window.localStorage.setItem('tinybubbles:test:inbox', JSON.stringify({ collapsed: ['inbox-group'] }));
+        window.localStorage.setItem('tinybubbles:test:done', JSON.stringify({ collapsed: ['done-group'] }));
 
         const { result, rerender } = renderHook(
             ({ storageKey }) => usePersistedViewState(storageKey, { collapsed: [] as string[] }),
-            { initialProps: { storageKey: 'mindwtr:test:inbox' } },
+            { initialProps: { storageKey: 'tinybubbles:test:inbox' } },
         );
 
         expect(result.current[0].collapsed).toEqual(['inbox-group']);
 
-        rerender({ storageKey: 'mindwtr:test:done' });
+        rerender({ storageKey: 'tinybubbles:test:done' });
         expect(result.current[0].collapsed).toEqual(['done-group']);
 
         act(() => {
             result.current[1]((current) => ({ collapsed: [...current.collapsed, 'another-done-group'] }));
         });
 
-        expect(JSON.parse(window.localStorage.getItem('mindwtr:test:done') || '{}')).toEqual({
+        expect(JSON.parse(window.localStorage.getItem('tinybubbles:test:done') || '{}')).toEqual({
             collapsed: ['done-group', 'another-done-group'],
         });
-        expect(JSON.parse(window.localStorage.getItem('mindwtr:test:inbox') || '{}')).toEqual({
+        expect(JSON.parse(window.localStorage.getItem('tinybubbles:test:inbox') || '{}')).toEqual({
             collapsed: ['inbox-group'],
         });
     });

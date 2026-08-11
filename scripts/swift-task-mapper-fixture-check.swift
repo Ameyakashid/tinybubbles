@@ -8,7 +8,7 @@ struct SwiftTaskMapperFixtureCheck {
         let arguments = CommandLine.arguments
         guard arguments.count >= 2 else {
             throw NSError(
-                domain: "MindwtrTaskMapperFixture",
+                domain: "TinyBubblesTaskMapperFixture",
                 code: 1,
                 userInfo: [NSLocalizedDescriptionKey: "Usage: checker <fixture-path> [field ...]"]
             )
@@ -21,14 +21,14 @@ struct SwiftTaskMapperFixtureCheck {
             let fixtureID = fixture["id"]
         else {
             throw NSError(
-                domain: "MindwtrTaskMapperFixture",
+                domain: "TinyBubblesTaskMapperFixture",
                 code: 2,
                 userInfo: [NSLocalizedDescriptionKey: "Fixture file has no fixture object"]
             )
         }
 
         let zoneID = CKRecordZone.ID(
-            zoneName: "MindwtrFixtureZone",
+            zoneName: "TinyBubblesFixtureZone",
             ownerName: CKCurrentUserDefaultName
         )
         guard let record = CloudKitRecordMapper.record(
@@ -37,7 +37,7 @@ struct SwiftTaskMapperFixtureCheck {
             zoneID: zoneID
         ) else {
             throw NSError(
-                domain: "MindwtrTaskMapperFixture",
+                domain: "TinyBubblesTaskMapperFixture",
                 code: 3,
                 userInfo: [NSLocalizedDescriptionKey: "Swift mapper rejected the fixture"]
             )

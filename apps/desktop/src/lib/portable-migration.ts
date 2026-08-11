@@ -1,4 +1,4 @@
-import { useTaskStore, type Attachment } from '@mindwtr/core';
+import { useTaskStore, type Attachment } from '@tinybubbles/core';
 import { isTauriRuntime } from './runtime';
 import { logInfo, logWarn } from './app-log';
 import { normalizeAttachmentPathForUrl } from './attachment-paths';

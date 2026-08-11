@@ -7,7 +7,7 @@ import {
     type Task,
     type TaskQueryOptions,
     useTaskStore,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { invokeNative } from './tauri-invoke';
 import { logInfo, logWarn } from './app-log';
 import { reportError } from './report-error';
@@ -18,7 +18,7 @@ import {
     rebaseQueuedSettings,
 } from './storage-save-baseline';
 
-const STORAGE_SCHEMA_VERSION_KEY = 'mindwtr-storage-schema-version';
+const STORAGE_SCHEMA_VERSION_KEY = 'tinybubbles-storage-schema-version';
 let storageInitLogged = false;
 type SaveQueueOutcome = {
     canonical: AppData | null;

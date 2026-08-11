@@ -15,7 +15,7 @@ import {
     webdavMakeDirectory,
     webdavPutFile,
     withRetry,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 
 import { sanitizeLogMessage } from './app-log';
 import {

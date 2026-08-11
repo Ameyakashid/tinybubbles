@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Folder } from 'lucide-react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { projectMatchesAreaFilterSelection, tFallback } from '@mindwtr/core';
-import type { Area, AreaFilterSelection, Project } from '@mindwtr/core';
+import { projectMatchesAreaFilterSelection, tFallback } from '@tinybubbles/core';
+import type { Area, AreaFilterSelection, Project } from '@tinybubbles/core';
 
 import type { ThemeColors } from '@/hooks/use-theme-colors';
 

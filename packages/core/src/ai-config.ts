@@ -2,7 +2,7 @@ import type { AppData } from './types';
 import type { AIProviderConfig, AIProviderId, AIRequestExtraBodyParams } from './ai/types';
 import { COPILOT_REASONING_EFFORT, DEFAULT_ANTHROPIC_THINKING_BUDGET, DEFAULT_GEMINI_THINKING_BUDGET, DEFAULT_REASONING_EFFORT, getDefaultAIConfig, getDefaultCopilotModel } from './ai/catalog';
 
-const AI_KEY_PREFIX = 'mindwtr-ai-key';
+const AI_KEY_PREFIX = 'tinybubbles-ai-key';
 const OPENAI_CHAT_COMPLETIONS_PATH = '/chat/completions';
 const OPENAI_TRANSCRIBE_PATH = '/audio/transcriptions';
 const OPENAI_TRANSCRIBE_URL = `https://api.openai.com/v1${OPENAI_TRANSCRIBE_PATH}`;

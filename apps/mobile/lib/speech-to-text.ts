@@ -7,13 +7,13 @@ import type {
   SpeechToTaskCaptureConfig,
   SpeechToTaskResult,
   SpeechToTextSettings,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import {
   normalizeSpeechLanguage,
   OPENAI_DEFAULT_MODEL,
   runRemoteSpeechToTaskCapture,
   runSpeechToTaskCapture,
-} from '@mindwtr/core';
+} from '@tinybubbles/core';
 import { logInfo, logWarn } from './app-log';
 import {
   buildMultipartAudioPart,

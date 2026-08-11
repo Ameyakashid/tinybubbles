@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 describe('fdroid_patch_android_jvm_targets', () => {
-  it('covers Mindwtr local Android modules with Kotlin sources', () => {
+  it('covers Tiny Bubbles local Android modules with Kotlin sources', () => {
     const source = fs.readFileSync(
       path.join(__dirname, 'fdroid_patch_android_jvm_targets.js'),
       'utf8'

@@ -4,7 +4,7 @@ import { authorizeDropbox } from './dropbox-oauth';
 
 const mocks = vi.hoisted(() => ({
     exchangeCodeAsync: vi.fn(),
-    makeRedirectUri: vi.fn(() => 'mindwtr://redirect'),
+    makeRedirectUri: vi.fn(() => 'tinybubbles://redirect'),
     maybeCompleteAuthSession: vi.fn(),
     promptAsync: vi.fn(),
     saveDropboxTokens: vi.fn(),
