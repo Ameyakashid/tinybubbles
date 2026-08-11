@@ -3,8 +3,15 @@ import type {
     ExternalCalendarSubscription,
 } from './ics';
 
-const TINYBUBBLES_PUSHED_EVENT_PREFIX = 'tinybubbles: ';
+// Titles are normalised to lowercase single-spaced before matching. Upstream's brand was one
+// word, so a single token covered every surface; "Tiny Bubbles" is two, and the platforms
+// disagree on which form they write: the desktop push prefixes "Tiny Bubbles: ", the mobile
+// managed calendar uses "tinybubbles", and the Linux/macOS bridges create "TinyBubbles".
+// Accept every one of those, or mirrored events get re-imported as duplicates.
+const TINYBUBBLES_PUSHED_EVENT_PREFIXES = ['tiny bubbles: ', 'tinybubbles: '];
 const TINYBUBBLES_MIRROR_CALENDAR_NAMES = new Set([
+    'tiny bubbles',
+    'tiny bubbles calendar',
     'tinybubbles',
     'tinybubbles calendar',
     'tinybubblescal',
@@ -29,9 +36,8 @@ export function isTinyBubblesMirrorEvent(
 ): boolean {
     const calendar = calendarById.get(event.sourceId);
     if (calendar && isTinyBubblesMirrorCalendar(calendar)) return true;
-    return event.title.trim().toLowerCase().startsWith(
-        TINYBUBBLES_PUSHED_EVENT_PREFIX,
-    );
+    const title = event.title.trim().toLowerCase();
+    return TINYBUBBLES_PUSHED_EVENT_PREFIXES.some((prefix) => title.startsWith(prefix));
 }
 
 export function mergeExternalCalendarSources(

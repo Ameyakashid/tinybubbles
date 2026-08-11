@@ -55,7 +55,7 @@ const reportedZhHantLabels = {
     backup: '備份',
     backupDesc: '導出完整備份，或從備份文件恢復或合併本地數據。',
     importData: '導入數據',
-    importDataDesc: '導入 Todoist、TickTick、DGT GTD、OmniFocus 與 TinyBubbles CSV 導出文件。',
+    importDataDesc: '導入 Todoist、TickTick、DGT GTD、OmniFocus 與 Tiny Bubbles CSV 導出文件。',
     exportBackupDesc: '將當前本地數據保存為 JSON 備份文件。',
     restoreBackup: '恢復備份',
     restoreBackupDesc: '從 Tiny Bubbles 備份 JSON 文件替換本地數據。',

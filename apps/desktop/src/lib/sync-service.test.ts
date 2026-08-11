@@ -372,7 +372,7 @@ describe('sync-service test utils', () => {
 
     it('hashes sync payloads with sha256 output', async () => {
         const hash = await hashString('tinybubbles');
-        expect(hash).toBe('feb7a7b01b1c68e586e77288a4b2598d146ee3696ec7dbfac0074196b8d68c33');
+        expect(hash).toBe('1cbae6e1d5ce9003bfd6dfae59949477832dca8648b0acecc16957cdd3247691');
     });
 
     it('formats fallback hashes as unsigned hex', () => {

@@ -281,7 +281,7 @@ const IMPORT_PICKER_DESCRIPTORS: Record<ImportPickerSourceId, ImportPickerDescri
     'tinybubbles-csv': {
         accept: '.csv,.zip,text/csv,application/zip',
         extensions: ['csv', 'zip'],
-        title: 'TinyBubbles CSV',
+        title: 'Tiny Bubbles CSV',
     },
 };
 

@@ -26,8 +26,8 @@ const labels = {
     importDgtDesc: 'Import DGT GTD exports.',
     importOmniFocus: 'Import from OmniFocus',
     importOmniFocusDesc: 'Import OmniFocus exports.',
-    importTinyBubblesCsv: 'Import from TinyBubbles CSV',
-    importTinyBubblesCsvDesc: 'Import a TinyBubbles CSV file.',
+    importTinyBubblesCsv: 'Import from Tiny Bubbles CSV',
+    importTinyBubblesCsvDesc: 'Import a Tiny Bubbles CSV file.',
     syncing: 'Working...',
 };
 

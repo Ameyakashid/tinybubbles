@@ -194,7 +194,6 @@ export const SETTINGS_SEARCH_PAGE_KEYS: Record<SettingsSearchPageId, readonly Se
         'feedback',
         'documentation',
         'github',
-        'sponsorProject',
         'license',
     ],
 };

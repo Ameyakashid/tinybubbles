@@ -1558,7 +1558,7 @@ export const useSyncSettings = ({
             const parseResult = await inspectDesktopTinyBubblesCsvImport();
             if (!parseResult) return;
             if (!parseResult.valid || !parseResult.preview || !parseResult.parsedData) {
-                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedTinyBubblesCsvFile', 'The selected file is not a supported TinyBubbles CSV file.')), 'error');
+                showToast(formatImportError(parseResult.diagnostics, resolveText('settings.backupMobile.theSelectedFileIsNotASupportedTinyBubblesCsvFile', 'The selected file is not a supported Tiny Bubbles CSV file.')), 'error');
                 return;
             }
 
@@ -1571,7 +1571,7 @@ export const useSyncSettings = ({
             }
 
             const confirmed = await requestConfirmation({
-                title: resolveText('settings.backupMobile.importTinyBubblesCsvData', 'Import TinyBubbles CSV data?'),
+                title: resolveText('settings.backupMobile.importTinyBubblesCsvData', 'Import Tiny Bubbles CSV data?'),
                 message: [
                     formatText('settings.backupMobile.importTaskCountFromFile', 'Import {{taskCount}} task(s) from {{fileName}}?', { taskCount: preview.taskCount, fileName: preview.fileName }),
                     preview.areaCount > 0 ? formatText('settings.backupMobile.tinybubblesCsvAreasWillBeCreated', '{{areaCount}} area(s) will be created from the Area column.', { areaCount: preview.areaCount }) : null,

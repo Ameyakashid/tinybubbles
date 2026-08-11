@@ -689,7 +689,7 @@ mod imp {
             return Err(unsafe {
                 session
                     .api
-                    .take_error(error, "Could not create the TinyBubbles calendar")
+                    .take_error(error, "Could not create the Tiny Bubbles calendar")
             });
         }
         if !error.is_null() {
@@ -710,7 +710,7 @@ mod imp {
             }
             thread::sleep(Duration::from_millis(50));
         }
-        Err("TinyBubbles calendar was created but is not ready yet".to_string())
+        Err("Tiny Bubbles calendar was created but is not ready yet".to_string())
     }
 
     pub(super) fn get_events(

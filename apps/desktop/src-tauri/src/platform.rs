@@ -225,7 +225,7 @@ pub(crate) fn ensure_macos_tinybubbles_calendar(
             return Ok(None);
         }
         let parsed = serde_json::from_value::<MacOsCalendarPushTarget>(value)
-            .map_err(|error| format!("Failed to decode TinyBubbles EventKit calendar: {error}"))?;
+            .map_err(|error| format!("Failed to decode Tiny Bubbles EventKit calendar: {error}"))?;
         return Ok(Some(parsed));
     }
     #[cfg(not(target_os = "macos"))]

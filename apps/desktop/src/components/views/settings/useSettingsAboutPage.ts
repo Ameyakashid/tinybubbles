@@ -356,7 +356,7 @@ export function useSettingsAboutPage({
         if (installSource === 'winget') {
             await openLink(WINGET_PACKAGE_URL);
             setDownloadNotice(
-                'Update via winget: winget upgrade --id dongdongbh.TinyBubbles --exact',
+                'Update via winget: winget upgrade --id Ameyakashid.TinyBubbles --exact',
             );
             return;
         }

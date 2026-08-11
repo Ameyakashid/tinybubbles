@@ -10,7 +10,6 @@ type Labels = {
     license: string;
     github: string;
     documentation: string;
-    sponsorProject: string;
     checkForUpdates: string;
     checking: string;
     checkFailed: string;

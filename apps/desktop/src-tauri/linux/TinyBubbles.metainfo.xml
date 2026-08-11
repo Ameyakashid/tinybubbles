@@ -88,7 +88,7 @@
   <url type="vcs-browser">https://github.com/Ameyakashid/tinybubbles</url>
   <releases>
     <release version="1.2.0-rc.1" date="2026-08-03">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.2.0-rc.1</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.2.0-rc.1</url>
       <description>
         <p>TinyBubbles 1.2.0-rc.1 improves calendar planning, sync setup, search, scheduling, and Linux desktop integration.</p>
         <p xml:lang="de">TinyBubbles 1.2.0-rc.1 verbessert Kalenderplanung, Sync-Einrichtung, Suche, Terminplanung und Linux-Desktop-Integration.</p>
@@ -107,7 +107,7 @@
       </description>
     </release>
     <release version="1.1.6" date="2026-07-31">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.1.6</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.1.6</url>
       <description>
         <p>TinyBubbles 1.1.6 improves desktop archives, calendars, dialogs, settings search, backup merging, and sync compatibility.</p>
         <p xml:lang="de">TinyBubbles 1.1.6 verbessert Desktop-Archive, Kalender, Dialoge, Einstellungssuche, Backup-Zusammenführung und Sync-Kompatibilität.</p>
@@ -124,7 +124,7 @@
       </description>
     </release>
     <release version="1.1.5" date="2026-07-27">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.1.5</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.1.5</url>
       <description>
         <p>TinyBubbles 1.1.5 adds Linux system calendars, faster task workflows, stronger storage and sync recovery, and broader keyboard and drag-and-drop support.</p>
         <p xml:lang="de">TinyBubbles 1.1.5 bringt Linux-Systemkalender, schnellere Aufgabenabläufe, robustere Speicher- und Sync-Wiederherstellung sowie mehr Tastatur- und Drag-and-drop-Unterstützung.</p>
@@ -143,7 +143,7 @@
       </description>
     </release>
     <release version="1.1.0" date="2026-07-12">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.1.0</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.1.0</url>
       <description>
         <p>TinyBubbles 1.1.0 adds opt-in time tracking, undo-based task actions, stronger data safety, richer keyboard support, and channel-aware updates on the Linux desktop.</p>
         <p xml:lang="de">TinyBubbles 1.1.0 bringt optionale Zeiterfassung, Undo statt Bestaetigungsdialogen, mehr Datensicherheit, bessere Tastaturbedienung und kanalbewusste Updates auf dem Linux-Desktop.</p>
@@ -162,7 +162,7 @@
       </description>
     </release>
     <release version="1.0.5" date="2026-06-28">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.0.5</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.0.5</url>
       <description>
         <p>TinyBubbles 1.0.5 improves desktop planning, import, sync diagnostics, local dictation, and Linux release coverage.</p>
         <p xml:lang="de">TinyBubbles 1.0.5 verbessert Desktop-Planung, Import, Sync-Diagnosen, lokale Diktatfunktion und Linux-Release-Kanaele.</p>
@@ -179,7 +179,7 @@
       </description>
     </release>
     <release version="1.0.0" date="2026-06-15">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.0.0</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v1.0.0</url>
       <description>
         <p>TinyBubbles 1.0.0 improves desktop sync safety, local storage, task editing, and published local automation helpers.</p>
         <p xml:lang="de">TinyBubbles 1.0.0 verbessert Desktop-Sync-Sicherheit, lokalen Speicher, Aufgabenbearbeitung und veroeffentlichte lokale Automationshelfer.</p>
@@ -196,7 +196,7 @@
       </description>
     </release>
     <release version="0.9.10" date="2026-06-11">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.10</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.10</url>
       <description>
         <p>TinyBubbles 0.9.10 adds Guided Mind Sweep, people planning, board ordering, Obsidian metadata import, and safer desktop sync and attachment cleanup.</p>
         <p xml:lang="de">TinyBubbles 0.9.10 fuegt Guided Mind Sweep, Personenplanung, Board-Sortierung, Obsidian-Metadatenimport sowie sichereren Desktop-Sync und Anhangsbereinigung hinzu.</p>
@@ -215,7 +215,7 @@
       </description>
     </release>
     <release version="0.9.9" date="2026-06-08">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.9</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.9</url>
       <description>
         <p>TinyBubbles 0.9.9 improves desktop feedback, planning metadata, large-library performance, Markdown editing, and Linux startup and theme reliability.</p>
         <p xml:lang="de">TinyBubbles 0.9.9 verbessert Desktop-Feedback, Planungsmetadaten, Leistung bei grossen Sammlungen, Markdown-Bearbeitung sowie Linux-Start- und Designzuverlaessigkeit.</p>
@@ -234,7 +234,7 @@
       </description>
     </release>
     <release version="0.9.8" date="2026-06-04">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.8</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.8</url>
       <description>
         <p>TinyBubbles 0.9.8 improves project planning, desktop selection, attachment handling, search, restore safety, and Linux Flatpak reminders.</p>
         <p xml:lang="de">TinyBubbles 0.9.8 verbessert Projektplanung, Desktop-Auswahl, Umgang mit Anhaengen, Suche, Wiederherstellungssicherheit und Linux-Flatpak-Erinnerungen.</p>
@@ -253,7 +253,7 @@
       </description>
     </release>
     <release version="0.9.7" date="2026-06-01">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.7</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.7</url>
       <description>
         <p>TinyBubbles 0.9.7 improves first-run setup, desktop task editing, Focus planning, sync safety, and Linux desktop integration.</p>
         <p xml:lang="de">TinyBubbles 0.9.7 verbessert Ersteinrichtung, Aufgabenbearbeitung im Desktop, Focus-Planung, Sync-Sicherheit und die Linux-Desktop-Integration.</p>
@@ -272,7 +272,7 @@
       </description>
     </release>
     <release version="0.9.6" date="2026-05-29">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.6</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.6</url>
       <description>
         <p>TinyBubbles 0.9.6 improves desktop planning, recurrence previews, project navigation, Markdown editing, and Linux desktop integration.</p>
         <p xml:lang="de">TinyBubbles 0.9.6 verbessert Desktop-Planung, Wiederholungsvorschauen, Projektnavigation, Markdown-Bearbeitung und die Linux-Desktop-Integration.</p>
@@ -291,7 +291,7 @@
       </description>
     </release>
     <release version="0.9.5" date="2026-05-25">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.5</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.5</url>
       <description>
         <p>TinyBubbles 0.9.5 improves task locations, calendar planning, Markdown editing, and Linux desktop reliability.</p>
         <p xml:lang="de">TinyBubbles 0.9.5 verbessert Aufgabenorte, Kalenderplanung, Markdown-Bearbeitung und die Zuverlaessigkeit des Linux-Desktops.</p>
@@ -310,7 +310,7 @@
       </description>
     </release>
     <release version="0.9.4" date="2026-05-23">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.4</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.4</url>
       <description>
         <p>TinyBubbles 0.9.4 expands desktop planning, local automation, project navigation, and Linux desktop reliability.</p>
         <p xml:lang="de">TinyBubbles 0.9.4 erweitert Desktop-Planung, lokale Automatisierung, Projektnavigation und die Zuverlaessigkeit des Linux-Desktops.</p>
@@ -329,7 +329,7 @@
       </description>
     </release>
     <release version="0.9.3" date="2026-05-13">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.3</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.3</url>
       <description translate="no">
         <p>TinyBubbles 0.9.3 improves desktop task editing, project navigation, calendar recurrence handling, and sync diagnostics.</p>
         <ul>
@@ -342,7 +342,7 @@
       </description>
     </release>
     <release version="0.9.2" date="2026-05-11">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.2</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.2</url>
       <description translate="no">
         <p>TinyBubbles 0.9.2 improves desktop view persistence, saved-filter sync, and sync reliability for Linux desktop builds.</p>
         <ul>
@@ -355,7 +355,7 @@
       </description>
     </release>
     <release version="0.9.1" date="2026-05-07">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.1</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.1</url>
       <description translate="no">
         <p>TinyBubbles 0.9.1 improves desktop startup control, sync safety, and Linux desktop reliability.</p>
         <ul>
@@ -368,7 +368,7 @@
       </description>
     </release>
     <release version="0.9.0" date="2026-05-04">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.9.0</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.9.0</url>
       <description translate="no">
         <p>TinyBubbles 0.9.0 improves desktop focus, search, quick capture, and sync responsiveness.</p>
         <ul>
@@ -381,7 +381,7 @@
       </description>
     </release>
     <release version="0.8.9" date="2026-05-01">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.9</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.9</url>
       <description translate="no">
         <p>TinyBubbles 0.8.9 improves desktop review, recurrence, sync, and Linux release reliability.</p>
         <ul>
@@ -394,7 +394,7 @@
       </description>
     </release>
     <release version="0.8.8" date="2026-04-26">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.8</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.8</url>
       <description translate="no">
         <p>TinyBubbles 0.8.8 expands desktop calendar planning and improves Linux desktop reliability.</p>
         <ul>
@@ -407,7 +407,7 @@
       </description>
     </release>
     <release version="0.8.7" date="2026-04-24">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.7</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.7</url>
       <description translate="no">
         <p>TinyBubbles 0.8.7 improves desktop task handling, import coverage, Pomodoro flow, and sync reliability.</p>
         <ul>
@@ -420,7 +420,7 @@
       </description>
     </release>
     <release version="0.8.6" date="2026-04-22">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.6</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.6</url>
       <description translate="no">
         <p>TinyBubbles 0.8.6 improves desktop planning, sync handling, and Linux release polish.</p>
         <ul>
@@ -432,7 +432,7 @@
       </description>
     </release>
     <release version="0.8.5" date="2026-04-19">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.5</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.5</url>
       <description translate="no">
         <p>TinyBubbles 0.8.5 sharpens desktop review and project planning while tightening attachment and sync behavior for Linux desktop users.</p>
         <ul>
@@ -444,7 +444,7 @@
       </description>
     </release>
     <release version="0.8.4" date="2026-04-16">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.4</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.4</url>
       <description translate="no">
         <p>TinyBubbles 0.8.4 is a maintenance release focused on sync documentation and regression coverage for desktop builds.</p>
         <ul>
@@ -455,7 +455,7 @@
       </description>
     </release>
     <release version="0.8.3" date="2026-04-14">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.3</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.3</url>
       <description translate="no">
         <p>TinyBubbles 0.8.3 expands desktop planning and Markdown editing while tightening Linux-facing polish and sync recovery.</p>
         <ul>
@@ -467,7 +467,7 @@
       </description>
     </release>
     <release version="0.8.2" date="2026-04-11">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.2</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.2</url>
       <description translate="no">
         <p>TinyBubbles 0.8.2 sharpens desktop capture, error handling, and sync recovery for Linux desktop users.</p>
         <ul>
@@ -479,7 +479,7 @@
       </description>
     </release>
     <release version="0.8.1" date="2026-04-09">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.1</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.1</url>
       <description translate="no">
         <p>TinyBubbles 0.8.1 refines desktop planning, inbox processing, and sync reliability for Linux desktop users.</p>
         <ul>
@@ -491,7 +491,7 @@
       </description>
     </release>
     <release version="0.8.0" date="2026-04-05">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.8.0</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.8.0</url>
       <description translate="no">
         <p>TinyBubbles 0.8.0 improves desktop project planning, sidebar behavior, and storage safety across Linux and other desktop builds.</p>
         <ul>
@@ -503,7 +503,7 @@
       </description>
     </release>
     <release version="0.7.9" date="2026-04-01">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.9</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.9</url>
       <description translate="no">
         <p>TinyBubbles 0.7.9 improves desktop data portability, Obsidian integration, sync reliability, and day-to-day planning polish.</p>
         <ul>
@@ -515,7 +515,7 @@
       </description>
     </release>
     <release version="0.7.8" date="2026-03-30">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.8</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.8</url>
       <description translate="no">
         <p>TinyBubbles 0.7.8 improves desktop project planning, editing polish, audio capture feedback, and Linux packaging details.</p>
         <ul>
@@ -527,7 +527,7 @@
       </description>
     </release>
     <release version="0.7.7" date="2026-03-26">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.7</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.7</url>
       <description translate="no">
         <p>TinyBubbles 0.7.7 focuses on desktop reliability, Linux theme integration, and safer self-hosted release defaults.</p>
         <ul>
@@ -539,7 +539,7 @@
       </description>
     </release>
     <release version="0.7.6" date="2026-03-22">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.6</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.6</url>
       <description translate="no">
         <p>TinyBubbles 0.7.6 expands desktop workflow customization, adds Manage controls, and tightens sync and Linux packaging behavior.</p>
         <ul>
@@ -551,7 +551,7 @@
       </description>
     </release>
     <release version="0.7.5" date="2026-03-18">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.5</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.5</url>
       <description translate="no">
         <p>TinyBubbles 0.7.5 improves desktop deletion flows, settings stability, sync resilience, and Linux packaging polish.</p>
         <ul>
@@ -563,7 +563,7 @@
       </description>
     </release>
     <release version="0.7.4" date="2026-03-16">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.4</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.4</url>
       <description translate="no">
         <p>TinyBubbles 0.7.4 adds Apple-platform iCloud sync, a desktop Obsidian workspace, stronger cross-device sync reliability, and faster mobile triage tools.</p>
         <ul>
@@ -576,7 +576,7 @@
       </description>
     </release>
     <release version="0.7.3" date="2026-03-05">
-      <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v0.7.3</url>
+      <url type="details">https://github.com/dongdongbh/Mindwtr/releases/tag/v0.7.3</url>
       <description translate="no">
         <p>TinyBubbles 0.7.3 focused on more consistent sync behavior, safer local persistence, more workflow customization, and better mobile reminder handling.</p>
         <ul>
