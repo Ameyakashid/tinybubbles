@@ -55,6 +55,7 @@ vi.mock('@mindwtr/core', async () => {
   executeCaptureTransaction: actual.executeCaptureTransaction,
   prepareCaptureTask: actual.prepareCaptureTask,
   buildQuickAddParseOptions: actual.buildQuickAddParseOptions,
+  buildQuickAddPreviewEntries: actual.buildQuickAddPreviewEntries,
   getPersonOptionNames: actual.getPersonOptionNames,
   createAIProvider: vi.fn(),
   DEFAULT_PROJECT_COLOR: '#94a3b8',
@@ -183,6 +184,25 @@ describe('CaptureScreen', () => {
     storeState.addTask.mockResolvedValue({ success: true, id: 'task-created' });
     storeState.projects = [];
     storeState.areas = [];
+  });
+
+  it('reads the parsed draft back as chips under the input', () => {
+    parseQuickAdd.mockImplementation((value: string) => ({
+      title: value,
+      props: { contexts: ['@errands'], dueDate: '2026-08-12' },
+      invalidDateCommands: [],
+    }));
+
+    let tree!: ReturnType<typeof create>;
+    act(() => {
+      tree = create(<CaptureScreen />);
+    });
+
+    const strip = tree.root.findByProps({ testID: 'quick-add-preview' });
+    const chipText = strip.findAllByType(Text).map((node) => node.props.children);
+    expect(chipText).toContain('@errands');
+    // The resolved date the task will store, formatted for reading.
+    expect(chipText.some((text) => typeof text === 'string' && /2026/.test(text))).toBe(true);
   });
 
   it('returns to inbox when cancelling without a back stack', () => {

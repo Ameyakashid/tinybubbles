@@ -84,6 +84,7 @@ vi.mock('@mindwtr/core', async () => {
   executeCaptureTransaction: actual.executeCaptureTransaction,
   prepareCaptureTask: actual.prepareCaptureTask,
   buildQuickAddParseOptions: actual.buildQuickAddParseOptions,
+  buildQuickAddPreviewEntries: actual.buildQuickAddPreviewEntries,
   DEFAULT_PROJECT_COLOR: actual.DEFAULT_PROJECT_COLOR,
   getDefaultTaskAreaMode: (settings: any) => {
     const mode = settings?.gtd?.defaultAreaMode;
@@ -525,6 +526,128 @@ describe('QuickCaptureSheet save handling', () => {
     if (!pickers) throw new Error('QuickCaptureSheetPickers not found');
     expect(pickers.props.filteredContexts).toEqual(['@computer']);
     expect(pickers.props.contextOptionsLoading).toBe(false);
+  });
+
+  it('previews the draft with the exact parse configuration its save runs', async () => {
+    addTask.mockResolvedValue({ success: true, id: 'task-1' });
+    parseQuickAdd.mockImplementation((input: string) => ({
+      title: input,
+      props: { contexts: ['@errands'] },
+      invalidDateCommands: [],
+    }));
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <QuickCaptureSheet visible openRequestId={1} initialValue="" onClose={vi.fn()} />
+      );
+      await Promise.resolve();
+    });
+
+    const getBody = () => {
+      const body = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+      if (!body) throw new Error('QuickCaptureSheetBody not found');
+      return body;
+    };
+
+    await act(async () => {
+      getBody().props.onValueChange('call mom @errands');
+      await Promise.resolve();
+    });
+
+    // The strip is fed by the draft, live.
+    expect(getBody().props.preview).toBeTruthy();
+    expect(getBody().props.preview.props.entries).toEqual([
+      expect.objectContaining({ kind: 'context', value: '@errands' }),
+    ]);
+
+    const parseCalls = parseQuickAdd.mock.calls as unknown as unknown[][];
+    const previewCalls = parseCalls.length;
+    const previewCall = parseCalls[previewCalls - 1];
+    expect(previewCall[0]).toBe('call mom @errands');
+
+    await act(async () => {
+      getBody().props.handleSave();
+      await Promise.resolve();
+    });
+
+    const saveCall = parseCalls[previewCalls];
+    expect(saveCall).toBeDefined();
+    expect(saveCall[0]).toBe(previewCall[0]);
+    // Same options object, not a look-alike rebuilt at save time.
+    expect(saveCall[4]).toBe(previewCall[4]);
+    expect(addTask).toHaveBeenCalled();
+  });
+
+  it('knows a multi-word context created earlier in the same capture burst', async () => {
+    // Real parsing: the point is which tokens the SECOND capture recognizes,
+    // which depends on the known-token bag being rebuilt between captures.
+    const core = await vi.importActual<typeof import('@mindwtr/core')>('@mindwtr/core');
+    parseQuickAdd.mockImplementation(core.parseQuickAdd as never);
+    addTask.mockImplementation(async (title: string, props: Record<string, unknown>) => {
+      selectStore.getState().tasks.push({ id: `task-${title}`, title, ...props } as never);
+      return { success: true, id: `task-${title}` };
+    });
+
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <QuickCaptureSheet visible openRequestId={1} initialValue="" onClose={vi.fn()} />
+      );
+      await Promise.resolve();
+    });
+
+    const getBody = () => {
+      const body = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+      if (!body) throw new Error('QuickCaptureSheetBody not found');
+      return body;
+    };
+
+    await act(async () => {
+      getBody().props.onToggleAddAnother(true);
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      getBody().props.onValueChange('plan review @"deep work"');
+      await Promise.resolve();
+    });
+    await act(async () => {
+      getBody().props.handleSave();
+      await Promise.resolve();
+    });
+    expect(addTask).toHaveBeenLastCalledWith('plan review', expect.objectContaining({
+      contexts: ['@deep work'],
+    }));
+
+    // Second capture of the burst: the sheet never closed, so only a refreshed
+    // bag can tokenize the unquoted form.
+    await act(async () => {
+      getBody().props.onValueChange('write notes @deep work');
+      await Promise.resolve();
+    });
+    await act(async () => {
+      getBody().props.handleSave();
+      await Promise.resolve();
+    });
+
+    expect(addTask).toHaveBeenLastCalledWith('write notes', expect.objectContaining({
+      contexts: ['@deep work'],
+    }));
+  });
+
+  it('keeps the strip away when the draft is a plain title', async () => {
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(
+        <QuickCaptureSheet visible openRequestId={1} initialValue="call mom" onClose={vi.fn()} />
+      );
+      await Promise.resolve();
+    });
+
+    const body = tree.root.findAll((node) => String(node.type) === 'QuickCaptureSheetBody')[0];
+    if (!body) throw new Error('QuickCaptureSheetBody not found');
+    expect(body.props.preview).toBeNull();
   });
 
   it('ignores duplicate save presses while the first save is in flight', async () => {

@@ -11,6 +11,7 @@ import {
     findSelectableProjectByTitleAndArea,
     getQuickAddProjectInitialProps,
     buildQuickAddParseOptions,
+    buildQuickAddPreviewEntries,
     parseQuickAdd,
     normalizeFocusTaskLimit,
     getDefaultTaskAreaMode,
@@ -56,6 +57,7 @@ import { consumeQuickAddPending, hideQuickAddWindow } from '../lib/quick-add-win
 import { TaskInput } from './Task/TaskInput';
 import { AreaSelector } from './ui/AreaSelector';
 import { QuickAddSyntaxHint } from './ui/QuickAddSyntaxHint';
+import { QuickAddPreview } from './QuickAddPreview';
 import { FocusStarIcon } from './FocusStarIcon';
 
 // Relative to the managed data dir (portable-aware, #855).
@@ -211,6 +213,11 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
     const parsedInput = useMemo(
         () => parseQuickAdd(value, projects, new Date(), areas, quickAddParseOptions),
         [value, projects, areas, quickAddParseOptions],
+    );
+    // Same parse object the submit path uses, shaped for display only.
+    const previewEntries = useMemo(
+        () => buildQuickAddPreviewEntries(parsedInput, { t, projects, areas, rawInput: value }),
+        [areas, parsedInput, projects, t, value],
     );
     const hasProjectOverride = Boolean(initialProps?.projectId || parsedInput.props.projectId || parsedInput.projectTitle);
     const showAreaSelector = !hasProjectOverride;
@@ -832,6 +839,11 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         let currentProjects = projects;
         let currentAreas = areas;
         if (standaloneWindow) {
+            // The standalone window re-parses against projects/areas fetched
+            // here, which can be fresher than the ones the preview strip
+            // rendered from — the preview may lag by whatever this fetch pulls
+            // in. Accepted: the submit deciding on fresher data is the right
+            // direction, and the window closes on save.
             await refreshStandaloneData().catch((error) => reportError('Failed to refresh quick add data', error));
             const currentState = useTaskStore.getState();
             currentProjects = currentState.projects;
@@ -1094,6 +1106,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 <FocusStarIcon filled={focusNewTask} className="h-[18px] w-[18px]" />
                             </button>
                         </div>
+                        <QuickAddPreview entries={previewEntries} />
                         {isPastingImage ? (
                             <p className="text-xs text-muted-foreground">
                                 {tFallback(t, 'quickAdd.pastedImageSaving', 'Attaching image...')}
@@ -1133,11 +1146,6 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 <QuickAddSyntaxHint text={t('quickAdd.help')} />
                             </p>
                         </details>
-                        {parsedInput.invalidDateCommands && parsedInput.invalidDateCommands.length > 0 ? (
-                            <p className="text-xs text-destructive">
-                                {t('quickAdd.invalidDateCommand')}: {parsedInput.invalidDateCommands.join(', ')}
-                            </p>
-                        ) : null}
                         {scheduledLabel && (
                             <p className="text-xs text-muted-foreground">
                                 {t('calendar.scheduleAction')}: {scheduledLabel}

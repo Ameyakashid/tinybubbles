@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, Folder, HelpCircle } from 'lucide-react';
 import { buildProjectOrderMap,
     buildQuickAddParseOptions,
+    buildQuickAddPreviewEntries,
     compareTasksByProjectThenOrder,
     createTaskFilterPredicate,
     DEFAULT_AREA_COLOR,
@@ -33,6 +34,7 @@ import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { ListBulkActions } from './list/ListBulkActions';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
 import { ListQuickAdd } from './list/ListQuickAdd';
+import { QuickAddPreview } from '../QuickAddPreview';
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { InboxProcessor } from './InboxProcessor';
@@ -782,6 +784,15 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const isNextView = statusFilter === 'next';
     const isWaitingView = statusFilter === 'waiting';
     const showQuickAdd = isInbox;
+    // Live parse of the draft, with the options handleAddTask submits with, so
+    // the strip can never claim something the save would not do.
+    const quickAddPreviewEntries = useMemo(() => {
+        if (!showQuickAdd || !newTaskTitle.trim()) return [];
+        return buildQuickAddPreviewEntries(
+            parseQuickAdd(newTaskTitle, projects, new Date(), areas, quickAddParseOptions),
+            { t, projects, areas, rawInput: newTaskTitle },
+        );
+    }, [areas, newTaskTitle, projects, quickAddParseOptions, showQuickAdd, t]);
     const priorityOptions = PRIORITY_FILTER_OPTIONS;
     const timeEstimateOptions = TIME_ESTIMATE_FILTER_OPTIONS;
     const formatEstimate = (value: TimeEstimate) => formatTimeEstimateLabel(value, { t });
@@ -1174,9 +1185,15 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                             {!isProcessing && (
                                 <div className="mt-1 space-y-1 text-xs text-muted-foreground">
                                     <div className="flex min-w-0 items-center gap-1.5">
-                                        <span className="min-w-0 truncate">
-                                            {t('quickAdd.inlineHint')}
-                                        </span>
+                                        {/* The preview takes the syntax hint's row rather than adding
+                                            one: with a draft to describe it is the better use of the
+                                            space, and the list below never shifts. */}
+                                        <QuickAddPreview entries={quickAddPreviewEntries} className="min-w-0" />
+                                        {quickAddPreviewEntries.length === 0 ? (
+                                            <span className="min-w-0 truncate">
+                                                {t('quickAdd.inlineHint')}
+                                            </span>
+                                        ) : null}
                                         <button
                                             type="button"
                                             onClick={() => setQuickAddSyntaxOpen((open) => !open)}

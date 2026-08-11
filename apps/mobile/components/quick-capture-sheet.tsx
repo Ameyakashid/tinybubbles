@@ -22,6 +22,7 @@ import {
   resolveCaptureAreaQuery,
   resolveCaptureProjectQuery,
   buildQuickAddParseOptions,
+  buildQuickAddPreviewEntries,
   canStarNewCapture,
   formatFocusTaskLimitText,
   getDefaultTaskAreaMode,
@@ -60,6 +61,7 @@ import {
   parseContextQueryTokens,
 } from './quick-capture-sheet.utils';
 import { styles } from './quick-capture-sheet/quick-capture-sheet.styles';
+import { QuickAddPreview } from './QuickAddPreview';
 import { QuickCaptureSheetBody } from './quick-capture-sheet/QuickCaptureSheetBody';
 import { QuickCaptureSheetPickers } from './quick-capture-sheet/QuickCaptureSheetPickers';
 import { useQuickCaptureAudio } from './use-quick-capture-audio';
@@ -76,6 +78,13 @@ const logCaptureWarn = (message: string, error?: unknown) => {
 const logCaptureError = (message: string, error?: unknown) => {
   const err = error instanceof Error ? error : new Error(message);
   void logError(err, { scope: 'capture', extra: buildCaptureExtra(message, error) });
+};
+
+// Settings come off the store too, so refreshing takes no component state and
+// cannot re-identify the callbacks that call it.
+const readQuickAddParseOptions = () => {
+  const state = useTaskStore.getState();
+  return buildQuickAddParseOptions(state.settings, state);
 };
 
 const resolveInitialContextTokens = (contexts?: string[]): string[] => (
@@ -204,6 +213,14 @@ export function QuickCaptureSheet({
   );
 
   const [value, setValue] = useState('');
+  // Refreshed by resetDraftState — which runs on open AND after each capture in
+  // an "Add another" burst, so a context/tag/person created by one capture is
+  // known to the next one's parse. Not subscribed and not rebuilt per render:
+  // the bag is an O(tasks) scan and this sheet stays mounted for the whole
+  // session (see loadContextOptions). The preview and the save read this one
+  // object, so they cannot disagree. A background sync landing mid-draft leaves
+  // it one capture stale — accepted, to keep the scan off the keystroke path.
+  const [quickAddParseOptions, setQuickAddParseOptions] = useState(readQuickAddParseOptions);
   const [pendingBulkLines, setPendingBulkLines] = useState<string[] | null>(null);
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [dueDateHasTime, setDueDateHasTime] = useState(false);
@@ -404,6 +421,7 @@ export function QuickCaptureSheet({
 
   const resetDraftState = useCallback((options?: { keepAddAnother?: boolean; value?: string }) => {
     clearAndroidOptionsExpand();
+    setQuickAddParseOptions(readQuickAddParseOptions());
     setValue(options?.value ?? initialValue ?? '');
     setDueDate(initialProps?.dueDate ? safeParseDate(initialProps.dueDate) : null);
     setDueDateHasTime(Boolean(initialProps?.dueDate && hasTimeComponent(initialProps.dueDate)));
@@ -471,6 +489,18 @@ export function QuickCaptureSheet({
     setShowPriorityPicker(false);
   }, [prioritiesEnabled]);
 
+  // A due date picked in the sheet outranks a trailing natural-language date,
+  // so the preview must not promise one either (see buildCaptureTaskProps).
+  const suppressDetectedDate = Boolean(dueDate);
+  const previewEntries = useMemo(() => {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    return buildQuickAddPreviewEntries(
+      parseQuickAdd(trimmed, projects, new Date(), areas, quickAddParseOptions),
+      { t, projects, areas, rawInput: trimmed, suppressDetectedDate },
+    );
+  }, [areas, projects, quickAddParseOptions, suppressDetectedDate, t, value]);
+
   const buildCaptureRequestForInput = useCallback((
     inputValue: string,
     fallbackTitle: string,
@@ -478,12 +508,8 @@ export function QuickCaptureSheet({
     currentProjects = projects,
   ): { input: CaptureAssemblyInput; options: CaptureTransactionOptions } => {
     const trimmed = inputValue.trim();
-    // Tasks/people are read here rather than subscribed to: the sheet stays off
-    // the hot render path (see loadContextOptions), and one capture is a user
-    // action, not a render.
     const parsed = trimmed
-      ? parseQuickAdd(trimmed, currentProjects, new Date(), areas,
-        buildQuickAddParseOptions(settings, useTaskStore.getState()))
+      ? parseQuickAdd(trimmed, currentProjects, new Date(), areas, quickAddParseOptions)
       : { title: '', props: {}, projectTitle: undefined, detectedDate: undefined, invalidDateCommands: undefined };
 
     const input: CaptureAssemblyInput = {
@@ -495,7 +521,7 @@ export function QuickCaptureSheet({
       extraProps,
       selectedAreaId,
       starNewTask: focusNewTask && canFocusNewTask,
-      suppressDetectedDate: Boolean(dueDate),
+      suppressDetectedDate,
     };
     const options: CaptureTransactionOptions = {
       transformProps: (props) => {
@@ -514,7 +540,7 @@ export function QuickCaptureSheet({
       },
     };
     return { input, options };
-  }, [areas, canFocusNewTask, contextTags, dueDate, dueDateHasTime, focusNewTask, initialProps, prioritiesEnabled, priority, projectId, projects, selectedAreaId, settings, startTime]);
+  }, [areas, canFocusNewTask, contextTags, dueDate, dueDateHasTime, focusNewTask, initialProps, prioritiesEnabled, priority, projectId, projects, quickAddParseOptions, selectedAreaId, startTime, suppressDetectedDate]);
 
   const buildTaskPropsForInput = useCallback(async (inputValue: string, fallbackTitle: string, extraProps?: Partial<Task>) => {
     const request = buildCaptureRequestForInput(inputValue, fallbackTitle, extraProps);
@@ -1096,6 +1122,7 @@ export function QuickCaptureSheet({
         onToggleRecording={handleToggleRecording}
         onValueChange={setValue}
         optionsExpanded={optionsExpanded}
+        preview={previewEntries.length > 0 ? <QuickAddPreview entries={previewEntries} tc={tc} /> : null}
         prioritiesEnabled={prioritiesEnabled}
         priorityLabel={priorityLabel}
         projectLabel={projectLabel}

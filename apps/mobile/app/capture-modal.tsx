@@ -17,6 +17,7 @@ import {
   executeCaptureTransaction,
   prepareCaptureTask,
   buildQuickAddParseOptions,
+  buildQuickAddPreviewEntries,
   createAIProvider,
   getUsedTaskTokens,
   isSelectableProjectForTaskAssignment,
@@ -43,6 +44,7 @@ import { logError } from '../lib/app-log';
 import { addHardwareBackPressListener } from '@/lib/hardware-back';
 import { showInvalidDateCommandToast } from '@/lib/quick-add-toast';
 import { ThemedAlertHost } from '@/components/themed-alert';
+import { QuickAddPreview } from '@/components/QuickAddPreview';
 import { openTaskScreen } from '@/lib/task-meta-navigation';
 
 type CaptureSearchParams = {
@@ -286,6 +288,16 @@ export default function CaptureScreen() {
     () => buildQuickAddParseOptions(settings, { tasks, people }),
     [people, settings, tasks]
   );
+
+  // The parse the save path runs, one keystroke early. Same options object, so
+  // the strip and the saved task can never disagree.
+  const previewEntries = React.useMemo(() => {
+    if (!value.trim()) return [];
+    return buildQuickAddPreviewEntries(
+      parseQuickAdd(value, projects, new Date(), areas, quickAddParseOptions),
+      { t, projects, areas, rawInput: value },
+    );
+  }, [areas, projects, quickAddParseOptions, t, value]);
 
   useEffect(() => {
     if (!aiEnabled || (keyRequired && !aiKey)) {
@@ -593,6 +605,7 @@ export default function CaptureScreen() {
             returnKeyType="done"
             multiline
           />
+          <QuickAddPreview entries={previewEntries} tc={tc} />
           {(initialProps.attachments?.length ?? 0) > 0 && (
             <View style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, { color: tc.secondaryText }]}>{tFallback(t, 'attachments.title', 'Attachments')}</Text>

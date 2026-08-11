@@ -81,6 +81,8 @@ interface QuickCaptureSheetBodyProps {
   onToggleRecording: () => void;
   onValueChange: (value: string) => void;
   optionsExpanded: boolean;
+  /** Passive parse read-out; rendered under the title input, above the chips. */
+  preview?: React.ReactNode;
   prioritiesEnabled: boolean;
   priorityLabel: string;
   projectLabel: string;
@@ -138,6 +140,7 @@ export function QuickCaptureSheetBody({
   onToggleRecording,
   onValueChange,
   optionsExpanded,
+  preview,
   prioritiesEnabled,
   priorityLabel,
   projectLabel,
@@ -307,6 +310,8 @@ export function QuickCaptureSheetBody({
                 )}
               </TouchableOpacity>
             </View>
+
+            {preview ? <View style={styles.previewRow}>{preview}</View> : null}
 
             {recordingReady && (
               <View style={styles.recordingRow}>

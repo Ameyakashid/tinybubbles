@@ -114,6 +114,21 @@ describe('ListView', () => {
     expect(queryByText(/Quick add supports/)).not.toBeInTheDocument();
   });
 
+  it('trades the syntax hint for a live read-out of what the draft parses to', () => {
+    const { getByPlaceholderText, getByTestId, queryByText } = renderListView('inbox', 'Inbox');
+
+    act(() => {
+      fireEvent.change(getByPlaceholderText(/Add Task/i), {
+        target: { value: 'call mom @phone #family' },
+      });
+    });
+
+    const preview = getByTestId('quick-add-preview');
+    expect(preview).toHaveTextContent('@phone');
+    expect(preview).toHaveTextContent('#family');
+    expect(queryByText('Try: Call mom /due:tomorrow 5pm @phone #family')).not.toBeInTheDocument();
+  });
+
   it('keeps Mind Sweep open when the first capture populates an empty inbox', async () => {
     const addTask = vi.fn(async (title: string, initialProps?: Partial<Task>) => {
       const task = makeTask('captured', {

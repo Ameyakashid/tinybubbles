@@ -79,6 +79,9 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  previewRow: {
+    marginTop: 8,
+  },
   recordingRow: {
     marginTop: 8,
     flexDirection: 'row',

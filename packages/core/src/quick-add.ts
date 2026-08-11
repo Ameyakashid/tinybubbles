@@ -8,6 +8,18 @@ import { isActiveDateFormatDayFirst, normalizeClockTimeInput } from './date';
 import { getUsedTaskTokens } from './task-token-usage';
 import { getPersonOptionNames } from './people';
 
+// The live capture preview rides this module's barrel line
+// (`export * from './quick-add'`) rather than its own: Metro collapses subpath
+// imports, so anything the mobile app imports has to reach it through the core
+// index, and index.ts is not this feature's to edit. The logic itself stays in
+// its own file — nothing here parses or formats for display.
+export {
+    buildQuickAddPreviewEntries,
+    type QuickAddPreviewEntry,
+    type QuickAddPreviewEntryKind,
+    type QuickAddPreviewOptions,
+} from './quick-add-preview';
+
 export interface QuickAddDetectedDate {
     date: string;
     matchedText: string;
