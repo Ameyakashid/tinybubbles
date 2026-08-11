@@ -13,6 +13,7 @@ const {
   mockAlarmRequestPermissions,
   mockAlarmSendNotification,
   mockAlarmScheduleAlarm,
+  mockAlarmGetScheduledAlarms,
   mockEnsureReminderNotificationChannel,
   mockRestorePersistentCaptureNotification,
   mockLogInfo,
@@ -46,6 +47,7 @@ const {
   mockAlarmRequestPermissions: vi.fn(async () => ({ alert: true })),
   mockAlarmSendNotification: vi.fn(),
   mockAlarmScheduleAlarm: vi.fn(async () => ({ id: 99 })),
+  mockAlarmGetScheduledAlarms: vi.fn(async () => [] as Array<{ id: string }>),
   mockEnsureReminderNotificationChannel: vi.fn(async () => undefined),
   mockRestorePersistentCaptureNotification: vi.fn(),
   mockLogInfo: vi.fn(async () => undefined),
@@ -90,6 +92,7 @@ vi.mock('react-native-alarm-notification', () => ({
     deleteRepeatingAlarm: mockAlarmDeleteRepeatingAlarm,
     removeFiredNotification: mockAlarmRemoveFiredNotification,
     removeAllFiredNotifications: mockAlarmRemoveAllFiredNotifications,
+    getScheduledAlarms: mockAlarmGetScheduledAlarms,
     requestPermissions: mockAlarmRequestPermissions,
   },
 }));
@@ -159,6 +162,8 @@ describe('notification-service-local', () => {
     mockAlarmSendNotification.mockReset();
     mockAlarmScheduleAlarm.mockReset();
     mockAlarmScheduleAlarm.mockResolvedValue({ id: 99 });
+    mockAlarmGetScheduledAlarms.mockReset();
+    mockAlarmGetScheduledAlarms.mockResolvedValue([]);
     mockEnsureReminderNotificationChannel.mockReset();
     mockEnsureReminderNotificationChannel.mockResolvedValue(undefined);
     mockRestorePersistentCaptureNotification.mockReset();
@@ -393,6 +398,28 @@ describe('notification-service-local', () => {
     const logPayload = JSON.stringify(mockLogInfo.mock.calls);
     expect(logPayload).not.toContain('Private task title');
     expect(logPayload).not.toContain('Private task details');
+  });
+
+  it('reports the pending native alarm count alongside the tracked count', async () => {
+    // #1020: a cancel that silently removes nothing leaves the OS holding more
+    // pending requests than the alarm map tracks. That gap is invisible in the
+    // app, so the cycle log has to carry it.
+    mockStoreState.tasks = [
+      { id: 'task-1', title: 'Task one', dueDate: new Date(Date.now() + 5 * 60 * 1000).toISOString() },
+    ];
+    mockAlarmGetScheduledAlarms.mockResolvedValueOnce([{ id: '1' }, { id: '2' }, { id: '3' }]);
+
+    await startLocalMobileNotifications();
+
+    expect(mockLogInfo).toHaveBeenCalledWith(
+      '[Local Notifications] Reschedule cycle complete',
+      expect.objectContaining({
+        extra: expect.objectContaining({
+          scheduledAlarmCount: 1,
+          pendingNativeAlarmCount: 3,
+        }),
+      })
+    );
   });
 
   it('only schedules the next 60 upcoming task reminders on iOS', async () => {

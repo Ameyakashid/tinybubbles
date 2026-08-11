@@ -846,6 +846,24 @@ const applyAlarmIosUniqueIdentifierPatchToSource = (original) => {
   return next;
 };
 
+// Upstream declares the cancel methods as `(NSInteger *)id` — a POINTER to an
+// integer, not an integer. Under the New Architecture the interop layer
+// (ObjCTurboModule::setInvocationArg) picks the marshalling branch by ObjC
+// argument encoding: `@encode(NSInteger)` ("q") writes the converted integer,
+// anything else falls through to writing the raw `double` bytes. `NSInteger *`
+// encodes as "^q", so the method receives the IEEE-754 bit pattern of the id
+// (~4.8e18 for a real ~1.75e15 identifier) and
+// removePendingNotificationRequestsWithIdentifiers gets a string that matches
+// nothing. Cancelling a pending iOS reminder was therefore a silent no-op, so
+// every reschedule left the previous request pending and one occurrence fired
+// as a stack of duplicates (#1020). Sibling `removeFiredNotification` already
+// takes `(NSInteger)` by value, which is why clearing *delivered*
+// notifications kept working and hid the bug.
+const applyAlarmIosDeletePendingPatchToSource = (original) => original.replace(
+  /RCT_EXPORT_METHOD\((deleteAlarm|deleteRepeatingAlarm): \(NSInteger \*\)id\)/g,
+  'RCT_EXPORT_METHOD($1: (NSInteger)id)'
+);
+
 const logPatchedCandidate = (label, candidate) => {
   console.log(`[${label}] patched ${candidate}`);
 };
@@ -1052,6 +1070,15 @@ const PATCHES = [
     // Original loop broke after the first successful write.
     firstMatchOnly: true,
     appliedMarker: 'mindwtrAlarmIdCounter',
+  },
+  {
+    id: 'alarm-ios-delete-pending-arg',
+    platform: 'ios',
+    getCandidates: iosSourceCandidates,
+    transform: applyAlarmIosDeletePendingPatchToSource,
+    required: true,
+    firstMatchOnly: true,
+    appliedMarker: 'RCT_EXPORT_METHOD(deleteAlarm: (NSInteger)id)',
   },
 ];
 

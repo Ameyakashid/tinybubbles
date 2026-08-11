@@ -50,6 +50,7 @@ type AlarmNotificationsApi = {
   deleteRepeatingAlarm: (id: AlarmId) => void;
   removeFiredNotification: (id: AlarmId) => void;
   removeAllFiredNotifications: () => void;
+  getScheduledAlarms?: () => Promise<unknown>;
   requestPermissions?: (permissions: { alert: boolean; badge: boolean; sound: boolean }) => Promise<unknown>;
 };
 
@@ -559,6 +560,23 @@ async function scheduleAlarmRequests(api: AlarmNotificationsApi, requests: Alarm
   }
 }
 
+// Pending requests the OS actually holds, for the cycle-complete log only —
+// never used to drive cancellation. A count above `alarmMap.size` is the
+// signature of #1020 (a cancel that silently removed nothing), and it is the
+// one number that separates "still leaking" from "orphans from before the fix
+// firing one last time" without another week of counting notifications by
+// hand. Returns null when the module cannot enumerate.
+async function countPendingNativeAlarms(api: AlarmNotificationsApi): Promise<number | null> {
+  if (typeof api.getScheduledAlarms !== 'function') return null;
+  try {
+    const pending = await api.getScheduledAlarms();
+    return Array.isArray(pending) ? pending.length : null;
+  } catch (error) {
+    logNotificationError('Failed to read pending native alarms', error);
+    return null;
+  }
+}
+
 async function cancelInactiveKeys(api: AlarmNotificationsApi, activeKeys: Set<string>): Promise<void> {
   for (const key of Array.from(alarmMap.keys())) {
     if (activeKeys.has(key)) continue;
@@ -671,6 +689,7 @@ async function runRescheduleCycle(api: AlarmNotificationsApi): Promise<void> {
   logNotificationInfo('Reschedule cycle complete', {
     activeFeature,
     scheduledAlarmCount: alarmMap.size,
+    pendingNativeAlarmCount: await countPendingNativeAlarms(api),
     oneShotReminderCount: diagnostics.oneShotReminderCount,
     scheduledOneShotReminderCount: oneShotRequests.length,
     maxPendingOneShotReminderAlarms: getMaxPendingOneShotReminderAlarms(),

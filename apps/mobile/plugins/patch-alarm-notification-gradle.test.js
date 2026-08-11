@@ -34,6 +34,7 @@ const applyAlarmCompleteUtilPatchToSource = transformFor('alarm-complete-action-
 const applyAlarmCompleteReceiverPatchToSource = transformFor('alarm-complete-action-receiver');
 const applyAlarmIosCompleteActionPatchToSource = transformFor('alarm-ios-complete-action');
 const applyAlarmIosUniqueIdentifierPatchToSource = transformFor('alarm-ios-unique-identifier');
+const applyAlarmIosDeletePendingPatchToSource = transformFor('alarm-ios-delete-pending-arg');
 
 describe('patch-alarm-notification-gradle', () => {
   it('patches AlarmUtil pending intent flags for Android 12+', () => {
@@ -519,6 +520,29 @@ static id _sharedInstance = nil;
     expect(applyAlarmIosUniqueIdentifierPatchToSource(output)).toBe(output);
   });
 
+  it('takes the iOS cancel ids by value so pending requests are actually removed', () => {
+    const input = `RCT_EXPORT_METHOD(deleteAlarm: (NSInteger *)id){
+    NSArray *array = [NSArray arrayWithObjects:[NSString stringWithFormat:@"%li", (long)id], nil];
+}
+
+RCT_EXPORT_METHOD(deleteRepeatingAlarm: (NSInteger *)id){
+    NSArray *array = [NSArray arrayWithObjects:[NSString stringWithFormat:@"%li", (long)id], nil];
+}
+
+RCT_EXPORT_METHOD(removeFiredNotification: (NSInteger)id){
+}`;
+
+    const output = applyAlarmIosDeletePendingPatchToSource(input);
+
+    expect(output).toContain('RCT_EXPORT_METHOD(deleteAlarm: (NSInteger)id)');
+    expect(output).toContain('RCT_EXPORT_METHOD(deleteRepeatingAlarm: (NSInteger)id)');
+    expect(output).not.toContain('(NSInteger *)id');
+    // The sibling that already took its id by value must be left alone.
+    expect(output).toContain('RCT_EXPORT_METHOD(removeFiredNotification: (NSInteger)id)');
+    // Idempotent: a second pass leaves the patched source untouched.
+    expect(applyAlarmIosDeletePendingPatchToSource(output)).toBe(output);
+  });
+
   it('keeps the Gradle compatibility rewrite in place', () => {
     const input = `apply plugin: 'maven'
 buildscript {
@@ -581,6 +605,9 @@ describe('PATCHES registry completeness', () => {
     ['Constants.java', 'applyAlarmCompleteConstantsPatchToSource'],
     ['RnAlarmNotification.m', 'applyAlarmIosCompleteActionPatchToSource'],
     ['RnAlarmNotification.m', 'applyAlarmIosUniqueIdentifierPatchToSource'],
+    // Added after the collapse (#1020), pinned here for the same reason as the
+    // original sites: dropping it silently restores the duplicate-reminder leak.
+    ['RnAlarmNotification.m', 'applyAlarmIosDeletePendingPatchToSource'],
   ];
 
   it('has exactly one registry entry per original call site — none dropped in the collapse', () => {
@@ -594,7 +621,7 @@ describe('PATCHES registry completeness', () => {
   });
 
   it('every entry declares required/firstMatchOnly explicitly', () => {
-    expect(PATCHES).toHaveLength(17);
+    expect(PATCHES).toHaveLength(18);
     for (const patch of PATCHES) {
       expect(typeof patch.id).toBe('string');
       expect(typeof patch.required).toBe('boolean');
@@ -696,6 +723,37 @@ describe('applyPatches (registry-driven fixture tree)', () => {
       const afterSecondRun = snapshot();
 
       expect(afterSecondRun).toBe(afterFirstRun);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  // The mechanism behind #1020, stated as an invariant rather than as one
+  // method's spelling: under the New Architecture the interop marshals a
+  // numeric argument by ObjC encoding, and only a by-value scalar ("q") gets
+  // the converted integer. A pointer-typed scalar ("^q") silently receives the
+  // raw double bit pattern instead, so the method runs with a garbage id and
+  // reports no error. Any exported method that takes an id this way is a
+  // silent no-op waiting to happen — assert none survive the patch pass.
+  it('leaves no pointer-typed scalar arguments in the patched iOS module', () => {
+    const realPackageRoot = path.join(__dirname, '..', '..', '..', 'node_modules', 'react-native-alarm-notification');
+    if (!fs.existsSync(realPackageRoot)) return;
+
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'alarm-patch-ptr-'));
+    try {
+      const projectRoot = path.join(tmpRoot, 'apps', 'mobile');
+      const hoistedDest = path.join(tmpRoot, 'node_modules', 'react-native-alarm-notification');
+      fs.mkdirSync(projectRoot, { recursive: true });
+      fs.mkdirSync(path.dirname(hoistedDest), { recursive: true });
+      fs.cpSync(realPackageRoot, hoistedDest, { recursive: true });
+
+      applyPatches(projectRoot, PATCHES);
+
+      const iosSource = fs.readFileSync(path.join(hoistedDest, 'ios', 'RnAlarmNotification.m'), 'utf8');
+      const pointerScalarArgs = iosSource.match(
+        /RCT_EXPORT_METHOD\([^)]*\(\s*(?:NSInteger|NSUInteger|int|long|double|float|BOOL)\s*\*\s*\)/g
+      ) ?? [];
+      expect(pointerScalarArgs).toEqual([]);
     } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
