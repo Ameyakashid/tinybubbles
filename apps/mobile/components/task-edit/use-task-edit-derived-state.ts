@@ -150,7 +150,12 @@ export function useTaskEditDerivedState({
         );
         return settings.gtd?.taskEditor?.hidden ?? defaultHidden;
     }, [prioritiesEnabled, settings.gtd?.taskEditor?.hidden, timeEstimatesEnabled]);
-    const isReference = (draft?.status ?? task?.status) === 'reference';
+    const editStatus = draft?.status ?? task?.status;
+    const isReference = editStatus === 'reference';
+    // #1021: reveal the person field while editing a task as Waiting For, so an
+    // existing task can be assigned a person without first customizing the
+    // editor layout. An explicit saved customization that hides the field wins.
+    const isAssignedToExplicitlyHidden = settings.gtd?.taskEditor?.hidden?.includes('assignedTo') ?? false;
     const availableStatusOptions = useMemo(
         () => (isReference ? STATUS_OPTIONS : STATUS_OPTIONS.filter((status) => status !== 'reference')),
         [isReference]
@@ -261,9 +266,10 @@ export function useTaskEditDerivedState({
     const isFieldVisible = useCallback(
         (fieldId: TaskEditorFieldId) => {
             if (isReference && REFERENCE_HIDDEN_FIELDS.has(fieldId)) return false;
+            if (fieldId === 'assignedTo' && editStatus === 'waiting' && !isAssignedToExplicitlyHidden) return true;
             return !hiddenSet.has(fieldId) || hasValue(fieldId);
         },
-        [hasValue, hiddenSet, isReference]
+        [editStatus, hasValue, hiddenSet, isAssignedToExplicitlyHidden, isReference]
     );
     const filterVisibleFields = useCallback(
         (fields: TaskEditorFieldId[]) => fields.filter(isFieldVisible),

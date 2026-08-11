@@ -44,7 +44,12 @@ export function useTaskItemFieldLayout({
         timeEstimate: editTimeEstimate,
     } = draft;
     const savedOrder = settings?.gtd?.taskEditor?.order ?? [];
-    const savedHidden = settings?.gtd?.taskEditor?.hidden ?? DEFAULT_TASK_EDITOR_HIDDEN;
+    const explicitHidden = settings?.gtd?.taskEditor?.hidden;
+    const savedHidden = explicitHidden ?? DEFAULT_TASK_EDITOR_HIDDEN;
+    // #1021: reveal the person field while editing a task as Waiting For, so an
+    // existing task can be assigned a person without first customizing the
+    // editor layout. An explicit saved customization that hides the field wins.
+    const isAssignedToExplicitlyHidden = explicitHidden?.includes('assignedTo') ?? false;
     const sectionAssignments = useMemo(
         () => getTaskEditorSectionAssignments(settings?.gtd?.taskEditor),
         [settings?.gtd?.taskEditor]
@@ -157,9 +162,10 @@ export function useTaskItemFieldLayout({
     const isFieldVisible = useCallback(
         (fieldId: TaskEditorFieldId) => {
             if (isReference && referenceHiddenFields.has(fieldId)) return false;
+            if (fieldId === 'assignedTo' && editStatus === 'waiting' && !isAssignedToExplicitlyHidden) return true;
             return !hiddenSet.has(fieldId) || hasValue(fieldId);
         },
-        [hasValue, hiddenSet, isReference, referenceHiddenFields]
+        [editStatus, hasValue, hiddenSet, isAssignedToExplicitlyHidden, isReference, referenceHiddenFields]
     );
     const showProjectField = isFieldVisible('project');
     const showAreaField = isFieldVisible('area') && !editProjectId;

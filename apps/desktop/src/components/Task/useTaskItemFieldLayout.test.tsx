@@ -213,6 +213,45 @@ describe('useTaskItemFieldLayout', () => {
         expect(result.current.basicFieldsBeforeOrganizers).toEqual(result.current.basicFields);
     });
 
+    it('reveals the empty assignedTo field while editing a task as waiting (#1021)', () => {
+        const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
+            draft: { status: 'waiting', assignedTo: '' },
+        })));
+
+        expect(result.current.organizationFields).toContain('assignedTo');
+    });
+
+    it('keeps assignedTo hidden by default for non-waiting statuses when empty', () => {
+        const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
+            draft: { status: 'next', assignedTo: '' },
+        })));
+
+        expect(result.current.organizationFields).not.toContain('assignedTo');
+    });
+
+    it('keeps assignedTo hidden while waiting when the saved layout explicitly hides it', () => {
+        const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
+            settings: {
+                gtd: {
+                    taskEditor: {
+                        hidden: ['assignedTo'],
+                    },
+                },
+            },
+            draft: { status: 'waiting', assignedTo: '' },
+        })));
+
+        expect(result.current.organizationFields).not.toContain('assignedTo');
+    });
+
+    it('keeps showing assignedTo while waiting once it already has a value', () => {
+        const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
+            draft: { status: 'waiting', assignedTo: 'Sam' },
+        })));
+
+        expect(result.current.organizationFields).toContain('assignedTo');
+    });
+
     it('moves due date into scheduling when configured and preserves section open defaults', () => {
         const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
             settings: {

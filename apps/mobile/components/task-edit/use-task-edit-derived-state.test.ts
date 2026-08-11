@@ -95,6 +95,134 @@ describe('useTaskEditDerivedState', () => {
         expect(derived?.showStatusField).toBe(false);
     });
 
+    it('reveals the empty assignedTo field while editing a task as waiting (#1021)', () => {
+        let derived: ReturnType<typeof useTaskEditDerivedState> | undefined;
+        const draft = setTaskDraftField(createTaskDraft(baseTask), 'status', 'waiting');
+
+        function Probe() {
+            derived = useTaskEditDerivedState({
+                task: baseTask,
+                checklist: baseTask.checklist,
+                draft,
+                settings: {},
+                projects: [],
+                sections: [],
+                prioritiesEnabled: true,
+                timeEstimatesEnabled: true,
+                contextInputDraft: '',
+                descriptionDraft: '',
+                tagInputDraft: '',
+                visibleAttachmentsLength: 0,
+                t: (key) => key,
+            });
+            return null;
+        }
+
+        renderer.act(() => {
+            renderer.create(React.createElement(Probe));
+        });
+
+        expect(derived?.organizationFields).toContain('assignedTo');
+    });
+
+    it('keeps assignedTo hidden by default for non-waiting statuses when empty', () => {
+        let derived: ReturnType<typeof useTaskEditDerivedState> | undefined;
+        const draft = setTaskDraftField(createTaskDraft(baseTask), 'status', 'next');
+
+        function Probe() {
+            derived = useTaskEditDerivedState({
+                task: baseTask,
+                checklist: baseTask.checklist,
+                draft,
+                settings: {},
+                projects: [],
+                sections: [],
+                prioritiesEnabled: true,
+                timeEstimatesEnabled: true,
+                contextInputDraft: '',
+                descriptionDraft: '',
+                tagInputDraft: '',
+                visibleAttachmentsLength: 0,
+                t: (key) => key,
+            });
+            return null;
+        }
+
+        renderer.act(() => {
+            renderer.create(React.createElement(Probe));
+        });
+
+        expect(derived?.organizationFields).not.toContain('assignedTo');
+    });
+
+    it('keeps assignedTo hidden while waiting when the saved layout explicitly hides it', () => {
+        let derived: ReturnType<typeof useTaskEditDerivedState> | undefined;
+        const draft = setTaskDraftField(createTaskDraft(baseTask), 'status', 'waiting');
+        const settings: AppData['settings'] = {
+            gtd: {
+                taskEditor: {
+                    hidden: ['assignedTo'],
+                },
+            },
+        };
+
+        function Probe() {
+            derived = useTaskEditDerivedState({
+                task: baseTask,
+                checklist: baseTask.checklist,
+                draft,
+                settings,
+                projects: [],
+                sections: [],
+                prioritiesEnabled: true,
+                timeEstimatesEnabled: true,
+                contextInputDraft: '',
+                descriptionDraft: '',
+                tagInputDraft: '',
+                visibleAttachmentsLength: 0,
+                t: (key) => key,
+            });
+            return null;
+        }
+
+        renderer.act(() => {
+            renderer.create(React.createElement(Probe));
+        });
+
+        expect(derived?.organizationFields).not.toContain('assignedTo');
+    });
+
+    it('keeps showing assignedTo while waiting once it already has a value', () => {
+        let derived: ReturnType<typeof useTaskEditDerivedState> | undefined;
+        let draft = setTaskDraftField(createTaskDraft(baseTask), 'status', 'waiting');
+        draft = setTaskDraftField(draft, 'assignedTo', 'Sam');
+
+        function Probe() {
+            derived = useTaskEditDerivedState({
+                task: baseTask,
+                checklist: baseTask.checklist,
+                draft,
+                settings: {},
+                projects: [],
+                sections: [],
+                prioritiesEnabled: true,
+                timeEstimatesEnabled: true,
+                contextInputDraft: '',
+                descriptionDraft: '',
+                tagInputDraft: '',
+                visibleAttachmentsLength: 0,
+                t: (key) => key,
+            });
+            return null;
+        }
+
+        renderer.act(() => {
+            renderer.create(React.createElement(Probe));
+        });
+
+        expect(derived?.organizationFields).toContain('assignedTo');
+    });
+
     it('does not resurrect task values that were cleared in the draft', () => {
         let derived: ReturnType<typeof useTaskEditDerivedState> | undefined;
         const task: Task = {
