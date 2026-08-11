@@ -1621,6 +1621,8 @@ export function expandCalendarRecurringTaskSetInRange(
  * - Advances dueDate only when the original task has a dueDate.
  * - Shifts startTime/reviewAt forward if present.
  * - Keeps schedule fields independent: due-only tasks stay due-only, start-only tasks stay start-only.
+ * - Never splits the fields a task does have: when a late completion pushes the next
+ *   instance past the completion date, every schedule field moves by the same steps.
  * - Resets checklist completion and IDs.
  * - New instance status is based on the previous status, with done -> next.
  */
@@ -1651,7 +1653,7 @@ export function createNextRecurringTask(
         return Number.isNaN(candidate.getTime()) ? new Date() : candidate;
     })();
     const completedAtDate = parsedCompletedAt ?? fallbackCompletedAt;
-    const nextDueDate = task.dueDate
+    let nextDueDate = task.dueDate
         ? preserveDateOnlyFormat(
             strategy === 'fluid'
                 ? nextFluidIsoFrom(completedAtIso, rule, completedAtDate, byDay, interval, byMonthDay, weekStart)
@@ -1667,10 +1669,70 @@ export function createNextRecurringTask(
             task.startTime
         )
         : undefined;
-    if (strategy === 'strict' && task.startTime && task.dueDate && nextStartTime) {
+    let nextReviewAt = task.reviewAt
+        ? preserveDateOnlyFormat(
+            strategy === 'fluid'
+                ? nextFluidIsoFrom(completedAtIso, rule, completedAtDate, byDay, interval, byMonthDay, weekStart)
+                : nextIsoFrom(task.reviewAt, rule, completedAtDate, byDay, interval, byMonthDay, weekStart, undefined, reviewAnchorDay),
+            task.reviewAt
+        )
+        : undefined;
+    // A single advance can land the next instance on or before the completion
+    // instant, materializing an occurrence that is already in the past. Push it
+    // onto the first occurrence after completion -- but measure the push ONCE,
+    // on the dueDate anchor, and move every schedule field by that same number
+    // of extra steps. Re-deriving startTime alone made it leapfrog a dueDate
+    // that had only advanced one step (a daily start=due task completed a day
+    // late came back as start=12/due=11). Anchoring on dueDate mirrors
+    // projectNextRecurringOccurrenceFields, so the completion path and the
+    // calendar projection agree on which occurrence comes next: the occurrence
+    // is identified by its due date, and a start that is already in the past
+    // when its due date is still ahead is a live task, not a stale one.
+    // relativeStartOffset tasks are excluded: their start is re-derived from the
+    // next due below, so they are coherent by construction.
+    if (strategy === 'strict' && task.startTime && task.dueDate && nextStartTime && nextDueDate
+        && !task.relativeStartOffset) {
         const parsedNextStart = safeParseDate(nextStartTime);
         if (parsedNextStart && parsedNextStart <= completedAtDate) {
-            nextStartTime = nextIsoFrom(task.startTime, rule, completedAtDate, byDay, interval, byMonthDay, weekStart, completedAtDate, startAnchorDay);
+            // `projectStrictIsoFrom` is the existing "first occurrence after this
+            // instant, and how many steps that took" helper, so multi-period
+            // lateness catches up here exactly as it does on the projection path.
+            const pushedDue = projectStrictIsoFrom(
+                task.dueDate,
+                rule,
+                completedAtDate,
+                byDay,
+                interval,
+                byMonthDay,
+                weekStart,
+                dueAnchorDay,
+            );
+            const extraSteps = pushedDue.iso ? pushedDue.steps - 1 : 0;
+            if (extraSteps > 0) {
+                const advancePastCompletion = (
+                    nextIso: string | undefined,
+                    sourceIso: string | undefined,
+                    anchorDay: number | undefined,
+                ): string | undefined => (nextIso
+                    ? preserveDateOnlyFormat(
+                        advanceStrictIsoBySteps(
+                            nextIso,
+                            extraSteps,
+                            rule,
+                            completedAtDate,
+                            byDay,
+                            interval,
+                            byMonthDay,
+                            weekStart,
+                            anchorDay,
+                        ),
+                        sourceIso,
+                    ) ?? nextIso
+                    : nextIso);
+                nextDueDate = preserveDateOnlyFormat(pushedDue.iso, task.dueDate);
+                nextStartTime = advancePastCompletion(nextStartTime, task.startTime, startAnchorDay);
+                nextReviewAt = advancePastCompletion(nextReviewAt, task.reviewAt, reviewAnchorDay);
+            }
         }
     }
     let nextRelativeStartOffset = task.relativeStartOffset ? { ...task.relativeStartOffset } : undefined;
@@ -1686,14 +1748,6 @@ export function createNextRecurringTask(
             nextRelativeStartOffset = undefined;
         }
     }
-    const nextReviewAt = task.reviewAt
-        ? preserveDateOnlyFormat(
-            strategy === 'fluid'
-                ? nextFluidIsoFrom(completedAtIso, rule, completedAtDate, byDay, interval, byMonthDay, weekStart)
-                : nextIsoFrom(task.reviewAt, rule, completedAtDate, byDay, interval, byMonthDay, weekStart, undefined, reviewAnchorDay),
-            task.reviewAt
-        )
-        : undefined;
     if (!nextStartTime && !nextDueDate && !nextReviewAt) {
         // When recurrence exists but no schedule fields are set, defer the next instance
         // from completion so it does not reappear in Next immediately. Seed with the

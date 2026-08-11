@@ -11,6 +11,7 @@ Changes collected after `v1.1.6` and before the next version tag.
 - Themes: added Catppuccin Macchiato and Dracula dark themes, selectable in Appearance settings on desktop and mobile (synced across devices like the existing themes).
 - Quick add: the capture inputs now show what the parser recognized as you type — resolved dates, project, area, contexts, tags, and a warning when a date command can't be read — on desktop and mobile.
 - Mobile (iOS): recurring task reminders no longer pile up duplicate notifications over time — cancelling a previously scheduled reminder was silently failing, so every edit, sync, or occurrence rollover left the old notification pending. One already-accumulated burst may still fire once after updating; counts stop growing from then on. (#1020)
+- Recurrence: completing a repeating task late no longer creates a next copy whose start date sits after its own due date — start, due, and review dates now move forward together, keeping the gaps you set between them, and the new copy is never already overdue the moment it appears. Desktop and mobile.
 
 - Calendar: a task with a start date but no time now shows "All day" in the desktop month grid and the mobile schedule list, instead of a phantom midnight time (shown as "12:00" on 12-hour clocks).
 - Desktop: attachment links pointing at a folder (for example `D:\Media\Movies\`) now open in the file manager instead of failing with "Path is outside Mindwtr-managed locations". Links to files anywhere already worked; folders now match.

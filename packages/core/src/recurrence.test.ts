@@ -20,6 +20,8 @@ import {
     CALENDAR_RANGE_PROJECTION_PER_TASK_CAP,
     CALENDAR_RANGE_PROJECTION_TOTAL_CAP,
 } from './recurrence';
+import { safeParseDate } from './date';
+import { isTaskDateCoherent } from './task-date-coherence';
 import type { Task, TaskStatus } from './types';
 
 type LocalApiRecurrenceParityCase = {
@@ -678,8 +680,14 @@ describe('recurrence', () => {
         };
 
         const next = createNextRecurringTask(task, '2025-01-09T12:00:00.000Z', 'done');
+        // The task was completed on its due date, so the due anchor lands on the
+        // next occurrence of the rule. The start date is off the BYDAY grid, so
+        // its own advance snaps it onto January's 2nd Thursday -- the same
+        // "check the current month first" step the sibling interval test pins
+        // for dueDate. It used to read 2025-03-13 because the past-completion
+        // push re-derived startTime alone from the completion instant.
         expect(next?.dueDate).toBe('2025-03-13');
-        expect(next?.startTime).toBe('2025-03-13');
+        expect(next?.startTime).toBe('2025-01-09');
     });
 
     it('uses current month for monthly BYDAY and preserves time', () => {
@@ -2088,6 +2096,214 @@ describe('expandCalendarRecurringTasksInRange', () => {
 
         expect(projected).toHaveLength(8);
         expect(projected.every((occurrence) => occurrence.sourceTaskId === active.id)).toBe(true);
+    });
+});
+
+describe('createNextRecurringTask late completion coherence', () => {
+    // Local (offset-free) date strings throughout: the schedule fields and the
+    // completion instant are then read in the same zone, so every cell asserts
+    // the same thing regardless of the machine's timezone.
+    const buildTask = (overrides: Partial<Task>): Task => ({
+        id: 'late-completion',
+        title: 'Late completion',
+        status: 'done',
+        tags: [],
+        contexts: [],
+        recurrence: { rule: 'daily', strategy: 'strict' },
+        createdAt: '2026-08-01T00:00:00.000Z',
+        updatedAt: '2026-08-01T00:00:00.000Z',
+        ...overrides,
+    });
+
+    const at = (iso: string): number => (safeParseDate(iso) as Date).getTime();
+    const calendarDayDiff = (fromIso: string, toIso: string): number => {
+        const from = safeParseDate(fromIso) as Date;
+        const to = safeParseDate(toIso) as Date;
+        const dayNumber = (date: Date) => (
+            Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000
+        );
+        return dayNumber(to) - dayNumber(from);
+    };
+
+    it('keeps the next instance on one day when a strict daily start=due task is completed a day late', () => {
+        const next = createNextRecurringTask(
+            buildTask({ startTime: '2026-08-10', dueDate: '2026-08-10' }),
+            '2026-08-11T20:00',
+            'done',
+        );
+
+        expect(next?.startTime).toBe('2026-08-12');
+        expect(next?.dueDate).toBe('2026-08-12');
+    });
+
+    it('advances every schedule field by the same steps when completion is several periods late', () => {
+        const next = createNextRecurringTask(
+            buildTask({ startTime: '2026-08-10', dueDate: '2026-08-12', reviewAt: '2026-08-13' }),
+            '2026-08-15T20:00',
+            'done',
+        );
+
+        // The due anchor catches up to the first occurrence after completion
+        // (16th); start and review keep their 2-day and 1-day offsets from it.
+        expect(next?.startTime).toBe('2026-08-14');
+        expect(next?.dueDate).toBe('2026-08-16');
+        expect(next?.reviewAt).toBe('2026-08-17');
+    });
+
+    it('keeps the wall-clock times of a datetime task when the past-completion push fires', () => {
+        const next = createNextRecurringTask(
+            buildTask({ startTime: '2026-08-10T09:00', dueDate: '2026-08-10T17:00' }),
+            '2026-08-11T20:00',
+            'done',
+        );
+
+        expect(next?.startTime).toBe('2026-08-12T09:00');
+        expect(next?.dueDate).toBe('2026-08-12T17:00');
+    });
+
+    type Shape = 'same-day' | 'start-before-due' | 'start-due-review';
+    type RuleKey = 'daily' | 'weekly' | 'monthly';
+    type Precision = 'date-only' | 'datetime';
+    type Timing = 'before-next-start' | 'after-next-start' | 'several-periods-late';
+
+    const shapeOffsets: Record<Shape, { due: number; review?: number }> = {
+        'same-day': { due: 0 },
+        'start-before-due': { due: 2 },
+        'start-due-review': { due: 2, review: 3 },
+    };
+    // Base start is 2026-08-10 (a Monday), day 10 of the month, so no weekly or
+    // monthly cell ever hits a month-end clamp that would move a day offset.
+    const fieldIso = (precision: Precision, day: string, time: string): string => (
+        precision === 'date-only' ? day : `${day}T${time}`
+    );
+    const baseDays: Record<Shape, { start: string; due: string; review?: string }> = {
+        'same-day': { start: '2026-08-10', due: '2026-08-10' },
+        'start-before-due': { start: '2026-08-10', due: '2026-08-12' },
+        'start-due-review': { start: '2026-08-10', due: '2026-08-12', review: '2026-08-13' },
+    };
+    const completedAt: Record<RuleKey, Record<Timing, string>> = {
+        daily: {
+            'before-next-start': '2026-08-10T20:00',
+            'after-next-start': '2026-08-11T20:00',
+            'several-periods-late': '2026-08-15T20:00',
+        },
+        weekly: {
+            'before-next-start': '2026-08-16T20:00',
+            'after-next-start': '2026-08-17T20:00',
+            'several-periods-late': '2026-09-07T20:00',
+        },
+        monthly: {
+            'before-next-start': '2026-09-09T20:00',
+            'after-next-start': '2026-09-10T20:00',
+            'several-periods-late': '2026-11-10T20:00',
+        },
+    };
+
+    const shapes = Object.keys(shapeOffsets) as Shape[];
+    const rules: RuleKey[] = ['daily', 'weekly', 'monthly'];
+    const precisions: Precision[] = ['date-only', 'datetime'];
+    const timings: Timing[] = ['before-next-start', 'after-next-start', 'several-periods-late'];
+
+    it('sweeps strict start/due/review shapes against on-time and late completions', () => {
+        for (const shape of shapes) {
+            for (const rule of rules) {
+                for (const precision of precisions) {
+                    for (const timing of timings) {
+                        const label = `${shape}/${rule}/${precision}/${timing}`;
+                        const days = baseDays[shape];
+                        const task = buildTask({
+                            id: `late-${shape}-${rule}-${precision}-${timing}`,
+                            startTime: fieldIso(precision, days.start, '09:00'),
+                            dueDate: fieldIso(precision, days.due, '17:00'),
+                            ...(days.review ? { reviewAt: fieldIso(precision, days.review, '18:00') } : {}),
+                            recurrence: { rule, strategy: 'strict' },
+                        });
+                        const completion = completedAt[rule][timing];
+
+                        const next = createNextRecurringTask(task, completion, 'done');
+                        expect(next, label).not.toBeNull();
+                        const nextStart = next?.startTime as string;
+                        const nextDue = next?.dueDate as string;
+
+                        // Coherence: the source start<->due<->review offsets survive.
+                        expect(calendarDayDiff(nextStart, nextDue), label)
+                            .toBe(calendarDayDiff(task.startTime as string, task.dueDate as string));
+                        // The same start-after-due check the store runs over every
+                        // task and both apps render as a warning on the row.
+                        expect(isTaskDateCoherent(next as Task), label).toBe(true);
+                        if (task.reviewAt) {
+                            const nextReview = next?.reviewAt as string;
+                            expect(calendarDayDiff(nextDue, nextReview), label)
+                                .toBe(calendarDayDiff(task.dueDate as string, task.reviewAt));
+                            expect(at(nextDue), label).toBeLessThanOrEqual(at(nextReview));
+                        }
+
+                        // The past-completion guard's intent: never hand back an
+                        // occurrence that is already past. The occurrence is
+                        // identified by its due date; a start already behind at
+                        // completion time with its due date ahead is a live task.
+                        expect(at(nextDue), label).toBeGreaterThan(at(completion));
+                        // And it always moves forward from the source instance.
+                        expect(at(nextStart), label).toBeGreaterThan(at(task.startTime as string));
+
+                        // P13: date-only fields never gain an implicit time.
+                        const fields = [nextStart, nextDue, ...(next?.reviewAt ? [next.reviewAt] : [])];
+                        for (const value of fields) {
+                            expect(/^\d{4}-\d{2}-\d{2}$/.test(value), `${label} ${value}`)
+                                .toBe(precision === 'date-only');
+                        }
+                        if (precision === 'datetime') {
+                            expect(nextStart.endsWith('T09:00'), label).toBe(true);
+                            expect(nextDue.endsWith('T17:00'), label).toBe(true);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    it('leaves relative start offsets deriving from the next due date when completion is late', () => {
+        const next = createNextRecurringTask(
+            buildTask({
+                startTime: '2026-08-09',
+                dueDate: '2026-08-10',
+                relativeStartOffset: { amount: -1, unit: 'day' },
+            }),
+            '2026-08-11T20:00',
+            'done',
+        );
+
+        expect(next?.dueDate).toBe('2026-08-11');
+        expect(next?.startTime).toBe('2026-08-10');
+        expect(next?.relativeStartOffset).toEqual({ amount: -1, unit: 'day' });
+    });
+
+    it('leaves start-only strict tasks on a single step when completed late', () => {
+        const next = createNextRecurringTask(
+            buildTask({ startTime: '2026-08-10' }),
+            '2026-08-11T20:00',
+            'done',
+        );
+
+        expect(next?.startTime).toBe('2026-08-11');
+        expect(next?.dueDate).toBeUndefined();
+    });
+
+    it('keeps fluid start and due on the same completion-anchored occurrence', () => {
+        const next = createNextRecurringTask(
+            buildTask({
+                startTime: '2026-08-10',
+                dueDate: '2026-08-12',
+                recurrence: { rule: 'daily', strategy: 'fluid' },
+            }),
+            '2026-08-15T20:00',
+            'done',
+        );
+
+        // Fluid re-bases every field on the completion instant, so the fields
+        // collapse onto one day; it can never produce start > due.
+        expect(next?.startTime).toBe('2026-08-16');
+        expect(next?.dueDate).toBe('2026-08-16');
     });
 });
 
