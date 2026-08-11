@@ -912,8 +912,8 @@ jobs:
         if: ${{ inputs.upload }}
         env:
           RELEASE_BODY: ${{ github.event.release.body || '' }}
-          APP_SUPPORT_URL: "https://github.com/tinybubbles-app/tinybubbles/issues"
-          APP_MARKETING_URL: "https://github.com/tinybubbles-app/tinybubbles"
+          APP_SUPPORT_URL: "https://github.com/Ameyakashid/tinybubbles/issues"
+          APP_MARKETING_URL: "https://github.com/Ameyakashid/tinybubbles"
         run: |
           set -euo pipefail
           export FASTLANE_METADATA_DIR="$RUNNER_TEMP/fastlane_metadata"

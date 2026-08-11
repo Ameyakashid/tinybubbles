@@ -1,6 +1,6 @@
 services:
   tinybubbles-cloud:
-    image: ghcr.io/tinybubbles-app/tinybubbles-cloud:latest
+    image: ghcr.io/ameyakashid/tinybubbles-cloud:latest
     build:
       context: ..
       dockerfile: docker/cloud/Dockerfile
@@ -24,7 +24,7 @@ services:
       - ./data:/app/cloud_data
 
   tinybubbles-app:
-    image: ghcr.io/tinybubbles-app/tinybubbles-app:latest
+    image: ghcr.io/ameyakashid/tinybubbles-app:latest
     build:
       context: ..
       dockerfile: docker/app/Dockerfile

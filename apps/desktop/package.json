@@ -3,11 +3,11 @@
   "license": "AGPL-3.0-only",
   "private": true,
   "version": "1.2.0",
-  "description": "A complete Getting Things Done (GTD) productivity system for desktop - Mind Like Water",
+  "description": "A complete Getting Things Done (GTD) productivity system for desktop",
   "author": "Tiny Bubbles contributors",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tinybubbles-app/tinybubbles"
+    "url": "https://github.com/Ameyakashid/tinybubbles"
   },
   "type": "module",
   "scripts": {

@@ -164,7 +164,7 @@ bun run dev
 
 请先阅读 [CONTRIBUTING.md](docs/CONTRIBUTING.md)。
 
-- **报告缺陷与提出需求：** [GitHub Issues](https://github.com/tinybubbles-app/tinybubbles/issues)
+- **报告缺陷与提出需求：** [GitHub Issues](https://github.com/Ameyakashid/tinybubbles/issues)
 - **协助翻译：** [`packages/core/src/i18n/locales/`](packages/core/src/i18n/locales/)
 - **贡献代码/文档：** 提交 Pull Request，并遵循贡献指南与提交信息规范。
 

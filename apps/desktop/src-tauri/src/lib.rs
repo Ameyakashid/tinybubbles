@@ -1158,10 +1158,10 @@ pub fn run() {
         })
         .on_menu_event(|_app, event| match event.id().as_ref() {
             MENU_HELP_DOCS_ID => {
-                let _ = open::that("https://github.com/tinybubbles-app/tinybubbles#readme");
+                let _ = open::that("https://github.com/Ameyakashid/tinybubbles#readme");
             }
             MENU_HELP_ISSUES_ID => {
-                let _ = open::that("https://github.com/tinybubbles-app/tinybubbles/issues");
+                let _ = open::that("https://github.com/Ameyakashid/tinybubbles/issues");
             }
             _ => {}
         });

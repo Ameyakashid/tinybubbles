@@ -546,7 +546,7 @@ jobs:
       - name: Checkout packages repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          repository: tinybubbles-app/homebrew-tinybubbles
+          repository: Ameyakashid/homebrew-tinybubbles
           token: ${{ secrets.PACKAGES_REPO_TOKEN }}
           path: packages-repo
 
@@ -602,13 +602,13 @@ jobs:
              '.version = $v
               | .architecture."64bit".url = $url
               | .architecture."64bit".hash = $hash
-             | .autoupdate.architecture."64bit".url = "https://github.com/tinybubbles-app/tinybubbles/releases/download/v\($v)/tinybubbles_\($v)_x64-setup.exe#/dl.7z"' \
+             | .autoupdate.architecture."64bit".url = "https://github.com/Ameyakashid/tinybubbles/releases/download/v\($v)/tinybubbles_\($v)_x64-setup.exe#/dl.7z"' \
              "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
 
       - name: Check Winget package exists
         id: winget_check
         run: |
-          PKG_ID="tinybubbles-app.TinyBubbles"
+          PKG_ID="Ameyakashid.TinyBubbles"
           PKG_LOWER="${PKG_ID,,}"
           FIRST="${PKG_LOWER:0:1}"
           URL="https://github.com/microsoft/winget-pkgs/tree/master/manifests/${FIRST}/${PKG_ID//./\/}"
@@ -624,7 +624,7 @@ jobs:
         if: steps.winget_check.outputs.exists == 'true'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          repository: tinybubbles-app/winget-pkgs
+          repository: Ameyakashid/winget-pkgs
           token: ${{ secrets.PACKAGES_REPO_TOKEN }}
           path: winget-pkgs
 
@@ -637,13 +637,13 @@ jobs:
           SHA_EXE="${{ steps.hashes.outputs.sha_exe }}"
           RELEASE_DATE="$(date -u +%Y-%m-%d)"
           INSTALLER_URL="https://github.com/${REPO}/releases/download/${TAG}/tinybubbles_${VERSION}_x64-setup.exe"
-          MANIFEST_DIR="winget-pkgs/manifests/d/tinybubbles-app/Tiny Bubbles/${VERSION}"
+          MANIFEST_DIR="winget-pkgs/manifests/a/Ameyakashid/Tiny Bubbles/${VERSION}"
 
           mkdir -p "$MANIFEST_DIR"
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.installer.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/Ameyakashid.TinyBubbles.installer.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
-          PackageIdentifier: tinybubbles-app.TinyBubbles
+          PackageIdentifier: Ameyakashid.TinyBubbles
           PackageVersion: ${VERSION}
           InstallerLocale: en-US
           InstallerType: nullsoft
@@ -672,22 +672,22 @@ jobs:
           ManifestVersion: 1.10.0
           EOF
 
-          INSTALLER_MANIFEST="$MANIFEST_DIR/tinybubbles-app.TinyBubbles.installer.yaml"
+          INSTALLER_MANIFEST="$MANIFEST_DIR/Ameyakashid.TinyBubbles.installer.yaml"
           test -s "$INSTALLER_MANIFEST"
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.locale.en-US.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/Ameyakashid.TinyBubbles.locale.en-US.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
-          PackageIdentifier: tinybubbles-app.TinyBubbles
+          PackageIdentifier: Ameyakashid.TinyBubbles
           PackageVersion: ${VERSION}
           PackageLocale: en-US
-          Publisher: tinybubbles-app
-          PublisherUrl: https://github.com/tinybubbles-app
-          PublisherSupportUrl: https://github.com/tinybubbles-app/tinybubbles/issues
-          Author: tinybubbles-app
+          Publisher: Ameyakashid
+          PublisherUrl: https://github.com/Ameyakashid
+          PublisherSupportUrl: https://github.com/Ameyakashid/tinybubbles/issues
+          Author: Ameyakashid
           PackageName: Tiny Bubbles
-          PackageUrl: https://github.com/tinybubbles-app/tinybubbles
+          PackageUrl: https://github.com/Ameyakashid/tinybubbles
           License: AGPL-3.0
-          LicenseUrl: https://github.com/tinybubbles-app/tinybubbles/blob/HEAD/LICENSE
+          LicenseUrl: https://github.com/Ameyakashid/tinybubbles/blob/HEAD/LICENSE
           ShortDescription: A complete Getting Things Done (GTD) productivity system.
           Description: A complete Getting Things Done (GTD) productivity system.
           Moniker: tinybubbles
@@ -707,19 +707,19 @@ jobs:
           ManifestVersion: 1.10.0
           EOF
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.locale.zh-CN.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/Ameyakashid.TinyBubbles.locale.zh-CN.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
-          PackageIdentifier: tinybubbles-app.TinyBubbles
+          PackageIdentifier: Ameyakashid.TinyBubbles
           PackageVersion: ${VERSION}
           PackageLocale: zh-CN
-          Publisher: tinybubbles-app
-          PublisherUrl: https://github.com/tinybubbles-app
-          PublisherSupportUrl: https://github.com/tinybubbles-app/tinybubbles/issues
-          Author: tinybubbles-app
+          Publisher: Ameyakashid
+          PublisherUrl: https://github.com/Ameyakashid
+          PublisherSupportUrl: https://github.com/Ameyakashid/tinybubbles/issues
+          Author: Ameyakashid
           PackageName: Tiny Bubbles
-          PackageUrl: https://github.com/tinybubbles-app/tinybubbles
+          PackageUrl: https://github.com/Ameyakashid/tinybubbles
           License: AGPL-3.0
-          LicenseUrl: https://github.com/tinybubbles-app/tinybubbles/blob/HEAD/LICENSE
+          LicenseUrl: https://github.com/Ameyakashid/tinybubbles/blob/HEAD/LICENSE
           ShortDescription: 完整的 GTD（搞定）任务管理系统。
           Description: 完整的 GTD（搞定）任务管理系统。
           Moniker: tinybubbles
@@ -739,9 +739,9 @@ jobs:
           ManifestVersion: 1.10.0
           EOF
 
-          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/tinybubbles-app.TinyBubbles.yaml"
+          cat <<EOF | sed 's/^          //' > "$MANIFEST_DIR/Ameyakashid.TinyBubbles.yaml"
           # yaml-language-server: \$schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
-          PackageIdentifier: tinybubbles-app.TinyBubbles
+          PackageIdentifier: Ameyakashid.TinyBubbles
           PackageVersion: ${VERSION}
           DefaultLocale: en-US
           ManifestType: version
@@ -757,14 +757,14 @@ jobs:
           BRANCH="tinybubbles-${VERSION}"
           cd winget-pkgs
           git checkout -b "$BRANCH"
-          git add manifests/d/tinybubbles-app/Tiny Bubbles/"$VERSION"
+          git add manifests/a/Ameyakashid/Tiny Bubbles/"$VERSION"
           git config --local user.name "GitHub Actions"
           git config --local user.email "actions@github.com"
           git commit -m "New version: Tiny Bubbles ${VERSION}"
           git push -u origin "$BRANCH"
           gh pr create \
             --repo microsoft/winget-pkgs \
-            --head "tinybubbles-app:${BRANCH}" \
+            --head "Ameyakashid:${BRANCH}" \
             --base master \
             --title "New version: Tiny Bubbles ${VERSION}" \
             --body "Automated manifest update for Tiny Bubbles ${VERSION}."
@@ -1109,12 +1109,12 @@ jobs:
           text = path.read_text(encoding="utf-8")
 
           archive_source = (
-              'source=("$pkgname-$pkgver.tar.gz::https://github.com/tinybubbles-app/tinybubbles/archive/refs/tags/v$pkgver.tar.gz"\n'
+              'source=("$pkgname-$pkgver.tar.gz::https://github.com/Ameyakashid/tinybubbles/archive/refs/tags/v$pkgver.tar.gz"\n'
               '        "$pkgname.desktop"\n'
               ')'
           )
           text, replaced = re.subn(
-              r'source=\("git\+https://github\.com/tinybubbles-app/Tiny Bubbles\.git#tag=v\$pkgver"\s*\n\s*"\$pkgname\.desktop"\s*\)',
+              r'source=\("git\+https://github\.com/Ameyakashid/Tiny Bubbles\.git#tag=v\$pkgver"\s*\n\s*"\$pkgname\.desktop"\s*\)',
               archive_source,
               text,
               count=1,

@@ -20,7 +20,7 @@ const updateInfo: UpdateInfo = {
     hasUpdate: true,
     currentVersion: '0.9.10',
     latestVersion: '1.0.0',
-    releaseUrl: 'https://github.com/tinybubbles-app/tinybubbles/releases/latest',
+    releaseUrl: 'https://github.com/Ameyakashid/tinybubbles/releases/latest',
     latestReleasedAt: null,
     releaseNotes: 'Release notes',
     downloadUrl: null,

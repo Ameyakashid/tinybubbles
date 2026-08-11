@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "upstreamRepository": "https://github.com/tinybubbles-app/tinybubbles",
+  "upstreamRepository": "https://github.com/Ameyakashid/tinybubbles",
   "releaseSigningKeyFingerprint": "0358999BBE704F588B9094979E553245CB17047D",
   "packages": {
     "tinybubbles": {
-      "maintainer": "yochananmarqos",
-      "coMaintainers": ["tinybubbles-app"],
+      "maintainer": "THIRD_PARTY_MAINTAINER",
+      "coMaintainers": ["Ameyakashid"],
       "trackedFiles": [
         ".SRCINFO",
         ".gitignore",
@@ -17,12 +17,12 @@
       ]
     },
     "tinybubbles-bin": {
-      "maintainer": "tinybubbles-app",
+      "maintainer": "Ameyakashid",
       "coMaintainers": [],
       "trackedFiles": [".SRCINFO", ".gitignore", "PKGBUILD"]
     },
     "tinybubbles-bin-beta": {
-      "maintainer": "tinybubbles-app",
+      "maintainer": "Ameyakashid",
       "coMaintainers": [],
       "trackedFiles": [".SRCINFO", "PKGBUILD"]
     }

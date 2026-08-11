@@ -18,20 +18,20 @@ function fixture({
   const directory = mkdtempSync(join(tmpdir(), "tinybubbles-aur-validator-"));
   const srcinfoSource =
     source ??
-    "https://github.com/tinybubbles-app/tinybubbles/releases/download/v1.2.0/tinybubbles_1.2.0_amd64.deb";
+    "https://github.com/Ameyakashid/tinybubbles/releases/download/v1.2.0/tinybubbles_1.2.0_amd64.deb";
   const renderedPkgbuildSource = pkgbuildSource ?? srcinfoSource;
   execFileSync("git", ["init", "-q", directory]);
   writeFileSync(
     join(directory, "PKGBUILD"),
-    `# Maintainer: tinybubbles-app <>\n` +
+    `# Maintainer: Ameyakashid <>\n` +
       `pkgname=tinybubbles-bin\npkgver=1.2.0\npkgrel=1\n` +
-      `url="https://github.com/tinybubbles-app/tinybubbles"\n` +
+      `url="https://github.com/Ameyakashid/tinybubbles"\n` +
       `source_x86_64=("${renderedPkgbuildSource}")\n` +
       `sha256sums_x86_64=('${checksumValue}')\n${extraPkgbuild}`,
   );
   writeFileSync(
     join(directory, ".SRCINFO"),
-    `pkgbase = tinybubbles-bin\n\turl = https://github.com/tinybubbles-app/tinybubbles\n` +
+    `pkgbase = tinybubbles-bin\n\turl = https://github.com/Ameyakashid/tinybubbles\n` +
       `\tsource_x86_64 = ${srcinfoSource}\n` +
       `\tsha256sums_x86_64 = ${checksumValue}\n\npkgname = tinybubbles-bin\n`,
   );

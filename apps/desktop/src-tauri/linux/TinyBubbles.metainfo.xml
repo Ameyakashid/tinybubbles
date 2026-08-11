@@ -37,42 +37,42 @@
     <screenshot type="default">
       <caption>Capture and triage tasks in Inbox</caption>
       <caption xml:lang="de">Aufgaben in der Inbox erfassen und klaeren</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/inbox_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/inbox_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Focus on your next actions for today</caption>
       <caption xml:lang="de">Naechste Aktionen fuer heute fokussieren</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/focus_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/focus_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Organize work in the projects workspace</caption>
       <caption xml:lang="de">Arbeit im Projektbereich organisieren</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/projects_workspace_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/projects_workspace_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Plan visually with board view</caption>
       <caption xml:lang="de">Visuell mit der Board-Ansicht planen</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/board_view_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/board_view_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Adjust appearance and workflow settings</caption>
       <caption xml:lang="de">Darstellung und Workflow-Einstellungen anpassen</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/settings_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/settings_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Keep supporting material in Reference</caption>
       <caption xml:lang="de">Begleitmaterial in Referenz aufbewahren</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/reference_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/reference_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Review due dates in calendar view</caption>
       <caption xml:lang="de">Faelligkeiten in der Kalenderansicht pruefen</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/calendar_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/calendar_light.png</image>
     </screenshot>
     <screenshot>
       <caption>Group and filter work by context</caption>
       <caption xml:lang="de">Arbeit nach Kontext gruppieren und filtern</caption>
-      <image>https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/desktop/screenshots/flathub/contexts_light.png</image>
+      <image>https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/desktop/screenshots/flathub/contexts_light.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -83,9 +83,9 @@
     <category>Office</category>
     <category>Utility</category>
   </categories>
-  <url type="homepage">https://github.com/tinybubbles-app/tinybubbles</url>
-  <url type="bugtracker">https://github.com/tinybubbles-app/tinybubbles/issues</url>
-  <url type="vcs-browser">https://github.com/tinybubbles-app/tinybubbles</url>
+  <url type="homepage">https://github.com/Ameyakashid/tinybubbles</url>
+  <url type="bugtracker">https://github.com/Ameyakashid/tinybubbles/issues</url>
+  <url type="vcs-browser">https://github.com/Ameyakashid/tinybubbles</url>
   <releases>
     <release version="1.2.0-rc.1" date="2026-08-03">
       <url type="details">https://github.com/dongdongbh/TinyBubbles/releases/tag/v1.2.0-rc.1</url>

@@ -263,12 +263,12 @@ fn detect_install_source() -> String {
             &[
                 "list",
                 "--id",
-                "tinybubbles-app.TinyBubbles",
+                "Ameyakashid.TinyBubbles",
                 "--exact",
                 "--disable-interactivity",
             ],
         ) {
-            if list_output.contains("tinybubbles-app.tinybubbles") && list_output.contains("winget") {
+            if list_output.contains("Ameyakashid.tinybubbles") && list_output.contains("winget") {
                 return "winget".to_string();
             }
         }

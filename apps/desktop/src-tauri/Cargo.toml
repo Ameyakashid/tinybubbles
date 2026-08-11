@@ -4,8 +4,8 @@ version = "1.2.0"
 description = "A complete Getting Things Done (GTD) productivity system"
 authors = ["Tiny Bubbles contributors"]
 license = "AGPL-3.0-only"
-repository = "https://github.com/tinybubbles-app/tinybubbles"
-homepage = "https://github.com/tinybubbles-app/tinybubbles"
+repository = "https://github.com/Ameyakashid/tinybubbles"
+homepage = "https://github.com/Ameyakashid/tinybubbles"
 edition = "2021"
 rust-version = "1.77.2"
 

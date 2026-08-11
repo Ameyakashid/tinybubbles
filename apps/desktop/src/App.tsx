@@ -223,7 +223,7 @@ const getDesktopReviewTarget = (installSource: InstallSource | null): { label: s
     }
     return {
         label: 'Open GitHub',
-        url: 'https://github.com/tinybubbles-app/tinybubbles',
+        url: 'https://github.com/Ameyakashid/tinybubbles',
     };
 };
 

@@ -80,9 +80,9 @@ export function AboutSettingsScreen({
     }, [isFossBuild]);
 
     const openLink = (url: string) => Linking.openURL(url);
-    const GITHUB_ISSUES_URL = 'https://github.com/tinybubbles-app/tinybubbles/issues/new/choose';
-    const GITHUB_RELEASES_API = 'https://api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest';
-    const GITHUB_RELEASES_URL = 'https://github.com/tinybubbles-app/tinybubbles/releases/latest';
+    const GITHUB_ISSUES_URL = 'https://github.com/Ameyakashid/tinybubbles/issues/new/choose';
+    const GITHUB_RELEASES_API = 'https://api.github.com/repos/Ameyakashid/tinybubbles/releases/latest';
+    const GITHUB_RELEASES_URL = 'https://github.com/Ameyakashid/tinybubbles/releases/latest';
     const ANDROID_PACKAGE_NAME = Constants.expoConfig?.android?.package || Application.applicationId || 'app.tinybubbles';
     const PLAY_STORE_URL = `https://play.google.com/store/apps/details?id=${ANDROID_PACKAGE_NAME}`;
     const PLAY_STORE_MARKET_URL = `market://details?id=${ANDROID_PACKAGE_NAME}`;
@@ -447,7 +447,7 @@ export function AboutSettingsScreen({
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.settingRow, { borderTopWidth: 1, borderTopColor: tc.border }]}
-                        onPress={() => openLink('https://github.com/tinybubbles-app/tinybubbles')}
+                        onPress={() => openLink('https://github.com/Ameyakashid/tinybubbles')}
                     >
                         <Text style={[styles.settingLabel, { color: tc.text }]}>GitHub</Text>
                         <Text style={styles.linkText}>Tiny Bubbles</Text>

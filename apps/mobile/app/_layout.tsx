@@ -165,8 +165,8 @@ const UPDATE_REMINDER_STARTUP_DELAY_MS = 1750;
 // fetchMobileUpdateReminderInfo is a plain fetch with no timeout; cap present()
 // so a hung network never holds the single prompt slot for the whole session.
 const UPDATE_REMINDER_FETCH_TIMEOUT_MS = 15000;
-const UPDATE_REMINDER_RELEASES_API = 'https://api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest';
-const UPDATE_REMINDER_RELEASES_URL = 'https://github.com/tinybubbles-app/tinybubbles/releases/latest';
+const UPDATE_REMINDER_RELEASES_API = 'https://api.github.com/repos/Ameyakashid/tinybubbles/releases/latest';
+const UPDATE_REMINDER_RELEASES_URL = 'https://github.com/Ameyakashid/tinybubbles/releases/latest';
 const APP_STORE_APP_ID = 'APPLE_APP_STORE_ID_PLACEHOLDER';
 const APP_STORE_REVIEW_URL = `itms-apps://itunes.apple.com/app/id${APP_STORE_APP_ID}?action=write-review`;
 const APP_STORE_LISTING_URL = `https://apps.apple.com/app/tinybubbles/id${APP_STORE_APP_ID}`;

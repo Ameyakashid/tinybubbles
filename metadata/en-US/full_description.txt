@@ -25,5 +25,3 @@ WHY TINYBUBBLES
 SIMPLE BY DEFAULT, POWERFUL WHEN YOU NEED IT
 
 Fewer fields, fewer knobs, no clutter. Advanced tools, like the kanban board, automation, and an optional AI assistant that uses your own AI account, stay out of sight until you want them.
-
-Tiny Bubbles means "mind like water": the calm you get when nothing is rattling around in your head.

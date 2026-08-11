@@ -149,10 +149,10 @@ export function SettingsAboutPage({
                 <div data-settings-key="github" className="flex justify-between items-center">
                     <span className="text-muted-foreground">{t.github}</span>
                     <button
-                        onClick={() => onOpenLink('https://github.com/tinybubbles-app/tinybubbles')}
+                        onClick={() => onOpenLink('https://github.com/Ameyakashid/tinybubbles')}
                         className="text-info hover:underline cursor-pointer flex items-center gap-1"
                     >
-                        github.com/tinybubbles-app/tinybubbles
+                        github.com/Ameyakashid/tinybubbles
                         <ExternalLink className="w-3 h-3" />
                     </button>
                 </div>
@@ -166,7 +166,7 @@ export function SettingsAboutPage({
                 isConfigured={feedbackConfigured}
                 isOpen={feedbackOpen}
                 onClose={() => setFeedbackOpen(false)}
-                onOpenIssue={() => onOpenLink('https://github.com/tinybubbles-app/tinybubbles/issues/new/choose')}
+                onOpenIssue={() => onOpenLink('https://github.com/Ameyakashid/tinybubbles/issues/new/choose')}
                 onSubmit={onSubmitFeedback}
                 t={t}
             />

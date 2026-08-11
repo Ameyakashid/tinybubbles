@@ -1,1 +1,5 @@
-Copyright © 2026 Dongda Li
+Copyright © 2026 Tiny Bubbles contributors.
+
+Tiny Bubbles is a derivative of Mindwtr (https://github.com/dongdongbh/Mindwtr).
+Portions copyright © the Mindwtr authors. Used and distributed under the terms of
+the GNU Affero General Public License, version 3.

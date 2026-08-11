@@ -135,7 +135,7 @@ jobs:
       # release-signing asks for two approvals per release.
       - name: Stage unsigned app binary for signing
         id: stage-unsigned-exe
-        if: ${{ vars.SIGNPATH_SIGNING_ENABLED == 'true' && github.repository == 'tinybubbles-app/tinybubbles' && env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '' || github.event.inputs.tag != '') }}
+        if: ${{ vars.SIGNPATH_SIGNING_ENABLED == 'true' && github.repository == 'Ameyakashid/tinybubbles' && env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != '' && (startsWith(github.ref, 'refs/tags/') || inputs.tag != '' || github.event.inputs.tag != '') }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path signing-unsigned-exe | Out-Null
@@ -1060,8 +1060,8 @@ jobs:
           function Apply-PublicSupportPropertiesIfPresent {
             param([Parameter(Mandatory = $false)]$Object)
             if (-not $Object) { return }
-            Set-SubmissionPropertyIfPresent -Object $Object -Names @('privacyPolicyUrl', 'PrivacyPolicyUrl', 'privacyPolicy', 'PrivacyPolicy') -Value 'https://github.com/tinybubbles-app/tinybubbles/blob/main/docs/PRIVACY.md'
-            Set-SubmissionPropertyIfPresent -Object $Object -Names @('websiteUrl', 'WebsiteUrl', 'website', 'Website') -Value 'https://github.com/tinybubbles-app/tinybubbles'
+            Set-SubmissionPropertyIfPresent -Object $Object -Names @('privacyPolicyUrl', 'PrivacyPolicyUrl', 'privacyPolicy', 'PrivacyPolicy') -Value 'https://github.com/Ameyakashid/tinybubbles/blob/main/docs/PRIVACY.md'
+            Set-SubmissionPropertyIfPresent -Object $Object -Names @('websiteUrl', 'WebsiteUrl', 'website', 'Website') -Value 'https://github.com/Ameyakashid/tinybubbles'
             Set-SubmissionPropertyIfPresent -Object $Object -Names @('supportContactInfo', 'SupportContactInfo', 'supportContact', 'SupportContact') -Value 'SUPPORT_CONTACT_PLACEHOLDER'
             Set-SubmissionPropertyIfPresent -Object $Object -Names @('phoneNumber', 'PhoneNumber', 'phone', 'Phone') -Value ''
             Set-SubmissionPropertyIfPresent -Object $Object -Names @('address', 'Address', 'addressLine1', 'AddressLine1', 'addressLine2', 'AddressLine2', 'postalCode', 'PostalCode', 'zipCode', 'ZipCode', 'city', 'City', 'state', 'State', 'stateOrProvince', 'StateOrProvince', 'province', 'Province', 'country', 'Country', 'countryOrRegion', 'CountryOrRegion') -Value ''

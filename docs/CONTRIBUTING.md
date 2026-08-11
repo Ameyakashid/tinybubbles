@@ -20,13 +20,13 @@ Tiny Bubbles is a Bun monorepo with:
 
 ### 1) Follow our community standards
 
-- Read and follow the [Code of Conduct](https://github.com/tinybubbles-app/tinybubbles/blob/main/.github/CODE_OF_CONDUCT.md).
+- Read and follow the [Code of Conduct](https://github.com/Ameyakashid/tinybubbles/blob/main/.github/CODE_OF_CONDUCT.md).
 - Be respectful in issues, discussions, reviews, and commits.
 
 ### 2) Report security issues privately
 
 - Do not open public issues for security vulnerabilities.
-- Use [SECURITY.md](https://github.com/tinybubbles-app/tinybubbles/blob/main/SECURITY.md) for responsible disclosure instructions.
+- Use [SECURITY.md](https://github.com/Ameyakashid/tinybubbles/blob/main/SECURITY.md) for responsible disclosure instructions.
 
 ### 3) Start with an issue for non-trivial changes
 
@@ -56,7 +56,7 @@ Tiny Bubbles focuses on GTD and practical execution, and is built to be **simple
 2. Fork the repository and create a branch in your fork.
 3. Implement the change with focused scope.
 4. Run relevant checks locally.
-5. Open a pull request to `tinybubbles-app/tinybubbles:main`.
+5. Open a pull request to `Ameyakashid/tinybubbles:main`.
 6. Link the issue in the PR (example: `Fixes #123`).
 
 Branch naming examples:
@@ -279,12 +279,12 @@ When changing docs:
 - Validate links
 - Update both English and Chinese docs when the content is mirrored
 - Keep `README.md` and `README_zh.md` heading structure aligned; CI runs `bun run docs:check-readme`
-- Put public user/developer documentation in [`docs/`](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs)
+- Put public user/developer documentation in [`docs/`](https://github.com/Ameyakashid/tinybubbles/tree/main/docs)
 
 Useful references:
 
 - [Official docs](https://docs.mindwtr.app/)
-- [Docs source](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs)
+- [Docs source](https://github.com/Ameyakashid/tinybubbles/tree/main/docs)
 - [Developer Guide](https://docs.mindwtr.app/developers/developer-guide)
 - [Architecture](https://docs.mindwtr.app/developers/architecture)
 
@@ -292,7 +292,7 @@ Useful references:
 
 Most translation strings live in:
 
-- [`packages/core/src/i18n/locales/`](https://github.com/tinybubbles-app/tinybubbles/tree/main/packages/core/src/i18n/locales/)
+- [`packages/core/src/i18n/locales/`](https://github.com/Ameyakashid/tinybubbles/tree/main/packages/core/src/i18n/locales/)
 
 When updating translations:
 

@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.tinybubbles-app/tinybubbles",
+  "name": "io.github.Ameyakashid/tinybubbles",
   "title": "Tiny Bubbles",
   "description": "Task and project automation for local Tiny Bubbles data, with read-only self-hosted Cloud access.",
   "version": "1.1.4",
-  "websiteUrl": "https://github.com/tinybubbles-app/tinybubbles/tree/main/apps/mcp-server",
+  "websiteUrl": "https://github.com/Ameyakashid/tinybubbles/tree/main/apps/mcp-server",
   "repository": {
-    "url": "https://github.com/tinybubbles-app/tinybubbles",
+    "url": "https://github.com/Ameyakashid/tinybubbles",
     "source": "github",
     "id": "REPO_ID_PLACEHOLDER",
     "subfolder": "apps/mcp-server"

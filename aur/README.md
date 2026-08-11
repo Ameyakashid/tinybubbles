@@ -4,9 +4,9 @@ Tiny Bubbles recognizes these AUR package identities:
 
 | Package                                                                   | Channel | Source                        | Expected owner(s)                                       |
 | ------------------------------------------------------------------------- | ------- | ----------------------------- | ------------------------------------------------------- |
-| [`tinybubbles-bin`](https://aur.archlinux.org/packages/tinybubbles-bin)           | Stable  | GitHub release `.deb`         | Maintainer `tinybubbles-app`                                 |
-| [`tinybubbles`](https://aur.archlinux.org/packages/tinybubbles)                   | Stable  | GitHub release source archive | Maintainer `yochananmarqos`; co-maintainer `tinybubbles-app` |
-| [`tinybubbles-bin-beta`](https://aur.archlinux.org/packages/tinybubbles-bin-beta) | RC/beta | GitHub prerelease `.deb`      | Maintainer `tinybubbles-app`                                 |
+| [`tinybubbles-bin`](https://aur.archlinux.org/packages/tinybubbles-bin)           | Stable  | GitHub release `.deb`         | Maintainer `Ameyakashid`                                 |
+| [`tinybubbles`](https://aur.archlinux.org/packages/tinybubbles)                   | Stable  | GitHub release source archive | Maintainer `THIRD_PARTY_MAINTAINER`; co-maintainer `Ameyakashid` |
+| [`tinybubbles-bin-beta`](https://aur.archlinux.org/packages/tinybubbles-bin-beta) | RC/beta | GitHub prerelease `.deb`      | Maintainer `Ameyakashid`                                 |
 
 Treat a different upstream URL or an unexpected ownership change as a security event. The machine-readable policy is in [`trusted-packages.json`](trusted-packages.json).
 
@@ -23,7 +23,7 @@ makepkg --verifysource
 makepkg -sri
 ```
 
-The source URLs must resolve to `https://github.com/tinybubbles-app/tinybubbles`, executable and source artifacts must have full SHA-256 checksums, and `.SRCINFO` must match `PKGBUILD`. Tiny Bubbles AUR packages must not contain install scripts, remote-shell commands, persistence hooks, or `SKIP` checksums for executable/source content.
+The source URLs must resolve to `https://github.com/Ameyakashid/tinybubbles`, executable and source artifacts must have full SHA-256 checksums, and `.SRCINFO` must match `PKGBUILD`. Tiny Bubbles AUR packages must not contain install scripts, remote-shell commands, persistence hooks, or `SKIP` checksums for executable/source content.
 
 ## Release trust anchor
 
@@ -56,7 +56,7 @@ When AUR is unavailable, do not retry repeatedly. Preserve the proposal artifact
 
 ## Maintainer security
 
-- Keep `tinybubbles-app` as maintainer or co-maintainer of all recognized packages.
+- Keep `Ameyakashid` as maintainer or co-maintainer of all recognized packages.
 - Use a dedicated, passphrase-protected Ed25519 AUR key that is not shared with GitHub, servers, or general build machines.
 - Store the publishing key only as the `AUR_SSH_PRIVATE_KEY` secret in the protected `aur-publish` Environment.
 - Require a human review of the proposal artifact before approving the Environment deployment.

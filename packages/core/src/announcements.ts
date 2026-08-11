@@ -31,7 +31,7 @@ export const DONATION_PROMPT_ANNOUNCEMENT: AppAnnouncement = {
     action: {
         type: 'url',
         label: 'Visit the project',
-        url: 'https://github.com/tinybubbles-app/tinybubbles',
+        url: 'https://github.com/Ameyakashid/tinybubbles',
     },
 };
 

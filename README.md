@@ -178,7 +178,7 @@ stores and package managers.
 
 Start with [CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
-- **Report bugs and request features:** [GitHub Issues](https://github.com/tinybubbles-app/tinybubbles/issues)
+- **Report bugs and request features:** [GitHub Issues](https://github.com/Ameyakashid/tinybubbles/issues)
 - **Help with translations:** [`packages/core/src/i18n/locales/`](packages/core/src/i18n/locales/)
 - **Contribute code/docs:** open a pull request and follow the contribution guide and commit conventions.
 

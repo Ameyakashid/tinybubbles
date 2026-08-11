@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately via [GitHub security advisories](https://github.com/tinybubbles-app/tinybubbles/security/advisories/new). Do not open a public issue for anything exploitable.
+Please report vulnerabilities privately via [GitHub security advisories](https://github.com/Ameyakashid/tinybubbles/security/advisories/new). Do not open a public issue for anything exploitable.
 
 If the vulnerability is inherited from upstream Mindwtr rather than specific to Tiny Bubbles, please also report it to [the upstream project](https://github.com/dongdongbh/Mindwtr/security/advisories/new) so its users are protected too.
 

@@ -1,23 +1,23 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/tinybubbles-app/tinybubbles/main/apps/mobile/assets/images/icon.png" width="120" alt="Tiny Bubbles Logo">
+<img src="https://raw.githubusercontent.com/Ameyakashid/tinybubbles/main/apps/mobile/assets/images/icon.png" width="120" alt="Tiny Bubbles Logo">
 
 # Tiny Bubbles Documentation
 
 **A complete Getting Things Done (GTD) productivity system for desktop and mobile.**
 
-*Mind Like Water*
+*Get everything out of your head.*
 
-[![GitHub](https://img.shields.io/badge/GitHub-Tiny Bubbles-blue?logo=github)](https://github.com/tinybubbles-app/tinybubbles)
-[![License](https://img.shields.io/badge/License-AGPL%20v3-blue)](https://github.com/tinybubbles-app/tinybubbles/blob/main/LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-Tiny%20Bubbles-blue?logo=github)](https://github.com/Ameyakashid/tinybubbles)
+[![License](https://img.shields.io/badge/License-AGPL%20v3-blue)](https://github.com/Ameyakashid/tinybubbles/blob/main/LICENSE)
 
 </div>
 
 ---
 
-> **This wiki has moved.** Tiny Bubbles documentation lives in the [`docs/`](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs) directory of this repository. For the inherited functionality this fork shares with upstream, the [Mindwtr documentation site](https://docs.mindwtr.app/) is more detailed — note that it documents upstream, not this fork.
+> **This wiki has moved.** Tiny Bubbles documentation lives in the [`docs/`](https://github.com/Ameyakashid/tinybubbles/tree/main/docs) directory of this repository. For the inherited functionality this fork shares with upstream, the [Mindwtr documentation site](https://docs.mindwtr.app/) is more detailed — note that it documents upstream, not this fork.
 >
-> **Main website:** [the project repository](https://github.com/tinybubbles-app/tinybubbles)
+> **Main website:** [the project repository](https://github.com/Ameyakashid/tinybubbles)
 
 Use the table of contents below to jump straight to the page you need.
 

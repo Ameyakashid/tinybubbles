@@ -25,5 +25,3 @@ POR QUÉ TINYBUBBLES
 SIMPLE POR DEFECTO, POTENTE CUANDO HACE FALTA
 
 Menos campos, menos ajustes, nada de estorbos. Las herramientas avanzadas, como el tablero kanban, la automatización y un asistente de IA opcional (con tu propia cuenta de IA), quedan ocultas hasta que las necesitas.
-
-Tiny Bubbles significa "mind like water": la calma de no tener nada dando vueltas en la cabeza.

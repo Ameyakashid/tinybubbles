@@ -71,6 +71,6 @@ release notes.
 ## Contact
 
 Questions about privacy: open an issue at
-<https://github.com/tinybubbles-app/tinybubbles/issues>. For anything sensitive, use the
-[security advisory form](https://github.com/tinybubbles-app/tinybubbles/security/advisories/new)
+<https://github.com/Ameyakashid/tinybubbles/issues>. For anything sensitive, use the
+[security advisory form](https://github.com/Ameyakashid/tinybubbles/security/advisories/new)
 instead of a public issue.

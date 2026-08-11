@@ -6,8 +6,8 @@ if [ -z "${FASTLANE_METADATA_DIR:-}" ]; then
   exit 1
 fi
 
-APP_SUPPORT_URL="${APP_SUPPORT_URL:-https://github.com/tinybubbles-app/tinybubbles/issues}"
-APP_MARKETING_URL="${APP_MARKETING_URL:-https://github.com/tinybubbles-app/tinybubbles}"
+APP_SUPPORT_URL="${APP_SUPPORT_URL:-https://github.com/Ameyakashid/tinybubbles/issues}"
+APP_MARKETING_URL="${APP_MARKETING_URL:-https://github.com/Ameyakashid/tinybubbles}"
 
 rm -rf "${FASTLANE_METADATA_DIR}"
 mkdir -p "${FASTLANE_METADATA_DIR}"

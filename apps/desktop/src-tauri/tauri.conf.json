@@ -30,7 +30,7 @@
   },
   "bundle": {
     "active": true,
-    "homepage": "https://github.com/tinybubbles-app/tinybubbles",
+    "homepage": "https://github.com/Ameyakashid/tinybubbles",
     "linux": {
       "deb": {
         "files": {

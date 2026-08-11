@@ -49,7 +49,7 @@ Important properties:
 
 The detailed algorithm, edge cases, and tie-break rules are documented in the public docs site. The source for those pages lives in the Tiny Bubbles web docs source:
 
-- [Docs source](https://github.com/tinybubbles-app/tinybubbles/tree/main/docs)
+- [Docs source](https://github.com/Ameyakashid/tinybubbles/tree/main/docs)
 - [Architecture](https://docs.mindwtr.app/developers/architecture)
 - [Sync Algorithm](https://docs.mindwtr.app/data-sync/sync-algorithm)
 - [Data and Sync](https://docs.mindwtr.app/data-sync/)

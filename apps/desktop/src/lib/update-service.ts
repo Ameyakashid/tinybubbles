@@ -7,9 +7,9 @@ import { isFlatpakRuntime, isTauriRuntime } from "./runtime";
 import { invokeNative } from "./tauri-invoke";
 
 const GITHUB_RELEASES_API =
-  "https://api.github.com/repos/tinybubbles-app/tinybubbles/releases/latest";
+  "https://api.github.com/repos/Ameyakashid/tinybubbles/releases/latest";
 const GITHUB_RELEASES_URL =
-  "https://github.com/tinybubbles-app/tinybubbles/releases/latest";
+  "https://github.com/Ameyakashid/tinybubbles/releases/latest";
 // Empty until Tiny Bubbles has its own Microsoft Store listing; an empty id makes the
 // store update check no-op instead of querying a different product.
 const MS_STORE_PRODUCT_ID = "";
@@ -36,7 +36,7 @@ const SNAPCRAFT_PACKAGE_URL = "https://snapcraft.io/tinybubbles";
 const APP_STORE_BUNDLE_ID = "app.tinybubbles";
 const APP_STORE_LOOKUP_URL = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(APP_STORE_BUNDLE_ID)}&country=US`;
 const APP_STORE_LOOKUP_FALLBACK_URL = `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(APP_STORE_BUNDLE_ID)}`;
-const APP_STORE_LISTING_URL = "https://github.com/tinybubbles-app/tinybubbles/releases";
+const APP_STORE_LISTING_URL = "https://github.com/Ameyakashid/tinybubbles/releases";
 
 export type InstallSource =
   | "unknown"
