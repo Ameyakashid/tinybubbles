@@ -147,7 +147,7 @@ describe('ImportSection', () => {
         ['import:ticktick', /import from ticktick/i],
         ['import:dgt', /import from dgt gtd/i],
         ['import:omnifocus', /import from omnifocus/i],
-        ['import:tinybubbles-csv', /import from tinybubbles csv/i],
+        ['import:tinybubbles-csv', /import from tiny bubbles csv/i],
     ] as const)('shows progress only on the active %s row', (transferAction, activeLabel) => {
         const { getAllByText, getByRole } = render(
             <ImportSection {...importProps} transferAction={transferAction} />

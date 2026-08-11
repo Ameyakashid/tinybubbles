@@ -114,11 +114,11 @@ describe('App', () => {
             dispatchDesktopOnboardingEvent();
         });
 
-        expect(getByRole('dialog', { name: /welcome to tinybubbles/i })).toBeInTheDocument();
+        expect(getByRole('dialog', { name: /welcome to tiny bubbles/i })).toBeInTheDocument();
         fireEvent.click(getByRole('button', { name: /start fresh/i }));
 
         await waitFor(() => {
-            expect(queryByRole('dialog', { name: /welcome to tinybubbles/i })).not.toBeInTheDocument();
+            expect(queryByRole('dialog', { name: /welcome to tiny bubbles/i })).not.toBeInTheDocument();
         });
         expect(useTaskStore.getState().projects.some((project) => project.title === 'Getting Started')).toBe(true);
         expect(useTaskStore.getState().tasks).toHaveLength(9);
@@ -137,7 +137,7 @@ describe('App', () => {
         fireEvent.click(getByRole('button', { name: /set up sync/i }));
 
         await waitFor(() => {
-            expect(queryByRole('dialog', { name: /welcome to tinybubbles/i })).not.toBeInTheDocument();
+            expect(queryByRole('dialog', { name: /welcome to tiny bubbles/i })).not.toBeInTheDocument();
         });
         expect(window.localStorage.getItem('tinybubbles:desktop:first-run-onboarding:v1')).not.toBe('dismissed');
     });
