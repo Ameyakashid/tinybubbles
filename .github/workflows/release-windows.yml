@@ -159,6 +159,9 @@ jobs:
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: Mindwtr
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          # Single-file config (zip -> pe-file mindwtr.exe). Pinned so the
+          # project default can never silently decide what gets signed.
+          artifact-configuration-slug: initial
           github-artifact-id: ${{ steps.upload-unsigned-exe.outputs.artifact-id }}
           wait-for-completion: true
           # release-signing requires manual approval in the SignPath UI;
@@ -242,6 +245,8 @@ jobs:
           organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
           project-slug: Mindwtr
           signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY || 'release-signing' }}
+          # Single-file config (zip -> pe-file mindwtr-setup.exe).
+          artifact-configuration-slug: windows-installer
           github-artifact-id: ${{ steps.upload-unsigned-installer.outputs.artifact-id }}
           wait-for-completion: true
           wait-for-completion-timeout-in-seconds: "1800"
