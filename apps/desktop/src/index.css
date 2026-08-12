@@ -24,49 +24,51 @@
 @layer base {
   :root {
     color-scheme: light;
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Tiny Bubbles soft theme (see DESIGN.md): warm foam background, deep-sea
+     * ink text, muted teal primary. Calm and rounded, never stark. */
+    --background: 160 33% 97%;
+    --foreground: 200 30% 20%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 200 30% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 200 30% 20%;
 
-    --primary: 217 91% 50%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 172 56% 30%;
+    --primary-foreground: 160 33% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 160 25% 93%;
+    --secondary-foreground: 200 30% 22%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 240 5% 40%;
+    --muted: 160 22% 94%;
+    --muted-foreground: 200 14% 38%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 160 32% 91%;
+    --accent-foreground: 200 30% 20%;
 
-    --destructive: 0 72% 45%;
+    --destructive: 5 65% 48%;
     --destructive-foreground: 210 40% 98%;
-    --success: 142 58% 32%;
+    --success: 157 43% 34%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 32%;
+    --warning: 36 80% 36%;
     --warning-foreground: 0 0% 100%;
     --focus-star: 45 100% 55%;
     --focus-star-outline: 38 92% 34%;
-    --info: 217 91% 45%;
+    --info: 199 55% 40%;
     --info-foreground: 0 0% 100%;
 
-    --border: 240 5.9% 85%;
-    --input: 240 5.9% 85%;
-    --ring: 217 91% 50%;
+    --border: 160 18% 86%;
+    --input: 160 18% 86%;
+    --ring: 172 56% 32%;
 
-    --status-inbox: 217 91% 45%;
-    --status-next: 142 58% 32%;
-    --status-waiting: 38 92% 32%;
-    --status-someday: 270 70% 55%;
-    --status-reference: 199 80% 30%;
-    --status-done: 220 10% 38%;
-    --status-archived: 217 91% 45%;
+    --status-inbox: 214 60% 50%;
+    --status-next: 157 43% 34%;
+    --status-waiting: 36 75% 38%;
+    --status-someday: 270 45% 60%;
+    --status-reference: 199 55% 38%;
+    --status-done: 200 12% 42%;
+    --status-archived: 214 60% 50%;
 
     --badge-project-bg: 214 100% 96%;
     --badge-project-fg: 214 30% 30%;
@@ -83,71 +85,72 @@
     --badge-info-bg: 210 40% 96%;
     --badge-info-fg: 220 10% 30%;
 
-    --radius: 0.5rem;
+    --radius: 0.85rem;
     --tinybubbles-text-scale: 1;
   }
 
   .dark {
     color-scheme: dark;
-    /* VS Code Dark Modern style - softer dark instead of near-black */
-    --background: 220 13% 13%;        /* #1e1e2e - main background */
-    --foreground: 220 13% 91%;        /* #e4e4e7 - text color */
+    /* Tiny Bubbles soft dark (see DESIGN.md): deep calm sea at night — same
+     * hue family as the light theme, gentle saturation, no stark blue. */
+    --background: 200 25% 12%;          /* deep sea water */
+    --foreground: 180 20% 88%;          /* soft foam text */
 
-    --card: 220 13% 16%;              /* #252530 - card background */
-    --card-foreground: 220 13% 91%;
+    --card: 200 22% 16%;
+    --card-foreground: 180 20% 88%;
 
-    --popover: 220 13% 14%;           /* #222230 - popover background */
-    --popover-foreground: 220 13% 91%;
+    --popover: 200 22% 14%;
+    --popover-foreground: 180 20% 88%;
 
-    --primary: 217 91% 65%;           /* Accessible blue accent on cards */
-    --primary-foreground: 220 13% 13%;
+    --primary: 172 45% 55%;             /* soft seafoam teal */
+    --primary-foreground: 200 30% 12%;
 
-    --secondary: 220 13% 20%;         /* #2d2d3a - secondary background */
-    --secondary-foreground: 220 13% 88%;
+    --secondary: 200 18% 22%;
+    --secondary-foreground: 180 18% 85%;
 
-    --muted: 220 13% 22%;             /* #33333f - muted background */
-    --muted-foreground: 220 13% 70%;
+    --muted: 200 16% 22%;
+    --muted-foreground: 190 12% 65%;
 
-    --accent: 220 13% 22%;
-    --accent-foreground: 220 13% 91%;
+    --accent: 190 20% 24%;
+    --accent-foreground: 180 20% 88%;
 
-    --destructive: 0 72% 66%;
-    --destructive-foreground: 0 80% 10%;
-    --success: 142 55% 55%;
-    --success-foreground: 145 80% 10%;
-    --warning: 43 90% 62%;
-    --warning-foreground: 35 80% 12%;
+    --destructive: 5 60% 62%;
+    --destructive-foreground: 0 60% 12%;
+    --success: 157 40% 55%;
+    --success-foreground: 157 50% 10%;
+    --warning: 40 75% 60%;
+    --warning-foreground: 40 60% 12%;
     --focus-star: 45 96% 65%;
     --focus-star-outline: 40 90% 45%;
-    --info: 210 90% 65%;
-    --info-foreground: 220 50% 12%;
+    --info: 199 55% 62%;
+    --info-foreground: 200 40% 12%;
 
-    --border: 220 13% 30%;
-    --input: 220 13% 30%;
-    --ring: 217 91% 60%;              /* matches primary */
+    --border: 200 16% 27%;
+    --input: 200 16% 27%;
+    --ring: 172 45% 50%;               /* matches primary */
 
-    --status-inbox: 217 91% 65%;
-    --status-next: 142 60% 50%;
-    --status-waiting: 45 90% 55%;
-    --status-someday: 270 65% 70%;
-    --status-reference: 199 75% 60%;
-    --status-done: 220 10% 60%;
-    --status-archived: 217 91% 65%;
+    --status-inbox: 214 55% 65%;
+    --status-next: 157 40% 52%;
+    --status-waiting: 40 70% 58%;
+    --status-someday: 270 40% 70%;
+    --status-reference: 199 50% 60%;
+    --status-done: 200 12% 60%;
+    --status-archived: 214 55% 65%;
 
-    --badge-project-bg: 220 18% 24%;
-    --badge-project-fg: 210 40% 90%;
-    --badge-context-bg: 270 20% 26%;
-    --badge-context-fg: 270 40% 85%;
-    --badge-tag-bg: 220 13% 24%;
-    --badge-tag-fg: 220 10% 85%;
-    --badge-priority-bg: 30 40% 26%;
-    --badge-priority-fg: 35 85% 80%;
-    --badge-estimate-bg: 140 30% 24%;
-    --badge-estimate-fg: 140 50% 85%;
+    --badge-project-bg: 195 20% 24%;
+    --badge-project-fg: 190 30% 88%;
+    --badge-context-bg: 270 18% 26%;
+    --badge-context-fg: 270 35% 85%;
+    --badge-tag-bg: 200 14% 24%;
+    --badge-tag-fg: 190 12% 85%;
+    --badge-priority-bg: 30 38% 26%;
+    --badge-priority-fg: 35 80% 80%;
+    --badge-estimate-bg: 150 25% 24%;
+    --badge-estimate-fg: 150 40% 82%;
     --badge-age-bg: 35 25% 24%;
     --badge-age-fg: 35 70% 80%;
-    --badge-info-bg: 220 13% 24%;
-    --badge-info-fg: 220 13% 88%;
+    --badge-info-bg: 200 14% 24%;
+    --badge-info-fg: 190 15% 86%;
   }
 
   :root.theme-eink {
@@ -520,6 +523,9 @@
 
   body {
     @apply bg-background text-foreground;
+    /* Rounded, gentle reading voice for the whole shell (see DESIGN.md).
+     * System stacks only — nothing fetched, works offline. */
+    font-family: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif;
     overflow-x: clip;
     overflow-y: hidden;
   }

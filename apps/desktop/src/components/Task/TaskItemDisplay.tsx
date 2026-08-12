@@ -1,7 +1,8 @@
 import { AlertTriangle, Calendar as CalendarIcon, Tag, Trash2, ArrowRight, Repeat, Check, Clock, Timer, Link2, Paperclip, RotateCcw, Copy, MapPin, History, Hourglass, Play, Zap, MoreHorizontal } from 'lucide-react';
 import type { Area, Attachment, Project, RangeSelectionOptions, Task, TaskStatus, RecurrenceRule, RecurrenceStrategy, Language } from '@tinybubbles/core';
-import { DEFAULT_AREA_COLOR, formatRecurrenceLabel, formatTimeEstimateLabel, formatTimeSpentLabel, getChecklistProgress, getContextColor, getInlineMarkdownPreview, getRecurringTaskPreviewDate, getTaskAgeLabel, getTaskDateCoherenceIssues, getTaskStaleness, getTaskUrgency, hasTimeComponent, isTaskActionable, isTaskFinished, safeFormatDate, resolveTaskTextDirection, tFallback } from '@tinybubbles/core';
+import { DEFAULT_AREA_COLOR, formatRecurrenceLabel, formatTimeEstimateLabel, formatTimeSpentLabel, getChecklistProgress, getContextColor, getRecurringTaskPreviewDate, getTaskAgeLabel, getTaskDateCoherenceIssues, getTaskStaleness, getTaskUrgency, hasTimeComponent, isTaskActionable, isTaskFinished, safeFormatDate, resolveTaskTextDirection, tFallback } from '@tinybubbles/core';
 import { cn } from '../../lib/utils';
+import { displayLabel } from '../../lib/display-labels';
 import { useBareFileReferenceCheck } from '../../lib/attachment-reference';
 import { getAttachmentDisplayTitle } from '../../lib/attachment-utils';
 import { MetadataBadge } from '../ui/MetadataBadge';
@@ -9,7 +10,7 @@ import { AttachmentProgressIndicator } from '../AttachmentProgressIndicator';
 import { RichMarkdown } from '../RichMarkdown';
 import { InlineMarkdown } from '../Markdown';
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { isImageAttachment } from './task-item-attachment-utils';
 import { AttachmentImage } from './AttachmentImage';
 import { FocusStarIcon } from '../FocusStarIcon';
@@ -110,11 +111,10 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     timeSpentEnabled = false,
     isStagnant,
     showQuickDone,
-    showStatusSelect = true,
-    showProjectBadgeInActions = true,
+    showStatusSelect = false,
+    showProjectBadgeInActions = false,
     showProjectBadgeInMetadata = true,
     readOnly,
-    compactMetaEnabled = true,
     dense = false,
     actionsOverlay = false,
     dragHandle,
@@ -160,11 +160,6 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
         : recurrenceLabel;
     const ageLabel = getTaskAgeLabel(task.createdAt, language);
     const isBareFileReference = useBareFileReferenceCheck();
-    const showCompactMeta = compactMetaEnabled && !isViewOpen;
-    const descriptionPreview = useMemo(
-        () => getInlineMarkdownPreview(task.description ?? ''),
-        [task.description],
-    );
     // The age badge nudges about work that has been sitting unfinished, so it stays
     // off completed rows — archived as well as done, which Archive started showing
     // when its rows became the shared read-only row (#968).
@@ -566,7 +561,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     const overlayDragHandle = actionsOverlay && !!dragHandle;
     const overlayQuickDone = actionsOverlay && showQuickDoneButton;
     const inlineLeftControls = !actionsOverlay && (showQuickDoneButton || dragHandle);
-    const showActionTags = !actionsOverlay && !isViewOpen && task.tags.length > 0;
+    const showActionTags = false;
 
     // Inbox items are unprocessed captures, not a done/not-done checklist, so the
     // quick-complete check stays hidden at rest and only reveals on row hover (for the
@@ -720,34 +715,20 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                         </div>
                     </button>
                     )}
-                    {showCompactMeta && descriptionPreview && (
-                        <div
-                            className={cn(
-                                "task-item-display__description-preview mt-0.5 truncate text-xs font-normal text-muted-foreground",
-                                (overlayDragHandle || overlayQuickDone) && "pl-12",
-                                isRtl && "text-right"
-                            )}
-                            dir={resolvedDirection}
-                        >
-                            <InlineMarkdown markdown={descriptionPreview} interactiveLinks={false} />
-                        </div>
-                    )}
-                    {showCompactMeta && hasMetadata && renderMetadataRow(cn(
-                        "gap-2 text-muted-foreground",
-                        dense ? "mt-0.5" : "mt-1",
-                        (overlayDragHandle || overlayQuickDone) && "pl-12"
-                    ))}
-                    {!showCompactMeta && !isViewOpen && (completionLabel || projectDeadlineLabel) && (
+                    {!isViewOpen && task.dueDate && (
                         <div className={cn(
-                            "flex flex-wrap items-center gap-2 text-xs text-muted-foreground",
+                            "flex items-center gap-2 text-xs text-muted-foreground",
                             dense ? "mt-0.5" : "mt-1",
                             (overlayDragHandle || overlayQuickDone) && "pl-12"
                         )}>
-                            {renderCompletionMetadataBadge()}
-                            {renderProjectDeadlineMetadataBadge()}
+                            <MetadataBadge
+                                variant="info"
+                                icon={CalendarIcon}
+                                label={safeFormatDate(task.dueDate, hasTimeComponent(task.dueDate) ? 'Pp' : 'P')}
+                                className={getUrgencyColor(task)}
+                            />
                         </div>
                     )}
-
                     {isViewOpen && (
                         <div onClick={(e) => e.stopPropagation()}>
                             {task.description && (
@@ -1015,15 +996,15 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                                 }}
                                     className="text-[11px] font-medium px-2.5 py-0.5 rounded-full cursor-pointer appearance-none bg-primary/10 text-primary border-none hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 >
-                                    <option value="inbox">{t('status.inbox')}</option>
-                                    <option value="next">{t('status.next')}</option>
-                                    <option value="waiting">{t('status.waiting')}</option>
-                                    <option value="someday">{t('status.someday')}</option>
+                                    <option value="inbox">{displayLabel(t, language, 'status.inbox', 'Inbox')}</option>
+                                    <option value="next">{displayLabel(t, language, 'status.next', 'Next')}</option>
+                                    <option value="waiting">{displayLabel(t, language, 'status.waiting', 'Waiting')}</option>
+                                    <option value="someday">{displayLabel(t, language, 'status.someday', 'Someday')}</option>
                                     {task.status === 'reference' && (
-                                        <option value="reference">{t('status.reference')}</option>
+                                        <option value="reference">{displayLabel(t, language, 'status.reference', 'Reference')}</option>
                                     )}
-                                    <option value="done">{t('status.done')}</option>
-                                    <option value="archived">{t('status.archived')}</option>
+                                    <option value="done">{displayLabel(t, language, 'status.done', 'Done')}</option>
+                                    <option value="archived">{displayLabel(t, language, 'status.archived', 'Archived')}</option>
                                 </select>
                             )}
                         </>

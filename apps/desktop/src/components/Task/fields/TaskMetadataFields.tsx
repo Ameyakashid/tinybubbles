@@ -7,12 +7,14 @@ import {
     tFallback,
     timeEstimateToMinutes,
     type TaskEnergyLevel,
+    type Language,
     type TaskPriority,
     type TaskStatus,
     type TimeEstimate,
 } from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
+import { displayLabel } from '../../../lib/display-labels';
 import {
     QUICK_ADD_FIELD_TOKENS,
     QuickAddTokenBadge,
@@ -559,23 +561,25 @@ function AutocompleteTextField({
 
 export function StatusField({
     t,
+    language,
     value,
     onChange,
     onRequestBackdatedComplete,
 }: {
     t: (key: string) => string;
+    language: Language;
     value: TaskStatus;
     onChange: (value: TaskStatus) => void;
     onRequestBackdatedComplete?: () => void;
 }) {
     const options: Array<PillOption<TaskStatus>> = [
-        { value: 'inbox', label: t('status.inbox') },
-        { value: 'next', label: t('status.next') },
-        { value: 'waiting', label: t('status.waiting') },
-        { value: 'someday', label: t('status.someday') },
-        ...(value === 'reference' ? [{ value: 'reference' as const, label: t('status.reference') }] : []),
-        { value: 'done', label: t('status.done'), onContextMenu: onRequestBackdatedComplete },
-        { value: 'archived', label: t('status.archived') },
+        { value: 'inbox', label: displayLabel(t, language, 'status.inbox', 'Inbox') },
+        { value: 'next', label: displayLabel(t, language, 'status.next', 'Next') },
+        { value: 'waiting', label: displayLabel(t, language, 'status.waiting', 'Waiting') },
+        { value: 'someday', label: displayLabel(t, language, 'status.someday', 'Someday') },
+        ...(value === 'reference' ? [{ value: 'reference' as const, label: displayLabel(t, language, 'status.reference', 'Reference') }] : []),
+        { value: 'done', label: displayLabel(t, language, 'status.done', 'Done'), onContextMenu: onRequestBackdatedComplete },
+        { value: 'archived', label: displayLabel(t, language, 'status.archived', 'Archived') },
     ];
 
     return (

@@ -28,6 +28,9 @@ type ListHeaderProps = {
     onToggleDetails: () => void;
     densityMode: 'comfortable' | 'compact' | 'condensed';
     onToggleDensity: () => void;
+    /** Hide the whole controls row (filters/select/sort/group/details/density)
+     * without removing the capability — see DESIGN.md (simplify pass). */
+    hideControls?: boolean;
     t: (key: string) => string;
 };
 
@@ -55,6 +58,7 @@ export function ListHeader({
     onToggleDetails,
     densityMode,
     onToggleDensity,
+    hideControls = false,
     t,
 }: ListHeaderProps) {
     // The button names what clicking it does, not the current state — "Details off"
@@ -110,6 +114,7 @@ export function ListHeader({
                 </div>
             </div>
 
+            {!hideControls && (
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
                 {showFiltersButton && onToggleFilters && (
                     <ToolbarButton
@@ -163,6 +168,7 @@ export function ListHeader({
                     {densityLabel}
                 </ToolbarButton>
             </div>
+            )}
         </header>
     );
 }

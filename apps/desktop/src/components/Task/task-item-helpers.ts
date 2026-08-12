@@ -35,18 +35,10 @@ export const DEFAULT_TASK_EDITOR_ORDER: TaskEditorFieldId[] = [
 ];
 
 export const DEFAULT_TASK_EDITOR_VISIBLE: TaskEditorFieldId[] = [
-    'status',
-    'project',
-    'area',
-    'contexts',
     'dueDate',
-    'recurrence',
-    'startTime',
-    'reviewAt',
-    'tags',
     'description',
-    'attachments',
     'checklist',
+    'attachments',
 ];
 
 export const DEFAULT_TASK_EDITOR_HIDDEN: TaskEditorFieldId[] = DEFAULT_TASK_EDITOR_ORDER.filter(

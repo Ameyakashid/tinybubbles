@@ -21,6 +21,7 @@ import {
     useTaskStore,
     type Attachment,
     type MarkdownSelection,
+    type Language,
     type MarkdownToolbarActionId,
     type MarkdownToolbarResult,
     type RecurrenceByDay,
@@ -99,7 +100,7 @@ export type MonthlyRecurrenceInfo = {
 /** Locale- and settings-derived facts the field editors render against. */
 export type TaskEditorEnv = {
     t: (key: string) => string;
-    language: string;
+    language: Language;
     dateFormatSetting?: string | null;
     nativeDateInputLocale: string;
     defaultScheduleTime: string;
@@ -1091,6 +1092,7 @@ export function TaskItemFieldRenderer({
             return (
                 <StatusField
                     t={t}
+                    language={language}
                     value={editStatus}
                     onChange={setEditStatus}
                     onRequestBackdatedComplete={requestBackdatedComplete}

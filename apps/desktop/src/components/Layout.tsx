@@ -3,10 +3,6 @@ import {
     Calendar,
     Inbox,
     CheckSquare,
-    Archive,
-    Kanban,
-    Tag,
-    CheckCircle2,
     ChevronDown,
     Folder,
     Settings,
@@ -14,14 +10,10 @@ import {
     Search,
     ChevronsLeft,
     ChevronsRight,
-    Trash2,
-    PauseCircle,
-    Book,
-    Clock3,
-    BookOpen,
     AlertTriangle,
     Plus,
     RefreshCw,
+    Trash2,
     type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -31,7 +23,6 @@ import { registerUndoableAction } from '../lib/undo-registry';
 import { formatTaskMovedMessage } from './views/list/task-list-scope';
 import { useLanguage } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
-import { useObsidianStore } from '../store/obsidian-store';
 import { reportError } from '../lib/report-error';
 import { ToastHost } from './ToastHost';
 import { areaFilterSelectionToFilters, resolveAreaFilterSelection, taskMatchesAreaFilterSelection, type AreaFilterSelection } from '@tinybubbles/core';
@@ -39,6 +30,7 @@ import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
 import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
 import { stageCalendarDropLanding } from '../lib/calendar-view-params';
+import { displayLabel } from '../lib/display-labels';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -118,7 +110,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         error: state.error,
         setError: state.setError,
     }), shallow);
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const userSidebarCollapsed = settings?.sidebarCollapsed ?? false;
     const [compactViewport, setCompactViewport] = useState(() => (
         typeof window !== 'undefined'
@@ -129,7 +121,6 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const calendarDragNavTimeoutRef = useRef<number | null>(null);
     const isFocusMode = useUiStore((state) => state.isFocusMode);
     const showToast = useUiStore((state) => state.showToast);
-    const isObsidianEnabled = useObsidianStore((state) => state.config.enabled);
     const [syncStatus, setSyncStatus] = useState(() => SyncService.getSyncStatus());
     const [isManualSyncing, setIsManualSyncing] = useState(false);
     const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
@@ -306,6 +297,10 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     ]);
     const isFullWidthView = fullWidthViews.has(currentView);
 
+    // Simplified sidebar (see DESIGN.md): the engine still has every view, but
+    // the shell surfaces only the destinations a child or caregiver needs day-to-day.
+    // Trash is restored below for recovery. Other adult destinations remain hidden.
+    // Contexts, Review, Board, Obsidian and Archived remain routable but hidden.
     const navSections = useMemo<NavSection[]>(() => ([
         {
             key: 'focus',
@@ -320,22 +315,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
             label: tFallback(t, 'nav.sectionLists', 'Lists'),
             items: [
                 { id: 'projects', labelKey: 'nav.projects', icon: Folder, tone: 'primary' },
-                { id: 'someday', labelKey: 'nav.someday', icon: Clock3 },
-                { id: 'waiting', labelKey: 'nav.waiting', icon: PauseCircle },
-                { id: 'reference', labelKey: 'nav.reference', icon: Book },
-            ],
-        },
-        {
-            key: 'organize',
-            label: tFallback(t, 'nav.sectionOrganize', 'Organize'),
-            items: [
                 { id: 'calendar', labelKey: 'nav.calendar', icon: Calendar },
-                { id: 'review', labelKey: 'nav.review', icon: CheckCircle2 },
-                { id: 'contexts', labelKey: 'nav.contexts', icon: Tag },
-                ...(isObsidianEnabled
-                    ? [{ id: 'obsidian', labelKey: 'nav.obsidian', fallbackLabel: 'Obsidian', icon: BookOpen }]
-                    : []),
-                { id: 'board', labelKey: 'nav.board', icon: Kanban },
             ],
         },
         {
@@ -343,11 +323,10 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
             label: tFallback(t, 'nav.sectionArchive', 'Archive'),
             items: [
                 { id: 'done', labelKey: 'nav.done', icon: CheckSquare, tone: 'recessed' },
-                { id: 'archived', labelKey: 'nav.archived', icon: Archive, tone: 'recessed' },
-                { id: 'trash', labelKey: 'nav.trash', icon: Trash2, tone: 'recessed' },
+                { id: 'trash', labelKey: 'nav.trash', fallbackLabel: 'Trash', icon: Trash2, tone: 'recessed' },
             ],
         },
-    ]), [inboxCount, isObsidianEnabled, t]);
+    ]), [inboxCount, t]);
 
     const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => loadCollapsedSections());
 
@@ -561,8 +540,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         const stored = settings?.filters;
         const next = areaFilterSelectionToFilters(resolvedAreaFilter);
         if (stored?.areaId === next.areaId
-            && (stored?.areaIds ?? []).join(' ') === next.areaIds.join(' ')
-            && (stored?.excludedAreaIds ?? []).join(' ') === next.excludedAreaIds.join(' ')) return;
+            && (stored?.areaIds ?? []).join('\0') === next.areaIds.join('\0')
+            && (stored?.excludedAreaIds ?? []).join('\0') === next.excludedAreaIds.join('\0')) return;
         updateSettings({ filters: { ...(stored ?? {}), ...next } })
             .catch((error) => reportError('Failed to update area filter', error));
     }, [areas.length, resolvedAreaFilter, settings?.filters, updateSettings]);
@@ -691,7 +670,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                 <button
                     onClick={triggerSearch}
                     className={cn(
-                        "w-full flex items-center gap-2.5 px-2.5 py-2 mb-4 rounded-md border border-border/70 bg-background/60 text-[13px] font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary/40",
+                        "w-full flex min-h-11 items-center gap-2.5 px-2.5 py-2 mb-4 rounded-md border border-border/70 bg-background/60 text-[13px] font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-primary/40",
                         isCollapsed && "justify-center px-2"
                     )}
                     title={`${searchTitleLabel} (${searchShortcutHint})`}
@@ -712,8 +691,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                 <button
                     onClick={triggerInboxCapture}
                     className={cn(
-                        "w-full flex h-9 items-center gap-2.5 px-2.5 mb-6 rounded-md border border-primary/40 bg-primary/5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/40",
-                        isCollapsed && "h-10 justify-center px-2"
+                        "w-full flex h-11 items-center gap-2.5 px-2.5 mb-6 rounded-md border border-primary/40 bg-primary/5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/40",
+                        isCollapsed && "h-11 justify-center px-2"
                     )}
                     title={inboxCaptureLabel}
                     aria-label={inboxCaptureLabel}
@@ -737,7 +716,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                     key={search.id}
                                     onClick={() => onViewChange(`savedSearch:${search.id}`)}
                                     className={cn(
-                                        "w-full flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
+                                        "w-full flex h-11 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
                                         currentView === `savedSearch:${search.id}`
                                             ? "bg-primary/5 text-primary"
                                             : "hover:bg-accent text-muted-foreground",
@@ -764,7 +743,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         onClick={() => toggleSection(section.key)}
                                         aria-expanded={!isSectionCollapsed}
                                         aria-controls={sectionId}
-                                        className="group w-full flex h-7 items-center gap-1 rounded-md px-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.16em] transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
+                                        className="group w-full flex h-9 items-center gap-1 rounded-md px-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.16em] transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
                                     >
                                         <ChevronDown
                                             className={cn(
@@ -777,7 +756,9 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                 )}
                                 <div id={sectionId} className={cn("space-y-1", isSectionCollapsed && "hidden")}>
                                 {section.items.map((item) => {
-                                    const itemLabel = item.labelKey ? tFallback(t, item.labelKey, item.fallbackLabel ?? item.id) : (item.fallbackLabel ?? item.id);
+                                    const itemLabel = item.labelKey
+                                        ? displayLabel(t, language, item.labelKey, item.fallbackLabel ?? item.id)
+                                        : (item.fallbackLabel ?? item.id);
                                     const isActiveItem = currentView === item.id;
                                     const isDropTarget = item.id === 'calendar' || NAV_DROP_STATUSES[item.id] !== undefined;
                                     const tone = item.tone ?? 'normal';
@@ -809,10 +790,10 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         data-sidebar-item
                                         data-view={item.id}
                                         className={cn(
-                                            "w-full flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
+                                            "w-full flex items-center rounded-md text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
                                             itemWeightClass,
                                             isActiveItem ? "bg-primary/5 text-primary" : inactiveItemClass,
-                                            isCollapsed ? "h-10 justify-center px-2" : "h-9 justify-between px-2.5",
+                                            isCollapsed ? "h-11 justify-center px-2" : "h-11 justify-between px-2.5",
                                             // Last so they win the merge: the drop target has to read as
                                             // available even on the active item's own tinted background.
                                             // Every destination reads as available at a glance, and the one

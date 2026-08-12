@@ -961,6 +961,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                             });
                         }}
                         t={t}
+                        hideControls={statusFilter === 'inbox'}
                     />
 
                     {isBatchDeleting && (

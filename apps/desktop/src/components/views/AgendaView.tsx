@@ -253,7 +253,7 @@ export function AgendaView() {
     );
     const getDerivedState = useTaskStore((state) => state.getDerivedState);
     const { activeTasksByStatus, projectMap, sequentialProjectIds, sequentialWithinSectionProjectIds, tasksById } = getDerivedState();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const localDayKey = useLocalDayKey();
     const { showListDetails, nextGroupBy, top3Only, setListOptions, collapseAllTaskDetails, setProjectView, showToast } = useUiStore((state) => ({
@@ -978,6 +978,7 @@ export function AgendaView() {
         <ErrorBoundary>
             <div className={cn("space-y-6 w-full", LIST_END_GAP)} data-list-end>
             <AgendaHeader
+                language={language}
                 filterCount={activeFilterCount}
                 filtersOpen={filtersOpen}
                 nextActionsCount={nextActionsCount}

@@ -66,6 +66,7 @@ import { reportError as reportAppError } from './lib/report-error';
 import { syncNativeProxyUrl } from './lib/tauri-http';
 import { persistLastView, readRestorableLastView } from './lib/session-restore';
 import { readViewFromUrl, writeViewToUrl } from './lib/view-url-params';
+import { displayLabel } from './lib/display-labels';
 import { logError, logInfo } from './lib/app-log';
 import { createDesktopAutoSyncController } from './lib/auto-sync-controller';
 import {
@@ -295,7 +296,7 @@ function App() {
     const showTray = useTaskStore((state) => state.settings?.window?.showTray);
     const settingsTheme = useTaskStore((state) => state.settings?.theme);
     const settingsProxyUrl = useTaskStore((state) => state.settings?.network?.proxyUrl);
-    const settingsTextSize = useTaskStore((state) => state.settings?.appearance?.textSize);
+    const settingsTextSize = useTaskStore((state) => state.settings?.appearance?.textSize ?? 'large');
     const settingsLanguage = useTaskStore((state) => state.settings?.language);
     const settingsDateFormat = useTaskStore((state) => state.settings?.dateFormat);
     const settingsCalendarSystem = useTaskStore((state) => state.settings?.calendarSystem);
@@ -1160,11 +1161,11 @@ function App() {
             case 'next':
                 return <AgendaView />;
             case 'someday':
-                return <ListView title={t('list.someday')} statusFilter="someday" />;
+                return <ListView title={displayLabel(t, language, 'list.someday', 'Someday/Maybe')} statusFilter="someday" />;
             case 'reference':
-                return <ListView title={t('list.reference')} statusFilter="reference" />;
+                return <ListView title={displayLabel(t, language, 'list.reference', 'Reference')} statusFilter="reference" />;
             case 'waiting':
-                return <ListView title={t('list.waiting')} statusFilter="waiting" />;
+                return <ListView title={displayLabel(t, language, 'list.waiting', 'Waiting For')} statusFilter="waiting" />;
             case 'done':
                 return <ListView title={t('list.done')} statusFilter="done" />;
             case 'calendar':
