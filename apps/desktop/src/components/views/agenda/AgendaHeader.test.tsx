@@ -2,7 +2,6 @@ import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgendaHeader } from './AgendaHeader';
-import { selectToolbarOption } from '../../../test/toolbar-select';
 
 const resolveText = (key: string, fallback: string) => {
     if (key === 'tags.title') return 'Tags';
@@ -30,20 +29,21 @@ const renderHeader = (overrides: Partial<Parameters<typeof AgendaHeader>[0]> = {
 );
 
 describe('AgendaHeader', () => {
-    it('offers tag as a Focus grouping option', () => {
+    // The Focus toolbar (Top 3 / Filters / Show details / Group) is hidden in
+    // the simplified shell — capability intact (props still accepted/wired),
+    // but AgendaHeader itself renders no controls. See DESIGN.md.
+    it('does not render a Group selector', () => {
         const onChangeGroupBy = vi.fn();
-        renderHeader({ onChangeGroupBy });
+        const { queryByRole } = renderHeader({ onChangeGroupBy });
 
-        selectToolbarOption('Group', 'Tags');
-
-        expect(onChangeGroupBy).toHaveBeenCalledWith('tag');
+        expect(queryByRole('combobox', { name: 'Group' })).not.toBeInTheDocument();
+        expect(onChangeGroupBy).not.toHaveBeenCalled();
     });
 
-    // See ListHeader: a name that flips with the action already conveys the state,
-    // and pairing it with aria-pressed announced both at once.
-    it('names the details button by its action without also claiming a pressed state', () => {
-        const { getByRole, rerender } = renderHeader();
-        expect(getByRole('button', { name: 'Show details' })).not.toHaveAttribute('aria-pressed');
+    it('does not render a details toggle button, in either details state', () => {
+        const { queryByRole, rerender } = renderHeader();
+        expect(queryByRole('button', { name: 'Show details' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Hide details' })).not.toBeInTheDocument();
 
         rerender(
             <AgendaHeader
@@ -61,26 +61,18 @@ describe('AgendaHeader', () => {
                 top3Only={false}
             />
         );
-        expect(getByRole('button', { name: 'Hide details' })).not.toHaveAttribute('aria-pressed');
+        expect(queryByRole('button', { name: 'Show details' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Hide details' })).not.toBeInTheDocument();
     });
 
-    // Focus used to draw its own pill buttons and a bare select, so its controls
-    // sat at a different height and radius than every other list toolbar, and the
-    // grouping value rendered without the GROUP caption (#861).
-    it('renders its controls in the shared list-toolbar style', () => {
-        const { container, getByRole, getByText } = renderHeader();
+    // Focus used to draw its own pill buttons and a bare select for Top 3 /
+    // Filters / Show details / Group; the whole row is hidden now, so the
+    // header renders only the title and the plain-language count line.
+    it('renders no toolbar buttons or Group control at all', () => {
+        const { container, queryByText } = renderHeader();
 
-        const groupTrigger = getByRole('combobox', { name: 'Group' });
-        expect(groupTrigger.className).toContain('h-9');
-        expect(groupTrigger.className).toContain('rounded-lg');
-        expect(getByText('Group')).toBeInTheDocument();
-
-        const buttons = [...container.querySelectorAll('button')];
-        expect(buttons.length).toBeGreaterThan(0);
-        buttons.forEach((button) => {
-            expect(button.className).toContain('h-9');
-            expect(button.className).toContain('rounded-lg');
-            expect(button.className).not.toContain('rounded-full');
-        });
+        expect(container.querySelectorAll('button')).toHaveLength(0);
+        expect(queryByText('Group')).not.toBeInTheDocument();
+        expect(queryByText('3 to do')).toBeInTheDocument();
     });
 });

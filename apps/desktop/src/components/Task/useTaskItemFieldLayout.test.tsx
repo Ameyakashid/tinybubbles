@@ -61,7 +61,13 @@ describe('useTaskItemFieldLayout', () => {
             },
         })));
 
-        expect(result.current.basicFields).toEqual(expect.arrayContaining(['status', 'contexts', 'dueDate']));
+        // DEFAULT_TASK_EDITOR_VISIBLE (task-item-helpers.ts) was reduced to
+        // dueDate/description/checklist/attachments; 'status' is a fixed field
+        // (TASK_EDITOR_FIXED_FIELDS) but has no "already has a value" escape
+        // hatch (hasValue('status') is hardcoded false), so it now falls out of
+        // the default basic fields along with the rest of the shrunk set.
+        expect(result.current.basicFields).toEqual(expect.arrayContaining(['contexts', 'dueDate']));
+        expect(result.current.basicFields).not.toContain('status');
         expect(result.current.organizationFields).not.toContain('priority');
         expect(result.current.organizationFields).not.toContain('energyLevel');
         expect(result.current.organizationFields).not.toContain('assignedTo');
@@ -130,7 +136,10 @@ describe('useTaskItemFieldLayout', () => {
             draft: { status: 'reference' },
         })));
 
-        expect(result.current.basicFields).toContain('status');
+        // Reference editing used to keep 'status' pinned in basicFields; with the
+        // reduced default visible set 'status' is hidden regardless of the draft's
+        // status (see the shallow-editor test above).
+        expect(result.current.basicFields).not.toContain('status');
         expect(result.current.basicFields).not.toContain('dueDate');
         expect(result.current.schedulingFields).toEqual([]);
         expect(result.current.basicFields).toContain('contexts');
@@ -168,11 +177,17 @@ describe('useTaskItemFieldLayout', () => {
     });
 
     it('splits basic fields around the organizer row following the configured order', () => {
+        // 'status'/'project'/'area' are hidden by the reduced default visible set
+        // unless a saved layout un-hides them (DESIGN.md: "Saved user layouts
+        // still win"), so this exercises a saved layout — a custom order plus an
+        // explicit empty hidden list — to keep testing the ordering behavior the
+        // title describes.
         const { result } = renderHook(() => useTaskItemFieldLayout(buildParams({
             settings: {
                 gtd: {
                     taskEditor: {
                         order: ['contexts', 'dueDate', 'area', 'project', 'section', 'status'],
+                        hidden: [],
                     },
                 },
             },
@@ -183,15 +198,32 @@ describe('useTaskItemFieldLayout', () => {
         expect(result.current.basicFieldsAfterOrganizers).toEqual(['status']);
     });
 
-    it('keeps status above the organizer row with the default order', () => {
+    it('keeps status out of the default basic fields, but pinned above the organizer row once a saved layout reveals it', () => {
+        // With zero saved customization, the reduced default visible set hides
+        // 'status' (and the empty-by-default 'project'/'area') entirely — there is
+        // no per-row status control anymore (TaskItemDisplay's showStatusSelect
+        // defaults to false), and now the editor's Basic section shows nothing in
+        // its place either.
         const { result } = renderHook(() => useTaskItemFieldLayout(buildParams()));
 
-        expect(result.current.basicFieldsBeforeOrganizers).toEqual(['status']);
-        expect(result.current.organizerFields).toEqual(['project', 'area']);
-        expect(result.current.basicFieldsAfterOrganizers).toEqual(expect.arrayContaining(['contexts', 'dueDate']));
-        expect(result.current.basicFields).toEqual([
-            ...result.current.basicFieldsBeforeOrganizers,
-            ...result.current.basicFieldsAfterOrganizers,
+        expect(result.current.basicFields).not.toContain('status');
+        expect(result.current.organizerFields).toEqual([]);
+        expect(result.current.basicFieldsBeforeOrganizers).toEqual(['contexts', 'dueDate']);
+        expect(result.current.basicFieldsAfterOrganizers).toEqual([]);
+
+        // Settings can still re-enable every field (DESIGN.md); once nothing is
+        // hidden, 'status' keeps its historical place above the project/area
+        // organizer row.
+        const { result: revealed } = renderHook(() => useTaskItemFieldLayout(buildParams({
+            settings: { gtd: { taskEditor: { hidden: [] } } },
+        })));
+
+        expect(revealed.current.basicFieldsBeforeOrganizers).toEqual(['status']);
+        expect(revealed.current.organizerFields).toEqual(['project', 'area']);
+        expect(revealed.current.basicFieldsAfterOrganizers).toEqual(expect.arrayContaining(['contexts', 'dueDate']));
+        expect(revealed.current.basicFields).toEqual([
+            ...revealed.current.basicFieldsBeforeOrganizers,
+            ...revealed.current.basicFieldsAfterOrganizers,
         ]);
     });
 

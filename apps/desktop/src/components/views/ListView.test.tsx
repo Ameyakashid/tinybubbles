@@ -493,7 +493,11 @@ describe('ListView', () => {
     expect(getAllByText('Dual-tag reference')).toHaveLength(2);
   });
 
-  it('groups inbox tasks by each tag when tag grouping is selected', () => {
+  // The Inbox controls row (Filters/Select/Sort/Group/Details/Density) is
+  // hidden in the simplified shell (see DESIGN.md), so there is no Group
+  // combobox to drive this from — but the grouping capability itself is
+  // intact: a stored `nextGroupBy` preference still groups the rendered rows.
+  it('groups inbox tasks by each tag when tag grouping is selected, with no Group control shown', () => {
     useTaskStore.setState({
       _allTasks: [
         makeTask('1', { title: 'Dual-tag inbox', status: 'inbox', tags: ['#alpha', '#beta'] }),
@@ -509,9 +513,9 @@ describe('ListView', () => {
       },
     }));
 
-    const { getAllByText, getByRole, queryByText } = renderListView('inbox', 'Inbox');
+    const { getAllByText, queryByRole, queryByText } = renderListView('inbox', 'Inbox');
 
-    expect(getByRole('combobox', { name: 'Group' })).toHaveTextContent('Tags');
+    expect(queryByRole('combobox', { name: 'Group' })).not.toBeInTheDocument();
     expect(queryByText('#alpha')).toBeInTheDocument();
     expect(queryByText('#beta')).toBeInTheDocument();
     expect(queryByText('No tags')).toBeInTheDocument();
@@ -1153,8 +1157,6 @@ describe('ListView', () => {
     ['done', 'Completed'],
     ['waiting', 'Waiting'],
     ['someday', 'Someday'],
-    // The shared criteria narrow the Inbox too, so it must expose them (#956).
-    ['inbox', 'Inbox'],
   ] as const)('offers a Filters toggle in the %s toolbar', (statusFilter, title) => {
     const { getByRole } = renderListView(statusFilter, title);
 
@@ -1162,8 +1164,13 @@ describe('ListView', () => {
   });
 
   // Reference deliberately stays off the toolbar for now (#863: no blanket pass).
+  // Inbox instead hides its *entire* controls row (Filters included) in the
+  // simplified shell — capability intact via ListHeader's hideControls prop,
+  // see DESIGN.md. The shared criteria still narrow the Inbox (#956); there is
+  // just no toolbar left to expose that from.
   it.each([
     ['reference', 'Reference'],
+    ['inbox', 'Inbox'],
   ] as const)('does not offer a Filters toggle in the %s toolbar', (statusFilter, title) => {
     const { queryByRole } = renderListView(statusFilter, title);
 

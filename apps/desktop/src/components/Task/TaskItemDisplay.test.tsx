@@ -42,13 +42,15 @@ describe('TaskItemDisplay', () => {
     });
 
     it('renders task age in Chinese when language is zh', () => {
+        // The age badge is secondary metadata, hidden from collapsed rows now
+        // (DESIGN.md); it still renders once the row is expanded.
         const { getByText } = render(
             <LanguageProvider>
                 <TaskItemDisplay
                     task={baseTask}
                     language="zh"
                     selectionMode={false}
-                    isViewOpen={false}
+                    isViewOpen
                     actions={{
                         onToggleView: vi.fn(),
                         onEdit: vi.fn(),
@@ -223,6 +225,8 @@ describe('TaskItemDisplay', () => {
     });
 
     it('shows a calm date-coherence indicator when a task starts after its due date', () => {
+        // The coherence badge is secondary metadata, hidden from collapsed rows
+        // now (DESIGN.md); it still renders once the row is expanded.
         const { getByText } = render(
             <LanguageProvider>
                 <TaskItemDisplay
@@ -233,7 +237,7 @@ describe('TaskItemDisplay', () => {
                     }}
                     language="en"
                     selectionMode={false}
-                    isViewOpen={false}
+                    isViewOpen
                     actions={{
                         onToggleView: vi.fn(),
                         onEdit: vi.fn(),
@@ -259,6 +263,8 @@ describe('TaskItemDisplay', () => {
     });
 
     it('shows the daily recurrence interval in task metadata', () => {
+        // Recurrence is secondary metadata, hidden from collapsed rows now
+        // (DESIGN.md); it still renders once the row is expanded.
         const { getByText } = render(
             <LanguageProvider>
                 <TaskItemDisplay
@@ -268,7 +274,7 @@ describe('TaskItemDisplay', () => {
                     }}
                     language="en"
                     selectionMode={false}
-                    isViewOpen={false}
+                    isViewOpen
                     actions={{
                         onToggleView: vi.fn(),
                         onEdit: vi.fn(),
@@ -472,8 +478,14 @@ describe('TaskItemDisplay', () => {
         expect(getByText(longTitle)).not.toHaveClass('truncate');
     });
 
-    it('renders a one-line markdown description preview in collapsed rows', () => {
-        const { getByText, queryByText, container } = render(
+    it('hides the description preview from collapsed rows', () => {
+        // The compact description preview was removed entirely for collapsed
+        // rows (DESIGN.md: "secondary metadata, description preview... are
+        // hidden"); a collapsed row now shows only checkbox, title, star and due
+        // chip. The full description is still available once the row expands
+        // (see "shows a truncated description preview collapsed and the full
+        // description expanded" below).
+        const { queryByText, container } = render(
             <LanguageProvider>
                 <TaskItemDisplay
                     task={{ ...baseTask, description: '- [ ] **Call** the vendor\nSecond line' }}
@@ -501,16 +513,15 @@ describe('TaskItemDisplay', () => {
             </LanguageProvider>
         );
 
-        const preview = container.querySelector('.task-item-display__description-preview');
-        expect(preview).not.toBeNull();
-        expect(preview).toHaveClass('truncate');
-        expect(getByText('Call').tagName).toBe('STRONG');
-        expect(queryByText(/\*\*Call\*\*/)).toBeNull();
-        expect(queryByText(/\[ \]/)).toBeNull();
-        expect(queryByText('Second line')).toBeNull();
+        expect(container.querySelector('.task-item-display__description-preview')).toBeNull();
+        expect(queryByText('Call')).not.toBeInTheDocument();
+        expect(queryByText(/Second line/)).not.toBeInTheDocument();
     });
 
-    it('shows the completion date and time for completed tasks when compact details are off', () => {
+    it('shows the completion date and time for completed tasks once expanded', () => {
+        // `compactMetaEnabled` was retired along with the collapsed-row compact
+        // metadata feature it used to gate; the completion badge now only ever
+        // renders in the full metadata row, which requires an expanded task.
         const completedTask: Task = {
             ...baseTask,
             title: 'Completed task',
@@ -526,7 +537,7 @@ describe('TaskItemDisplay', () => {
                     task={completedTask}
                     language="en"
                     selectionMode={false}
-                    isViewOpen={false}
+                    isViewOpen
                     actions={{
                         onToggleView: vi.fn(),
                         onEdit: vi.fn(),
@@ -542,7 +553,6 @@ describe('TaskItemDisplay', () => {
                     timeEstimatesEnabled={false}
                     isStagnant={false}
                     showQuickDone={false}
-                    compactMetaEnabled={false}
                     readOnly={false}
                     t={(key: string) => key}
                 />
@@ -552,13 +562,18 @@ describe('TaskItemDisplay', () => {
         expect(getByText(`Completed: ${completionLabel}`)).toBeInTheDocument();
     });
 
-    it('keeps board overlay tags in the metadata row instead of the absolute action controls', () => {
+    it('shows overlay-row tags only in the expanded metadata row, never as absolute action controls', () => {
+        // `showActionTags` is now hard-coded false (TaskItemDisplay.tsx) — the
+        // condensed action-cluster tag chips this test used to distinguish from
+        // the metadata-row badge no longer render at all, for overlay rows or
+        // otherwise. Tags now show only in the full metadata row, and only once
+        // the row is expanded.
         const taggedTask: Task = {
             ...baseTask,
             tags: ['#board-tag'],
         };
 
-        const { getByText, queryByText } = render(
+        const { getByText, queryByText, rerender } = render(
             <LanguageProvider>
                 <TaskItemDisplay
                     task={taggedTask}
@@ -588,17 +603,53 @@ describe('TaskItemDisplay', () => {
             </LanguageProvider>
         );
 
+        expect(queryByText('#board-tag')).not.toBeInTheDocument();
+        expect(queryByText('board-tag')).not.toBeInTheDocument();
+
+        rerender(
+            <LanguageProvider>
+                <TaskItemDisplay
+                    task={taggedTask}
+                    language="en"
+                    selectionMode={false}
+                    isViewOpen
+                    actions={{
+                        onToggleView: vi.fn(),
+                        onEdit: vi.fn(),
+                        onDelete: vi.fn(),
+                        onDuplicate: vi.fn(),
+                        onStatusChange: vi.fn(),
+                        openAttachment: vi.fn(),
+                    }}
+                    visibleAttachments={[]}
+                    recurrenceRule=""
+                    recurrenceStrategy="strict"
+                    prioritiesEnabled={false}
+                    timeEstimatesEnabled={false}
+                    isStagnant={false}
+                    showQuickDone={false}
+                    showStatusSelect={false}
+                    readOnly={false}
+                    actionsOverlay
+                    t={(key: string) => key}
+                />
+            </LanguageProvider>
+        );
+
         expect(getByText('#board-tag')).toBeInTheDocument();
         expect(queryByText('board-tag')).not.toBeInTheDocument();
     });
 
-    it('keeps the condensed tag summary for non-overlay task rows', () => {
+    it('never renders the retired condensed tag summary for non-overlay task rows', () => {
+        // The condensed, '#'-stripped tag summary in the action cluster is gone
+        // (showActionTags is hard-coded false); the only remaining tag display is
+        // the full '#tag' metadata badge, shown once the row expands.
         const taggedTask: Task = {
             ...baseTask,
             tags: ['#list-tag'],
         };
 
-        const { getByText, queryByText } = render(
+        const { getByText, queryByText, rerender } = render(
             <LanguageProvider>
                 <TaskItemDisplay
                     task={taggedTask}
@@ -622,14 +673,45 @@ describe('TaskItemDisplay', () => {
                     showQuickDone={false}
                     showStatusSelect={false}
                     readOnly={false}
-                    compactMetaEnabled={false}
                     t={(key: string) => key}
                 />
             </LanguageProvider>
         );
 
-        expect(getByText('list-tag')).toBeInTheDocument();
+        expect(queryByText('list-tag')).not.toBeInTheDocument();
         expect(queryByText('#list-tag')).not.toBeInTheDocument();
+
+        rerender(
+            <LanguageProvider>
+                <TaskItemDisplay
+                    task={taggedTask}
+                    language="en"
+                    selectionMode={false}
+                    isViewOpen
+                    actions={{
+                        onToggleView: vi.fn(),
+                        onEdit: vi.fn(),
+                        onDelete: vi.fn(),
+                        onDuplicate: vi.fn(),
+                        onStatusChange: vi.fn(),
+                        openAttachment: vi.fn(),
+                    }}
+                    visibleAttachments={[]}
+                    recurrenceRule=""
+                    recurrenceStrategy="strict"
+                    prioritiesEnabled={false}
+                    timeEstimatesEnabled={false}
+                    isStagnant={false}
+                    showQuickDone={false}
+                    showStatusSelect={false}
+                    readOnly={false}
+                    t={(key: string) => key}
+                />
+            </LanguageProvider>
+        );
+
+        expect(getByText('#list-tag')).toBeInTheDocument();
+        expect(queryByText('list-tag')).not.toBeInTheDocument();
     });
 
     it('can suppress the expanded details project badge independently of action badges', () => {
@@ -783,6 +865,9 @@ describe('TaskItemDisplay', () => {
     });
 
     it('opens context and tag metadata tokens from task badges', () => {
+        // Context/tag badges are secondary metadata, hidden from collapsed rows
+        // now (DESIGN.md); expand the row to reach them. The click/keyboard
+        // handlers themselves are unchanged.
         const onOpenContextToken = vi.fn();
         const taggedTask: Task = {
             ...baseTask,
@@ -796,7 +881,7 @@ describe('TaskItemDisplay', () => {
                     task={taggedTask}
                     language="en"
                     selectionMode={false}
-                    isViewOpen={false}
+                    isViewOpen
                     actions={{
                         onToggleView: vi.fn(),
                         onEdit: vi.fn(),
@@ -862,7 +947,10 @@ describe('TaskItemDisplay', () => {
         );
     });
 
-    it('shows a truncated description preview collapsed and the full description expanded', () => {
+    it('hides the description entirely while collapsed, and shows it in full once expanded', () => {
+        // The collapsed-row description preview was removed outright (DESIGN.md);
+        // a collapsed row shows no description text at all, truncated or
+        // otherwise. Expanding still shows the full, untruncated description.
         const taskWithDescription: Task = {
             ...baseTask,
             description: 'Expanded task note\nSecond note line',
@@ -896,8 +984,8 @@ describe('TaskItemDisplay', () => {
             </LanguageProvider>
         );
 
-        expect(queryByText(/Expanded task note/)).toBeInTheDocument();
-        expect(container.querySelector('.task-item-display__description-preview')).toHaveClass('truncate');
+        expect(queryByText(/Expanded task note/)).not.toBeInTheDocument();
+        expect(container.querySelector('.task-item-display__description-preview')).toBeNull();
         expect(queryByText(/Second note line/)).not.toBeInTheDocument();
 
         rerender(
@@ -1062,6 +1150,10 @@ describe('TaskItemDisplay', () => {
     });
 
     it('keeps secondary active task actions off the row', () => {
+        // The per-row status <select> is gone by default (showStatusSelect
+        // defaults to false — TaskItemDisplay.tsx / DESIGN.md); no caller opts
+        // it back in, so an active row's action cluster now offers only "More
+        // options", with no combobox, reference-conversion, or delete control.
         const { getByRole, queryByRole } = render(
             <LanguageProvider>
                 <TaskItemDisplay
@@ -1092,9 +1184,7 @@ describe('TaskItemDisplay', () => {
         );
 
         expect(getByRole('button', { name: 'More options' })).toBeInTheDocument();
-        const statusSelect = getByRole('combobox', { name: 'task.aria.status' });
-        expect(statusSelect).toBeInTheDocument();
-        expect(statusSelect).toHaveClass('bg-primary/10', 'text-primary');
+        expect(queryByRole('combobox', { name: 'task.aria.status' })).not.toBeInTheDocument();
         expect(queryByRole('button', { name: 'task.convertToReference' })).not.toBeInTheDocument();
         expect(queryByRole('button', { name: 'task.aria.delete' })).not.toBeInTheDocument();
     });
@@ -1228,6 +1318,10 @@ describe('TaskItemDisplay', () => {
     });
 
     it('keeps the completion timestamp clickable on read-only done rows', () => {
+        // The completion badge (and its edit-completion-time button) lives in the
+        // full metadata row now, shown only once the row is expanded (DESIGN.md);
+        // expanded task details "remain available", so the capability itself is
+        // intact.
         const onEditCompletedAt = vi.fn();
         const doneTask: Task = {
             ...baseTask,
@@ -1242,7 +1336,7 @@ describe('TaskItemDisplay', () => {
                     task={doneTask}
                     language="en"
                     selectionMode={false}
-                    isViewOpen={false}
+                    isViewOpen
                     actions={{
                         onToggleView: vi.fn(),
                         onEdit: vi.fn(),

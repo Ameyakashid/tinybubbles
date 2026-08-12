@@ -511,6 +511,12 @@ describe('TaskItem', () => {
                 },
             }));
         });
+        // The completion badge (and its edit-completion-time button) only renders
+        // in the full metadata row now, which requires an expanded row
+        // (DESIGN.md: collapsed rows hide secondary metadata).
+        act(() => {
+            useUiStore.setState({ expandedTaskIds: { [doneTask.id]: true } });
+        });
         const { getByRole } = render(
             <LanguageProvider>
                 <TaskItem task={doneTask} />
@@ -1168,6 +1174,11 @@ describe('TaskItem', () => {
                     _tasksById: new Map([[task.id, task]]),
                 });
             });
+            // The age badge is secondary metadata, hidden from collapsed rows now
+            // (DESIGN.md) — expand this row so it's reachable if shown at all.
+            act(() => {
+                useUiStore.setState({ expandedTaskIds: { [id]: true } });
+            });
             // Scoped to this render's own container: every render in this test shares
             // document.body, so a screen-level query would find the previous row.
             const { container } = render(
@@ -1623,18 +1634,52 @@ describe('TaskItem', () => {
         expect(root?.className).toContain('focus-within:bg-primary/5');
     });
 
-    it('includes archived in the task status selector', () => {
-        const { getByLabelText } = render(
+    it('offers no per-row status selector; status (including archived) stays reachable only through a saved editor layout', () => {
+        // The row-level status <select> is entirely gone by default
+        // (TaskItemDisplay's showStatusSelect defaults to false, and no view
+        // opts it back in — DESIGN.md). With zero saved customization, the
+        // reduced default task-editor field set (task-item-helpers.ts) also
+        // drops 'status' out of the editor's Basic section — status has no
+        // "already has a value" escape hatch, so a fresh install shows no
+        // status control anywhere, row or editor, until Settings re-enables it.
+        const { queryByLabelText, getAllByRole, queryByRole } = render(
             <LanguageProvider>
                 <TaskItem task={mockTask} />
             </LanguageProvider>
         );
-        const statusSelect = getByLabelText(/task status/i) as HTMLSelectElement;
-        const archivedOption = Array.from(statusSelect.options).find((option) => option.value === 'archived');
-        expect(archivedOption).toBeTruthy();
+        expect(queryByLabelText(/task status/i)).toBeNull();
+
+        fireEvent.click(getAllByRole('button', { name: /edit/i })[0]);
+        expect(queryByRole('button', { name: 'Archived' })).not.toBeInTheDocument();
     });
 
-    it('prompts for assigned to when changing status to waiting', async () => {
+    it('reveals archived as a status pill in the editor once a saved layout un-hides status', () => {
+        act(() => {
+            useTaskStore.setState({
+                settings: { gtd: { taskEditor: { hidden: [] } } },
+            });
+        });
+
+        const { getAllByRole, getByRole } = render(
+            <LanguageProvider>
+                <TaskItem task={mockTask} />
+            </LanguageProvider>
+        );
+
+        fireEvent.click(getAllByRole('button', { name: /edit/i })[0]);
+        expect(getByRole('button', { name: 'Archived' })).toBeInTheDocument();
+    });
+
+    it('captures who a task is waiting for through the editor once status changes to waiting', async () => {
+        // The row-level status <select> used to call `handleStatusChange`
+        // directly, which special-cased 'waiting' to pop a quick "Who/what are
+        // you waiting for?" modal. That control is gone and nothing else wires
+        // arbitrary status changes to `handleStatusChange` (the quick-actions
+        // menu only offers "convert to reference"; the quick-done check only
+        // completes or promotes to Next) — the modal itself is now dead code,
+        // unreachable from any live control. Status changes go through the
+        // editor's draft instead, which reveals Assigned To once status is
+        // Waiting (#1021) and persists both fields together on Save.
         const nextTask: Task = {
             ...mockTask,
             id: 'waiting-select-task',
@@ -1647,23 +1692,27 @@ describe('TaskItem', () => {
                 _allTasks: [nextTask],
                 projects: [],
                 _allProjects: [],
+                // 'status' is hidden by the reduced editor defaults unless a saved
+                // layout re-enables it (DESIGN.md: "Settings can re-enable every
+                // field").
+                settings: { gtd: { taskEditor: { hidden: [] } } },
             }));
         });
 
-        const { getByLabelText, getByPlaceholderText, getByRole, getByText } = render(
+        const { getAllByRole, getByRole, getByPlaceholderText, queryByRole, queryByLabelText } = render(
             <LanguageProvider>
                 <TaskItem task={nextTask} />
             </LanguageProvider>
         );
 
-        const statusSelect = getByLabelText(/task status/i) as HTMLSelectElement;
-        statusSelect.focus();
-        expect(statusSelect).toHaveFocus();
+        expect(queryByLabelText(/task status/i)).toBeNull();
 
-        fireEvent.change(statusSelect, { target: { value: 'waiting' } });
+        fireEvent.click(getAllByRole('button', { name: /edit/i })[0]);
+        fireEvent.click(getByRole('button', { name: 'Waiting' }));
 
-        expect(getByText('Who/what are you waiting for?')).toBeInTheDocument();
-        expect(statusSelect).not.toHaveFocus();
+        expect(queryByRole('dialog', { name: 'Who/what are you waiting for?' })).not.toBeInTheDocument();
+
+        fireEvent.click(getByRole('button', { name: 'Organization' }));
         fireEvent.change(getByPlaceholderText('Who is this waiting for?'), { target: { value: 'Alex' } });
         fireEvent.click(getByRole('button', { name: 'Save' }));
 

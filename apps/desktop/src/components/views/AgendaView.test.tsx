@@ -5,7 +5,6 @@ import { LanguageProvider } from '../../contexts/language-context';
 import { AgendaView } from './AgendaView';
 import { useUiStore } from '../../store/ui-store';
 import { TINYBUBBLES_NAVIGATE_EVENT } from '../../lib/navigation-events';
-import { selectToolbarOption } from '../../test/toolbar-select';
 import { expectScrolledEndGap } from '../../test/list-end-gap';
 
 // Capture the focus-drag handler so tests can drive a drop without a real
@@ -65,6 +64,29 @@ const renderAgenda = () => render(
         <AgendaView />
     </LanguageProvider>
 );
+
+// AgendaHeader's controls row (Top 3 / Filters / Show details / Group) is
+// hidden in the simplified shell (see DESIGN.md) — there is no "Filters"
+// button left in the Focus view to click. The filters/sort panel is still
+// reachable exactly the way DESIGN.md describes for a hidden toolbar: "via
+// stored preferences". Applying an existing saved Focus filter (here, an
+// empty bootstrap one) from the still-visible chip row renders
+// AgendaFiltersPanel, whose own internal Show/Hide toggle — a different
+// control from the removed header button — then reveals the sort/search/
+// token/project/energy controls exactly as before.
+const FOCUS_FILTER_BOOTSTRAP_NAME = 'Open filters';
+const focusFilterBootstrap = () => ({
+    id: 'focus-filter-bootstrap',
+    name: FOCUS_FILTER_BOOTSTRAP_NAME,
+    view: 'focus' as const,
+    criteria: {},
+    createdAt: nowIso,
+    updatedAt: nowIso,
+});
+const openFocusFilters = (getByRole: (role: string, options?: { name: string | RegExp }) => HTMLElement) => {
+    fireEvent.click(getByRole('button', { name: FOCUS_FILTER_BOOTSTRAP_NAME }));
+    fireEvent.click(getByRole('button', { name: /^Show$/i }));
+};
 
 describe('AgendaView', () => {
     beforeEach(() => {
@@ -201,11 +223,23 @@ describe('AgendaView', () => {
             expandedTaskIds: { 'next-action-task': true },
         }));
 
-        const { getByRole, queryByText } = renderAgenda();
+        const { queryByRole, queryByText } = renderAgenda();
 
         expect(queryByText('Expanded task note')).toBeInTheDocument();
+        // AgendaHeader's "Hide details" button is hidden in the simplified
+        // shell (see DESIGN.md) — the toggle is unreachable from this view.
+        expect(queryByRole('button', { name: /hide details/i })).not.toBeInTheDocument();
 
-        fireEvent.click(getByRole('button', { name: /^hide details$/i }));
+        // The same store update the (now-hidden) button used to make is still
+        // reachable app-wide via the global keyboard shortcut wired in
+        // keybinding-context.tsx — capability intact, per DESIGN.md.
+        act(() => {
+            useUiStore.getState().collapseAllTaskDetails();
+            useUiStore.setState((state) => ({
+                ...state,
+                listOptions: { ...state.listOptions, showDetails: false },
+            }));
+        });
 
         expect(queryByText('Expanded task note')).not.toBeInTheDocument();
         expect(useUiStore.getState().listOptions.showDetails).toBe(false);
@@ -299,14 +333,17 @@ describe('AgendaView', () => {
         expect(queryByRole('button', { name: 'New saved filter' })).not.toBeInTheDocument();
     });
 
-    it('keeps Focus filters collapsed until opened from the header', () => {
-        const { getByRole, getByPlaceholderText, queryByPlaceholderText } = renderAgenda();
+    // AgendaHeader's Filters button is hidden in the simplified shell (see
+    // DESIGN.md), and there is no fallback control anywhere else in Focus —
+    // unlike Inbox's "Show details", there is no keyboard shortcut for it
+    // either. The filters panel stays collapsed with no way to open it from
+    // a blank Focus view.
+    it('keeps Focus filters collapsed, with no Filters toggle to open them', () => {
+        const { queryByRole, queryByPlaceholderText } = renderAgenda();
 
+        expect(queryByRole('button', { name: /^Filters$/i })).not.toBeInTheDocument();
         expect(queryByPlaceholderText('Search...')).not.toBeInTheDocument();
-
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
-
-        expect(getByPlaceholderText('Search...')).toBeInTheDocument();
+        expect(document.getElementById('agenda-filters-panel')).not.toBeInTheDocument();
     });
 
     it('does not let earlier non-Focus tasks hide the next task in a sequential project', () => {
@@ -707,7 +744,7 @@ describe('AgendaView', () => {
             highlightTaskId: null,
         });
 
-        const { container, getByText } = renderAgenda();
+        const { container, getByText, queryByText } = renderAgenda();
         const firstRow = container.querySelector('[data-task-id="project-first"]');
         const unrelatedRow = container.querySelector('[data-task-id="unrelated-next"]');
         const secondRow = container.querySelector('[data-task-id="project-second"]');
@@ -717,6 +754,14 @@ describe('AgendaView', () => {
         expect(secondRow).toBeTruthy();
         expect(firstRow!.compareDocumentPosition(unrelatedRow!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(unrelatedRow!.compareDocumentPosition(secondRow!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        // Collapsed rows were calmed down to checkbox/title/star/due-date chip
+        // only (see DESIGN.md "Kid-shell structural follow-up") — the project
+        // due-today badge is secondary metadata, so it no longer shows until
+        // the row is expanded.
+        expect(queryByText('Project due today')).not.toBeInTheDocument();
+        const toggle = firstRow!.querySelector<HTMLButtonElement>('[data-task-view-toggle]');
+        expect(toggle).toBeTruthy();
+        fireEvent.click(toggle!);
         expect(getByText('Project due today')).toBeInTheDocument();
         expect(projectFirst.dueDate).toBeUndefined();
     });
@@ -856,10 +901,17 @@ describe('AgendaView', () => {
             settings: {},
             highlightTaskId: null,
         });
+        // AgendaHeader's Group selector is hidden in the simplified shell (see
+        // DESIGN.md) — capability intact via the stored `nextGroupBy`
+        // preference, which Focus shares with the other list views.
+        useUiStore.setState((state) => ({
+            ...state,
+            listOptions: { ...state.listOptions, nextGroupBy: 'context' },
+        }));
 
-        const { getByText } = renderAgenda();
-        selectToolbarOption('Group', 'Context');
+        const { getByText, queryByRole } = renderAgenda();
 
+        expect(queryByRole('combobox', { name: 'Group' })).not.toBeInTheDocument();
         expect(getByText('@work')).toBeInTheDocument();
         expect(getByText('@home')).toBeInTheDocument();
         expect(getByText('Work next task')).toBeInTheDocument();
@@ -907,9 +959,12 @@ describe('AgendaView', () => {
             settings: {},
             highlightTaskId: null,
         });
+        useUiStore.setState((state) => ({
+            ...state,
+            listOptions: { ...state.listOptions, nextGroupBy: 'project' },
+        }));
 
         const { getByText } = renderAgenda();
-        selectToolbarOption('Group', 'Project');
 
         expect(getByText('Alpha project')).toBeInTheDocument();
         expect(getByText('No Project')).toBeInTheDocument();
@@ -958,9 +1013,12 @@ describe('AgendaView', () => {
             settings: {},
             highlightTaskId: null,
         });
+        useUiStore.setState((state) => ({
+            ...state,
+            listOptions: { ...state.listOptions, nextGroupBy: 'priority' },
+        }));
 
         const { getByText } = renderAgenda();
-        selectToolbarOption('Group', 'Priority');
 
         expect(getByText('Urgent')).toBeInTheDocument();
         expect(getByText('Low')).toBeInTheDocument();
@@ -1021,13 +1079,13 @@ describe('AgendaView', () => {
             _allProjects: projects,
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'Alpha project' }));
 
         expect(getByText('Project task')).toBeInTheDocument();
@@ -1072,13 +1130,13 @@ describe('AgendaView', () => {
             _allProjects: projects,
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'No Project' }));
 
         expect(getByText('Standalone task')).toBeInTheDocument();
@@ -1114,13 +1172,13 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'High energy' }));
 
         expect(getByText('High energy task')).toBeInTheDocument();
@@ -1146,14 +1204,14 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             error: null,
             highlightTaskId: null,
         });
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'High energy' }));
 
         expect(queryByText('Low energy task')).not.toBeInTheDocument();
@@ -1196,14 +1254,14 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             error: null,
             highlightTaskId: null,
         });
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: '@desk' }));
         fireEvent.click(getByRole('button', { name: '@phone' }));
 
@@ -1245,14 +1303,14 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             error: null,
             highlightTaskId: null,
         });
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         // Neutral → included: only tasks carrying #waiting remain.
         fireEvent.click(getByRole('button', { name: '#waiting' }));
         expect(getByText('Waiting task')).toBeInTheDocument();
@@ -1517,13 +1575,13 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getAllByRole, getByDisplayValue, getByRole, getByText } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'High energy' }));
         fireEvent.click(getByRole('button', { name: /^Save$/i }));
         fireEvent.change(getByDisplayValue('High energy'), { target: { value: 'High energy preset' } });
@@ -1531,7 +1589,9 @@ describe('AgendaView', () => {
         fireEvent.click(saveButtons[saveButtons.length - 1]);
 
         await waitFor(() => {
-            expect(useTaskStore.getState().settings.savedFilters?.[0]).toMatchObject({
+            // Index 1: index 0 is the bootstrap saved filter used above to
+            // reach the (header-hidden) filters panel.
+            expect(useTaskStore.getState().settings.savedFilters?.[1]).toMatchObject({
                 name: 'High energy preset',
                 view: 'focus',
                 criteria: { energy: ['high'] },
@@ -1569,13 +1629,13 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getAllByRole, getByDisplayValue, getByRole } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: '@desk' }));
         fireEvent.click(getByRole('button', { name: '@phone' }));
         fireEvent.click(getByRole('button', { name: 'Any' }));
@@ -1585,7 +1645,9 @@ describe('AgendaView', () => {
         fireEvent.click(saveButtons[saveButtons.length - 1]);
 
         await waitFor(() => {
-            expect(useTaskStore.getState().settings.savedFilters?.[0]).toMatchObject({
+            // Index 1: index 0 is the bootstrap saved filter used above to
+            // reach the (header-hidden) filters panel.
+            expect(useTaskStore.getState().settings.savedFilters?.[1]).toMatchObject({
                 name: 'Desk or phone',
                 view: 'focus',
                 criteria: {
@@ -1625,13 +1687,13 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getAllByRole, getByDisplayValue, getByRole } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: '#quick' }));
         fireEvent.click(getByRole('button', { name: '#calls' }));
         fireEvent.click(getByRole('button', { name: 'Any' }));
@@ -1641,7 +1703,9 @@ describe('AgendaView', () => {
         fireEvent.click(saveButtons[saveButtons.length - 1]);
 
         await waitFor(() => {
-            expect(useTaskStore.getState().settings.savedFilters?.[0]).toMatchObject({
+            // Index 1: index 0 is the bootstrap saved filter used above to
+            // reach the (header-hidden) filters panel.
+            expect(useTaskStore.getState().settings.savedFilters?.[1]).toMatchObject({
                 name: 'Quick or calls',
                 view: 'focus',
                 criteria: {
@@ -1660,22 +1724,29 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
+        // AgendaHeader's Group selector is hidden (see DESIGN.md); grouping is
+        // driven directly through the shared `nextGroupBy` preference instead.
+        useUiStore.setState((state) => ({
+            ...state,
+            listOptions: { ...state.listOptions, nextGroupBy: 'project' },
+        }));
 
         const { getAllByRole, getByDisplayValue, getByRole } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'Start date' }));
-        selectToolbarOption('Group', 'Project', { getByRole });
         fireEvent.click(getByRole('button', { name: /^Save$/i }));
         fireEvent.change(getByDisplayValue('Focus filter'), { target: { value: 'Start by project' } });
         const saveButtons = getAllByRole('button', { name: /^Save$/i });
         fireEvent.click(saveButtons[saveButtons.length - 1]);
 
         await waitFor(() => {
-            expect(useTaskStore.getState().settings.savedFilters?.[0]).toMatchObject({
+            // Index 1: index 0 is the bootstrap saved filter used above to
+            // reach the (header-hidden) filters panel.
+            expect(useTaskStore.getState().settings.savedFilters?.[1]).toMatchObject({
                 name: 'Start by project',
                 view: 'focus',
                 criteria: {},
@@ -1783,15 +1854,22 @@ describe('AgendaView', () => {
         expect(secondRender.getByRole('button', { name: /^Next Actions\s*\(1\)$/i })).toHaveAttribute('aria-expanded', 'false');
     });
 
-    it('exposes the filter panel state with aria-expanded', () => {
+    // AgendaHeader's own Filters button (and its aria-expanded) is gone (see
+    // DESIGN.md); the panel keeps its own separate Show/Hide toggle with the
+    // same aria-expanded wiring once the panel is reachable at all (here, via
+    // a bootstrap saved filter — see openFocusFilters above).
+    it('exposes the filter panel state with aria-expanded, on the panel\'s own toggle', () => {
+        useTaskStore.setState({
+            settings: { savedFilters: [focusFilterBootstrap()] },
+        });
         const { getByRole } = renderAgenda();
 
-        const filtersButton = getByRole('button', { name: /^Filters$/i });
+        fireEvent.click(getByRole('button', { name: FOCUS_FILTER_BOOTSTRAP_NAME }));
+        const filtersButton = getByRole('button', { name: /^Show$/i });
         expect(filtersButton).toHaveAttribute('aria-expanded', 'false');
 
         fireEvent.click(filtersButton);
-        expect(filtersButton).toHaveAttribute('aria-expanded', 'true');
-        expect(getByRole('button', { name: /hide/i })).toHaveAttribute('aria-expanded', 'true');
+        expect(getByRole('button', { name: /^Hide$/i })).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('allows hiding the filter panel after selecting a filter', () => {
@@ -1813,17 +1891,19 @@ describe('AgendaView', () => {
             _allProjects: [],
             areas: [],
             _allAreas: [],
-            settings: {},
+            settings: { savedFilters: [focusFilterBootstrap()] },
             highlightTaskId: null,
         });
 
         const { getByRole, queryByRole } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+        openFocusFilters(getByRole);
         fireEvent.click(getByRole('button', { name: 'High energy' }));
         fireEvent.click(getByRole('button', { name: /^hide$/i }));
 
-        expect(getByRole('button', { name: /^Filters/i })).toHaveAttribute('aria-expanded', 'false');
+        // The header's own Filters button is gone; the panel's own toggle
+        // (now reading "Show" again) carries the same aria-expanded wiring.
+        expect(getByRole('button', { name: /^Show$/i })).toHaveAttribute('aria-expanded', 'false');
         expect(queryByRole('button', { name: 'Low energy' })).not.toBeInTheDocument();
         expect(getByRole('textbox')).toBeInTheDocument();
         expect(queryByRole('button', { name: 'High energy' })).not.toBeInTheDocument();
@@ -1851,9 +1931,12 @@ describe('AgendaView', () => {
             settings: {},
             highlightTaskId: null,
         });
+        useUiStore.setState((state) => ({
+            ...state,
+            listOptions: { ...state.listOptions, nextGroupBy: 'context' },
+        }));
 
         const { getByText } = renderAgenda();
-        selectToolbarOption('Group', 'Context');
 
         expect(getByText(/no context/i)).toBeInTheDocument();
         expect(getByText('Next task 30')).toBeInTheDocument();
@@ -1901,8 +1984,14 @@ describe('AgendaView', () => {
             highlightTaskId: null,
         });
 
+        // AgendaHeader's Group selector is hidden in the simplified shell (see
+        // DESIGN.md) — grouping mode is driven directly through the shared
+        // `nextGroupBy` preference instead of a click on a hidden control.
+        useUiStore.setState((state) => ({
+            ...state,
+            listOptions: { ...state.listOptions, nextGroupBy: 'context' },
+        }));
         const firstRender = renderAgenda();
-        selectToolbarOption('Group', 'Context', firstRender);
 
         const workContextGroup = firstRender.getByRole('button', { name: /@work\s*1/i });
         fireEvent.click(workContextGroup);
@@ -1917,12 +2006,22 @@ describe('AgendaView', () => {
         expect(persisted.collapsedGroups?.context).toEqual(['context:@work']);
         expect(persisted.collapsedGroups?.project ?? []).toEqual([]);
 
-        selectToolbarOption('Group', 'Project', firstRender);
+        act(() => {
+            useUiStore.setState((state) => ({
+                ...state,
+                listOptions: { ...state.listOptions, nextGroupBy: 'project' },
+            }));
+        });
 
         expect(firstRender.getByRole('button', { name: /@work\s*1/i })).toHaveAttribute('aria-expanded', 'true');
         expect(firstRender.getByText('Work task')).toBeInTheDocument();
 
-        selectToolbarOption('Group', 'Context', firstRender);
+        act(() => {
+            useUiStore.setState((state) => ({
+                ...state,
+                listOptions: { ...state.listOptions, nextGroupBy: 'context' },
+            }));
+        });
         firstRender.unmount();
 
         const secondRender = renderAgenda();
@@ -2013,14 +2112,14 @@ describe('AgendaView', () => {
                 _allProjects: [],
                 areas: [],
                 _allAreas: [],
-                settings: {},
+                settings: { savedFilters: [focusFilterBootstrap()] },
                 highlightTaskId: null,
             });
 
             const { getByRole, queryByRole, queryAllByRole } = renderAgenda();
             expect(queryAllByRole('button', { name: 'Reorder' }).length).toBeGreaterThan(0);
 
-            fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+            openFocusFilters(getByRole);
             fireEvent.click(getByRole('button', { name: 'Start date' }));
 
             expect(queryByRole('button', { name: 'Reorder' })).toBeNull();
@@ -2038,14 +2137,14 @@ describe('AgendaView', () => {
                 _allProjects: [],
                 areas: [],
                 _allAreas: [],
-                settings: {},
+                settings: { savedFilters: [focusFilterBootstrap()] },
                 highlightTaskId: null,
             });
 
             const { getByRole, getByPlaceholderText, getByText, queryByRole, queryAllByRole } = renderAgenda();
             expect(queryAllByRole('button', { name: 'Reorder' }).length).toBeGreaterThan(0);
 
-            fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+            openFocusFilters(getByRole);
             fireEvent.change(getByPlaceholderText('Search...'), { target: { value: 'Focus A' } });
 
             // The matching row still renders, but without any drag handle.
@@ -2064,14 +2163,14 @@ describe('AgendaView', () => {
                 _allProjects: [],
                 areas: [],
                 _allAreas: [],
-                settings: {},
+                settings: { savedFilters: [focusFilterBootstrap()] },
                 highlightTaskId: null,
             });
 
             const { getByRole, getByText, queryByRole, queryAllByRole } = renderAgenda();
             expect(queryAllByRole('button', { name: 'Reorder' }).length).toBeGreaterThan(0);
 
-            fireEvent.click(getByRole('button', { name: /^Filters$/i }));
+            openFocusFilters(getByRole);
             fireEvent.click(getByRole('button', { name: 'High energy' }));
 
             expect(getByText('Focus A')).toBeInTheDocument();

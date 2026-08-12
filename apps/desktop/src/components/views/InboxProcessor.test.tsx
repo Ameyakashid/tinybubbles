@@ -236,8 +236,13 @@ describe('InboxProcessor', () => {
         expect(queryByText('process.refineDesc')).toBeNull();
     });
 
-    it('preselects the area already assigned to the inbox task', () => {
-        const { getByRole } = renderInboxProcessor({
+    // Area is one of the fields hidden from the reduced default task-editor
+    // layout (see DESIGN.md), so quick processing no longer shows a picker
+    // to preselect at all. What still matters is the bug this test used to
+    // guard against: a hidden field must not silently drop data already
+    // saved on the task, so this now checks the commit instead of a picker.
+    it('preserves the area already assigned to the inbox task even with no area picker shown', async () => {
+        const { getByRole, queryByRole, updateTask } = renderInboxProcessor({
             settings: {
                 gtd: {
                     inboxProcessing: {
@@ -251,17 +256,34 @@ describe('InboxProcessor', () => {
 
         fireEvent.click(getByRole('button', { name: /process\.btn/i }));
 
-        // The dropdown must reflect what apply will save; resetting it to empty
-        // silently dropped an area assigned while the task sat in the inbox.
-        expect(getByRole('button', { name: 'Work' })).toBeTruthy();
+        expect(queryByRole('button', { name: 'Work' })).not.toBeInTheDocument();
+
+        // In quick mode, "Done it" only selects the two-minute choice; the
+        // final commit happens on "process.next".
+        fireEvent.click(getByRole('button', { name: 'process.doneIt' }));
+        fireEvent.click(getByRole('button', { name: 'process.next' }));
+
+        await waitFor(() => {
+            expect(updateTask).toHaveBeenCalledWith('task-1', expect.objectContaining({
+                areaId: 'area-work',
+                status: 'done',
+            }));
+        });
     });
 
+    // Area and project are hidden from the reduced default task-editor
+    // fields (see DESIGN.md); re-enable them here, the way Settings would,
+    // to keep exercising the underlying area-then-project filtering rather
+    // than testing a picker the default config no longer shows.
     it('filters quick processing project choices by the selected area', () => {
         const { getByRole, queryByRole } = renderInboxProcessor({
             settings: {
                 gtd: {
                     inboxProcessing: {
                         defaultMode: 'quick',
+                    },
+                    taskEditor: {
+                        hidden: [],
                     },
                 },
             },
@@ -284,6 +306,9 @@ describe('InboxProcessor', () => {
                 gtd: {
                     inboxProcessing: {
                         projectFirst: true,
+                    },
+                    taskEditor: {
+                        hidden: [],
                     },
                 },
             },
@@ -429,8 +454,14 @@ describe('InboxProcessor', () => {
         expect(getByText('process.reference')).toBeTruthy();
     });
 
+    // Contexts and tags are hidden from the reduced default task-editor
+    // fields (see DESIGN.md); re-enable them here, the way Settings would,
+    // so this keeps exercising the underlying commit rather than a picker
+    // the default config no longer shows.
     it('shows context and tag fields for quick Reference processing', async () => {
-        const { getByRole, getByText, getByLabelText, updateTask } = renderInboxProcessor();
+        const { getByRole, getByText, getByLabelText, updateTask } = renderInboxProcessor({
+            gtd: { taskEditor: { hidden: [] } },
+        });
 
         fireEvent.click(getByRole('button', { name: /process\.btn/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
@@ -458,7 +489,9 @@ describe('InboxProcessor', () => {
 
     it('shows context and tag fields before confirming guided Reference processing', async () => {
         const user = userEvent.setup();
-        const { getAllByRole, getByPlaceholderText, getByRole, getByText, updateTask } = renderInboxProcessor();
+        const { getAllByRole, getByPlaceholderText, getByRole, getByText, updateTask } = renderInboxProcessor({
+            gtd: { taskEditor: { hidden: [] } },
+        });
 
         fireEvent.click(getByRole('button', { name: /process\.btn/i }));
         fireEvent.click(getByText('process.refineNext'));
@@ -955,9 +988,10 @@ describe('InboxProcessor', () => {
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepNo'));
         fireEvent.click(getByText('process.takesLonger'));
+        // Project and area are hidden from the reduced default task-editor
+        // fields (see DESIGN.md), so the project-selection step is skipped
+        // and "Do it" commits directly instead of advancing to it.
         fireEvent.click(getByText('process.doIt'));
-        fireEvent.click(getByRole('button', { name: /process\.next/ }));
-        fireEvent.click(getByRole('button', { name: /process\.noProject/ }));
 
         await waitFor(() => {
             expect(updateTask).toHaveBeenCalledWith(

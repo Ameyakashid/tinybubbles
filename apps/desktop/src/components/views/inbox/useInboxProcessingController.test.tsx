@@ -124,7 +124,31 @@ describe('useInboxProcessingController not-actionable destinations', () => {
 
     it('keeps picked organization fields when delegated to Waiting', async () => {
         const updateTask = vi.fn(async () => ({ success: true }));
-        const { result } = renderController(updateTask);
+        // Contexts and tags are hidden from the task editor (and this wizard)
+        // by default in the simplified desktop shell — DEFAULT_TASK_EDITOR_VISIBLE
+        // is just dueDate/description/checklist/attachments (see DESIGN.md).
+        // Re-enable them here the way Settings would, so this still exercises
+        // the underlying commit carrying picked organization fields through
+        // to Waiting rather than testing a path the default config skips.
+        const settingsWithOrganizationFields = { gtd: { taskEditor: { hidden: [] as string[] } } };
+        const { result } = renderHook(() => {
+            const [isProcessing, setIsProcessing] = useState(true);
+            return useInboxProcessingController({
+                t: (key) => key,
+                tasks,
+                projects,
+                areas,
+                settings: settingsWithOrganizationFields,
+                addProject: async () => null,
+                addTask: async () => ({ success: true }),
+                updateTask,
+                deleteTask: async () => ({ success: true }),
+                allContexts: tokens,
+                allTags: tokens,
+                isProcessing,
+                setIsProcessing,
+            });
+        });
 
         await waitFor(() => {
             expect(result.current.wizardProps.processingTask?.id).toBe('one');
@@ -145,6 +169,32 @@ describe('useInboxProcessingController not-actionable destinations', () => {
             contexts: ['@work'],
             tags: ['#follow-up'],
         }));
+    });
+
+    // With the default kid-shell task-editor fields, the picked context/tag
+    // above wouldn't even be reachable — this documents what actually
+    // happens for a session that never customises Settings back on.
+    it('drops contexts and tags when delegated to Waiting under the default (reduced) task-editor fields', async () => {
+        const updateTask = vi.fn(async () => ({ success: true }));
+        const { result } = renderController(updateTask);
+
+        await waitFor(() => {
+            expect(result.current.wizardProps.processingTask?.id).toBe('one');
+        });
+
+        act(() => {
+            result.current.wizardProps.setField('projectId', 'p1');
+            result.current.wizardProps.toggleContext('@work');
+            result.current.wizardProps.toggleTag('#follow-up');
+        });
+        await act(async () => {
+            await result.current.wizardProps.handleConfirmWaiting();
+        });
+
+        const [, fields] = updateTask.mock.calls[0] as [string, Record<string, unknown>];
+        expect(fields).toMatchObject({ status: 'waiting', projectId: 'p1' });
+        expect(fields).not.toHaveProperty('contexts');
+        expect(fields).not.toHaveProperty('tags');
     });
 });
 

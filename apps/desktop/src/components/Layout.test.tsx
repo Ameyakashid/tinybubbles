@@ -198,7 +198,9 @@ describe('Layout sidebar archive section', () => {
             expect(getByRole('button', { name: 'Archive' })).toHaveAttribute('aria-expanded', 'true');
             expect(container.querySelector('#sidebar-section-archive')).not.toHaveClass('hidden');
         });
-        expect(getByRole('button', { name: 'Trash' })).toHaveAttribute('aria-current', 'page');
+        // Trash was restored to the sidebar for recovery, relabelled "Deleted"
+        // in the English shell (see display-labels.ts / DESIGN.md).
+        expect(getByRole('button', { name: 'Deleted' })).toHaveAttribute('aria-current', 'page');
     });
 
     it('respects a stored collapsed archive preference', () => {
@@ -249,7 +251,12 @@ describe('Layout Obsidian nav visibility', () => {
         expect(queryByRole('button', { name: 'Obsidian' })).not.toBeInTheDocument();
     });
 
-    it('shows Obsidian when the integration is enabled', () => {
+    // Obsidian was cut from the simplified sidebar entirely (see DESIGN.md):
+    // the engine and its route still exist, enabling the integration no
+    // longer surfaces a sidebar entry for it. Layout still renders whatever
+    // view it's handed, so the route stays reachable even with no nav link
+    // pointing at it.
+    it('keeps Obsidian out of the sidebar even when the integration is enabled, though the route still resolves', () => {
         act(() => {
             useObsidianStore.setState((state) => ({
                 ...state,
@@ -260,9 +267,10 @@ describe('Layout Obsidian nav visibility', () => {
             }));
         });
 
-        const { getByRole } = renderLayout();
+        const { getByText, queryByRole } = renderLayout('obsidian');
 
-        expect(getByRole('button', { name: 'Obsidian' })).toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Obsidian' })).not.toBeInTheDocument();
+        expect(getByText('Main content')).toBeInTheDocument();
     });
 });
 
@@ -478,7 +486,11 @@ describe('Layout collapsed sidebar area filter', () => {
         expect(getByRole('button', { name: 'Area filter: Work' })).toBeInTheDocument();
     });
 
-    it('uses distinct collapsed icons for board navigation and area filtering', () => {
+    // Board was cut from the simplified sidebar (see DESIGN.md): it no longer
+    // has a nav item to collide with the area-filter icon, but the view
+    // stays routable, so this only needs to check the filter icon is what it
+    // should be and that Board really has no collapsed nav entry to clash with.
+    it('shows a distinct collapsed area-filter icon, with Board hidden from the sidebar rather than colliding with it', () => {
         act(() => {
             useTaskStore.setState((state) => ({
                 ...state,
@@ -490,11 +502,10 @@ describe('Layout collapsed sidebar area filter', () => {
         });
 
         const { container, getByRole } = renderLayout();
-        const boardIcon = container.querySelector('[data-view="board"] svg');
         const areaFilterIcon = getByRole('button', { name: 'Area filter: All areas' }).querySelector('svg');
 
-        expect(boardIcon).toHaveClass('lucide-kanban');
         expect(areaFilterIcon).toHaveClass('lucide-layers');
+        expect(container.querySelector('[data-view="board"]')).not.toBeInTheDocument();
     });
 });
 
@@ -624,18 +635,24 @@ describe('Layout sync security warning', () => {
     // This nav item is the only place a task dragged out of a list can be dropped,
     // and it gave no sign of that while a drag was in flight, so the capability was
     // undiscoverable (#867).
-    it('lights up every drop target while a task drag is in flight', () => {
+    it('lights up every visible drop target while a task drag is in flight', () => {
         const { container, getByRole } = renderLayout();
         const calendarItem = getByRole('button', { name: 'Calendar' });
-        const somedayItem = container.querySelector('[data-view="someday"]')!;
+        // Someday is a valid drop status in NAV_DROP_STATUSES, but its nav
+        // item was cut from the simplified sidebar (see DESIGN.md) — it's
+        // hidden but still routable, so there is nothing in the DOM for a
+        // drag to light up.
+        expect(container.querySelector('[data-view="someday"]')).not.toBeInTheDocument();
+        const doneItem = container.querySelector('[data-view="done"]')!;
         const projectsItem = container.querySelector('[data-view="projects"]')!;
         expect(calendarItem.className).not.toContain('outline-dashed');
 
         dispatchDragStartFromRow(true);
 
-        // Every destination, not just whichever one the pointer happens to be over.
+        // Every remaining status destination, not just whichever one the
+        // pointer happens to be over.
         expect(calendarItem.className).toContain('outline-dashed');
-        expect(somedayItem.className).toContain('outline-dashed');
+        expect(doneItem.className).toContain('outline-dashed');
         // Projects is not a destination and must stay quiet.
         expect(projectsItem.className).not.toContain('outline-dashed');
 
@@ -665,9 +682,13 @@ describe('Layout sync security warning', () => {
             dropEffect: 'none',
         };
 
-        fireEvent.drop(container.querySelector('[data-view="waiting"]')!, { dataTransfer });
+        // Waiting is a valid drop status but its nav item is hidden from the
+        // simplified sidebar (see DESIGN.md); "Done" is one of the status
+        // destinations that remains visible, so it's what a real drag could
+        // actually land on.
+        fireEvent.drop(container.querySelector('[data-view="done"]')!, { dataTransfer });
 
-        await waitFor(() => expect(moveTask).toHaveBeenCalledWith('task-1', 'waiting'));
+        await waitFor(() => expect(moveTask).toHaveBeenCalledWith('task-1', 'done'));
         const latestToast = () => {
             const toasts = useUiStore.getState().toasts;
             return toasts[toasts.length - 1];

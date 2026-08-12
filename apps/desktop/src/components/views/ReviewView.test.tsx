@@ -99,7 +99,13 @@ describe('ReviewView', () => {
         expect(getByRole('button', { name: /weekly review/i })).toBeInTheDocument();
     });
 
-    it('hides compact metadata when the details toggle is turned off', () => {
+    // Collapsed rows were calmed down to checkbox, title, focus star and
+    // due-date chip (see DESIGN.md); secondary metadata like location now only
+    // shows once a row is individually expanded — the list-wide "Details"
+    // setting no longer shows it on its own. That setting still does
+    // something real, though: turning it off collapses every expanded row at
+    // once, which this test now covers instead.
+    it('collapses every expanded row, hiding their metadata, when the details toggle is turned off', () => {
         const reviewTask = makeTask('review-1', {
             title: 'Review task',
             location: 'Desk lamp',
@@ -118,9 +124,14 @@ describe('ReviewView', () => {
             },
         }));
 
-        const { getByRole, queryByText } = renderWithProviders(<ReviewView />);
+        const { getByRole, getByText, queryByText } = renderWithProviders(<ReviewView />);
 
-        expect(queryByText('Desk lamp')).toBeInTheDocument();
+        // The showDetails setting alone no longer reveals metadata on a
+        // collapsed row.
+        expect(queryByText('Desk lamp')).not.toBeInTheDocument();
+
+        fireEvent.click(getByRole('button', { name: 'Toggle task details' }));
+        expect(getByText('Desk lamp')).toBeInTheDocument();
 
         fireEvent.click(getByRole('button', { name: /^view$/i }));
         fireEvent.click(within(getByRole('dialog', { name: /^view$/i })).getByRole('button', { name: /^details$/i }));

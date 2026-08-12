@@ -60,16 +60,23 @@ describe('ArchiveView', () => {
         expectScrolledEndGap(container);
     });
 
-    it('shows the archived task completion date and time', () => {
+    it('shows the archived task completion date and time once the row is expanded', () => {
         const completionLabel = safeFormatDate(archivedTask.completedAt, 'Pp');
 
-        const { getByText } = render(
+        const { getByText, getByRole, queryByText } = render(
             <LanguageProvider>
                 <ArchiveView />
             </LanguageProvider>
         );
 
         expect(getByText('Archived task')).toBeInTheDocument();
+        // Collapsed rows were calmed down to checkbox, title, focus star and
+        // due-date chip (see DESIGN.md); the completion badge is secondary
+        // metadata and no longer shows until the row is expanded.
+        expect(queryByText(`Completed: ${completionLabel}`)).not.toBeInTheDocument();
+
+        fireEvent.click(getByRole('button', { name: 'Toggle task details' }));
+
         expect(getByText(`Completed: ${completionLabel}`)).toBeInTheDocument();
     });
 

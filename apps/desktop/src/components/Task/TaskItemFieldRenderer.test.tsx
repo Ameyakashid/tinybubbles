@@ -940,7 +940,10 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         inboxButton.focus();
         fireEvent.keyDown(inboxButton, { key: 'ArrowDown' });
 
-        expect(getByRole('button', { name: 'Next' })).toHaveFocus();
+        // The shell overrides the 'status.next' pill label to "To do"
+        // (src/lib/display-labels.ts, DESIGN.md); the underlying value and
+        // keyboard behavior are unchanged.
+        expect(getByRole('button', { name: 'To do' })).toHaveFocus();
         expect(setField).toHaveBeenCalledWith('status', 'next');
     });
 
