@@ -1,25 +1,18 @@
-import type { NextGroupBy } from '../list/next-grouping';
 import { displayLabel } from '../../../lib/display-labels';
 import type { Language } from '@tinybubbles/core';
 
 type AgendaHeaderProps = {
-    filterCount: number;
     filtersOpen: boolean;
     nextActionsCount: number;
-    nextGroupBy: NextGroupBy;
-    onChangeGroupBy: (value: NextGroupBy) => void;
     onToggleFilters: () => void;
-    onToggleDetails: () => void;
-    onToggleTop3: () => void;
-    resolveText: (key: string, fallback: string) => string;
-    showListDetails: boolean;
     t: (key: string) => string;
     language?: Language;
-    top3Only: boolean;
 };
 
 export function AgendaHeader({
+    filtersOpen,
     nextActionsCount,
+    onToggleFilters,
     t,
     language = 'en',
 }: AgendaHeaderProps) {
@@ -33,9 +26,15 @@ export function AgendaHeader({
                     {nextActionsCount} {displayLabel(t, language, 'agenda.nextActions', 'to do')}
                 </p>
             </div>
-            {/* Toolbar controls (Top 3 / Filters / Details / Group) are hidden
-             * in the simplified shell — capability intact, props still passed.
-             * See DESIGN.md. */}
+            <button
+                type="button"
+                onClick={onToggleFilters}
+                aria-expanded={filtersOpen}
+                aria-controls="agenda-filters-panel"
+                className="inline-flex min-h-11 items-center rounded-md border border-border px-3 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+                {t('filters.label')}
+            </button>
         </header>
     );
 }

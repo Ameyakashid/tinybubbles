@@ -73,14 +73,33 @@ Waiting For, Reference, Contexts, Review, Board View, Obsidian, Archived, Trash.
 
 ### In-view toolbars
 
-Hidden from render, capability intact (all props/state/handlers still wired; the
-features work and are reachable via keyboard shortcuts and stored preferences):
+The child-facing rows are deliberately sparse. Reachability differs by feature and is
+recorded explicitly here; persisted state alone is not treated as an entry point.
 
-- **Focus view** (`agenda/AgendaHeader.tsx`): the whole controls row — Show Top 3 Only,
-  Filters, Show details, Group selector. The header keeps the title and the count line.
+- **Focus view** (`agenda/AgendaHeader.tsx`): the adult controls row is removed. One small
+  **Filters** button remains so filtering and sort are reachable on a fresh install.
+  **Show details** remains reachable through the real global keyboard binding. Grouping
+  can still be supplied by a saved Focus filter or existing list preference, but has no
+  Focus-view toggle. **Top 3 only** was removed, including its dead UI plumbing.
 - **Inbox** (`list/ListHeader.tsx` via new `hideControls` prop, passed by `ListView`
   when `statusFilter === 'inbox'`): the whole controls row — Filters, Select, Sort,
-  Group, Show details, Density. Scoped to Inbox only; other ListViews are unchanged.
+  Group, Show details, Density. Those Inbox-specific controls have no shortcut; stored
+  values may still affect rendering. Scoped to Inbox only; other ListViews are unchanged.
+
+- **Projects** (`projects/ProjectWorkspace.tsx`): the task toolbar keeps only Add Task.
+  Sort, Select, columns/list layout, show/hide completed tasks, and Add Section sit in a
+  small secondary options row below the project header. Select is the preset-independent
+  entry point to multi-select, bulk organize, and bulk delete on a fresh install. This
+  preserves a real path to each capability without restoring the former toolbar.
+
+## Other simplification passes
+
+- **Calendar:** simplified the visible calendar shell and selected-day actions while
+  retaining the mature calendar data and editing flows underneath.
+- **Quick add:** reduced the initial task-entry surface; the existing task model and
+  full editor remain the foundation.
+- **Projects:** simplified the sidebar, empty state, task rows, and primary toolbar;
+  advanced view/section controls use the secondary row described above.
 
 ## Plain-language display overrides (`src/lib/display-labels.ts`)
 
@@ -116,74 +135,12 @@ modules serve HTTP 200 from the dev server and production preview is clean, so t
 looks like a Vite dev optimize-deps race, pre-existing on the branch. Harmless in dev;
 revisit only if it starts appearing in production.
 
-## Test impact (deliberate, reported per the rules — tests NOT edited)
+## Test contract
 
-Full desktop suite after both passes: **37 failed / 1955 passed (1992)**. Every failure
-is either a deliberately hidden feature or pre-existing on the branch.
-
-### From hiding sidebar views (6) — `src/components/Layout.test.tsx`
-
-1. `sidebar archive section > expands archive when the active view lives in archive`
-2. `Obsidian nav visibility > shows Obsidian when the integration is enabled`
-3. `collapsed sidebar area filter > uses distinct collapsed icons for board navigation…`
-4. `lights up every drop target while a task drag is in flight`
-5. `reclassifies a task dropped on a status list, with undo`
-6. `ignores a task dropped on Trash`
-
-### From hiding the Focus toolbar (22) — `src/components/views/AgendaView.test.tsx`
-
-7. `keeps Focus filters collapsed until opened from the header`
-8. `exposes the filter panel state with aria-expanded`
-9. `allows hiding the filter panel after selecting a filter`
-10. `filters focus tasks by project`
-11. `filters focus tasks with the no-project option`
-12. `filters focus tasks by energy level`
-13. `can switch multiple context filters from all to any matching`
-14. `cycles a token chip to excluded and subtracts matching tasks from the list`
-15. `persists context any matching when saving a Focus filter`
-16. `persists tag any matching when saving a Focus filter`
-17. `saves the current Focus filter from existing controls`
-18. `saves Focus sort and group preferences without requiring criteria`
-19. `shows an empty state when filters match no visible focus tasks`
-20. `groups next actions by project in Focus view`
-21. `groups next actions by context in Focus view`
-22. `groups next actions by priority in Focus view`
-23. `renders every grouped no-context task when the list is large`
-24. `persists collapsed grouped next-action state by grouping mode`
-25. `collapses expanded task details when page details are turned off`
-26. `Today's Focus drag reorder > renders no drag affordance under a non-default sort`
-27. `Today's Focus drag reorder > renders no drag affordance while a search query narrows the focus list`
-28. `Today's Focus drag reorder > renders no drag affordance while filter criteria narrow the focus list`
-
-### From hiding the Focus toolbar (3) — `src/components/views/agenda/AgendaHeader.test.tsx`
-
-29. `renders its controls in the shared list-toolbar style`
-30. `names the details button by its action without also claiming a pressed state`
-31. `offers tag as a Focus grouping option`
-
-### From hiding the Inbox controls (2) — `src/components/views/ListView.test.tsx`
-
-32. `offers a Filters toggle in the inbox toolbar`
-33. `groups inbox tasks by each tag when tag grouping is selected`
-
-### From plain-language label overrides (1) — `src/components/Task/TaskItemFieldRenderer.test.tsx`
-
-34. `changes status pill choices with arrow keys` — looks for a pill named "Next";
-    the pill is now "To do". Keyboard behavior itself is intact (the sibling test
-    `renders status choices as pills…` passes).
-
-### Pre-existing on the branch (3) — verified on the clean tree
-
-35–36. `src/lib/tauri-invoke.test.ts` — both seam-ratchet tests (stale exclusion for
-    `components/Task/task-item-attachment-utils.ts`)
-37. `src/contexts/keybinding-context.test.tsx > triggers quick add with Ctrl+Alt+M`
-
-(`App.test.tsx > prefers the view in the URL… (#931)` failed once with a 5s timeout
-under full-suite load but passes in isolation — flaky, unrelated.)
-
-**Decision needed:** the 31 toolbar/sidebar tests encode the old visible-chrome
-contract. Either the hidden chrome returns, or the owner blesses updating those tests
-to the new contract. They are untouched here, per the rules.
+The owner explicitly approved updating tests to assert the simplified shell. Tests may
+therefore assert that intentionally hidden chrome is absent, while capability tests must
+still exercise a real reachable path. Historical red-test inventories are not design
+documentation; current verification results belong in the handoff that produced them.
 
 ## Previous direction removed
 
@@ -198,7 +155,6 @@ What survived from it: the soft sea-tone palette idea, folded into the main them
 - Per-locale plain-language overrides in `display-labels.ts` if non-English matters.
 - The task-row status `<select>` pill is still an adult control rendered on every row —
   a candidate to hide next pass (its tests would need the same sanctioned treatment).
-- Owner decision on the 31 red tests above.
 
 ## Kid-shell structural follow-up
 

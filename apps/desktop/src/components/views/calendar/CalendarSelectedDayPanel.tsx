@@ -4,6 +4,8 @@ import { Check, Clock, MoreHorizontal, Plus, X } from 'lucide-react';
 import { getTaskCalendarOccurrenceDate, hasTimeComponent, isProjectedRecurringTask, safeFormatDate, safeParseDate, type Task } from '@tinybubbles/core';
 
 import { cn } from '../../../lib/utils';
+import { displayLabel } from '../../../lib/display-labels';
+import { useLanguage } from '../../../contexts/language-context';
 import { reportError } from '../../../lib/report-error';
 import { setCalendarTaskDragData } from '../../../lib/calendar-task-drag';
 import type { DesktopCalendarController } from './useDesktopCalendarController';
@@ -55,6 +57,7 @@ function getProjectedRecurrenceDisplayLabel(task: Task, projectedLabel: string):
 }
 
 export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPanelProps) {
+    const { language } = useLanguage();
     const {
         beginEditScheduledTime,
         calendarNameById,
@@ -70,10 +73,6 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
         openQuickAddForDate,
         openTaskFromCalendar,
         resolveText,
-        scheduleCandidates,
-        scheduleError,
-        scheduleQuery,
-        scheduleTaskOnSelectedDate,
         selectedAllDayEvents,
         selectedDate,
         selectedExternalEvents,
@@ -82,7 +81,6 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
         t,
         timeEstimateToMinutes,
         updateEditingTimeValue,
-        updateScheduleQuery,
         updateTask,
     } = controller;
     const handleTaskDragStart = (event: DragEvent<HTMLElement>, taskId: string, kind: 'scheduled' | 'deadline') => {
@@ -96,56 +94,56 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
         <div className="rounded-lg border border-border bg-card">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                 <div>
-                    <div className="text-sm font-semibold">{format(selectedDate, 'PPPP')}</div>
-                    <div className="text-xs text-muted-foreground">
-                        {selectedTaskRows.length + selectedExternalEvents.length} {resolveText('calendar.items', 'items')}
+                    <div className="text-lg font-bold">{format(selectedDate, 'PPPP')}</div>
+                    <div className="text-sm text-muted-foreground">
+                        {selectedTaskRows.length + selectedExternalEvents.length} {displayLabel(t, language, 'calendar.items', 'items')}
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
                         type="button"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="inline-flex h-11 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40"
                         onClick={() => openQuickAddForDate(selectedDate)}
                     >
-                        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Plus className="h-4 w-4" aria-hidden="true" />
                         {t('calendar.addTask')}
                     </button>
                     <button
                         type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                         onClick={closeSelectedDay}
                         aria-label={t('common.close')}
                         title={t('common.close')}
                     >
-                        <X className="h-4 w-4" aria-hidden="true" />
+                        <X className="h-5 w-5" aria-hidden="true" />
                     </button>
                 </div>
             </div>
 
-            <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="grid gap-4 p-4">
                 <div className="space-y-5">
                     {selectedAllDayEvents.length > 0 && (
                         <section className="space-y-2">
-                            <h3 className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t('calendar.allDay')}</h3>
-                            <div className="space-y-1">
+                            <h3 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">{t('calendar.allDay')}</h3>
+                            <div className="space-y-1.5">
                                 {selectedAllDayEvents.map((event) => {
                                     const sourceLabel = calendarNameById.get(event.sourceId);
                                     return (
                                         <div
                                             key={event.id}
-                                            className="flex items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-sm"
+                                            className="flex min-h-11 items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-base"
                                             style={{ borderLeftColor: getExternalCalendarColor(event.sourceId) }}
                                         >
                                             <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                                            {sourceLabel && <span className="truncate text-xs text-muted-foreground">{sourceLabel}</span>}
+                                            {sourceLabel && <span className="truncate text-sm text-muted-foreground">{sourceLabel}</span>}
                                             <button
                                                 type="button"
-                                                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-2 text-xs font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                className="inline-flex h-11 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
                                                 onClick={() => void createTaskFromExternalEvent(event)}
                                                 aria-label={`${resolveText('calendar.createTaskFromEvent', 'Create task')}: ${event.title}`}
                                                 title={resolveText('calendar.createTaskFromEvent', 'Create task')}
                                             >
-                                                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                                                <Plus className="h-4 w-4" aria-hidden="true" />
                                                 {resolveText('calendar.createTaskFromEvent', 'Create task')}
                                             </button>
                                         </div>
@@ -155,11 +153,12 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                         </section>
                     )}
 
+                    {(isExternalLoading || selectedTimedEvents.length > 0) && (
                     <section className="space-y-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{t('calendar.events')}</h3>
-                        <div className="space-y-1">
+                        <h3 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">{t('calendar.events')}</h3>
+                        <div className="space-y-1.5">
                             {isExternalLoading && (
-                                <div className="rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                                <div className="rounded-md bg-muted/40 px-3 py-2 text-base text-muted-foreground">
                                     {resolveText('common.loading', 'Loading...')}
                                 </div>
                             )}
@@ -173,36 +172,32 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                 return (
                                     <div
                                         key={event.id}
-                                        className="flex items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-sm"
+                                        className="flex min-h-11 items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-base"
                                         style={{ borderLeftColor: getExternalCalendarColor(event.sourceId) }}
                                     >
-                                        <span className="w-28 shrink-0 text-xs font-medium text-muted-foreground">{timeLabel}</span>
+                                        <span className="w-28 shrink-0 text-sm font-medium text-muted-foreground">{timeLabel}</span>
                                         <span className="min-w-0 flex-1 truncate">{event.title}</span>
-                                        {sourceLabel && <span className="truncate text-xs text-muted-foreground">{sourceLabel}</span>}
+                                        {sourceLabel && <span className="truncate text-sm text-muted-foreground">{sourceLabel}</span>}
                                         <button
                                             type="button"
-                                            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-2 text-xs font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                            className="inline-flex h-11 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
                                             onClick={() => void createTaskFromExternalEvent(event)}
                                             aria-label={`${resolveText('calendar.createTaskFromEvent', 'Create task')}: ${event.title}`}
                                             title={resolveText('calendar.createTaskFromEvent', 'Create task')}
                                         >
-                                            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <Plus className="h-4 w-4" aria-hidden="true" />
                                             {resolveText('calendar.createTaskFromEvent', 'Create task')}
                                         </button>
                                     </div>
                                 );
                             })}
-                            {!isExternalLoading && selectedTimedEvents.length === 0 && (
-                                <div className="rounded-md bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                                    {t('calendar.noTasks')}
-                                </div>
-                            )}
                         </div>
                     </section>
+                    )}
 
                     <section className="space-y-2">
-                        <h3 className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{resolveText('calendar.tasks', 'Tasks')}</h3>
-                        <div className="space-y-1">
+                        <h3 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">{resolveText('calendar.tasks', 'Tasks')}</h3>
+                        <div className="space-y-1.5">
                             {selectedTaskRows.map(({ id, kind, task, start }) => {
                                 const projected = isProjectedRecurringTask(task);
                                 const projectedLabel = projected
@@ -218,7 +213,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                     : start && end
                                     ? `${safeFormatDate(start, 'p')}-${safeFormatDate(end, 'p')}`
                                     : kind === 'deadline'
-                                        ? t('calendar.deadline')
+                                        ? displayLabel(t, language, 'calendar.deadline', 'Deadline')
                                         : '';
                                 const isEditing = editingTimeTaskId === task.id;
 
@@ -231,7 +226,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                             if (!projected) handleTaskDragStart(event, task.id, kind);
                                         }}
                                         className={cn(
-                                            "group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted/50",
+                                            "group flex items-center gap-3 rounded-md px-4 py-2 text-base transition-colors hover:bg-muted/50",
                                             projected
                                                 ? "border border-dashed border-primary/50 bg-primary/5"
                                                 : kind === 'scheduled' ? "bg-primary/5" : "border-l-[3px] border-destructive/70 bg-background/60"
@@ -244,16 +239,16 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                             onClick={() => {
                                                 if (!projected) openTaskFromCalendar(task);
                                             }}
-                                            className="min-w-0 flex-1 truncate text-left text-foreground focus:outline-none focus:underline"
+                                            className="flex min-h-11 min-w-0 flex-1 items-center truncate text-left text-foreground focus:outline-none focus:underline"
                                         >
-                                            <span className="mr-2 inline-flex w-28 items-center gap-1 text-xs font-medium text-muted-foreground">
-                                                {kind === 'scheduled' && <Clock className="h-3 w-3" aria-hidden="true" />}
+                                            <span className="mr-2 inline-flex w-28 shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground">
+                                                {kind === 'scheduled' && <Clock className="h-4 w-4" aria-hidden="true" />}
                                                 {timeLabel}
                                             </span>
-                                            {task.title}
+                                            <span className="min-w-0 truncate">{task.title}</span>
                                         </button>
                                         {projected && (
-                                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                                                 {projectedLabel}
                                             </span>
                                         )}
@@ -263,54 +258,56 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                                     type="time"
                                                     value={editingTimeValue}
                                                     onChange={(e) => updateEditingTimeValue(e.target.value)}
-                                                    className="h-8 rounded border border-border bg-background px-2 text-xs"
+                                                    className="h-11 rounded border border-border bg-background px-2 text-sm"
                                                 />
                                                 <button
                                                     type="button"
-                                                    className="h-8 rounded bg-primary px-2 text-xs text-primary-foreground"
+                                                    className="h-11 rounded bg-primary px-3 text-sm text-primary-foreground"
                                                     onClick={commitEditScheduledTime}
                                                 >
                                                     {t('common.save')}
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    className="h-8 rounded bg-muted px-2 text-xs hover:bg-muted/80"
+                                                    className="h-11 rounded bg-muted px-3 text-sm hover:bg-muted/80"
                                                     onClick={cancelEditScheduledTime}
                                                 >
                                                     {t('common.cancel')}
                                                 </button>
                                             </div>
                                         ) : !projected ? (
-                                            <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                                            // Always visible — never hover-revealed: controls must not
+                                            // appear, disappear or move between states (see DESIGN.md).
+                                            <div className="flex shrink-0 items-center gap-1.5">
                                                 <button
                                                     type="button"
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-success/15 text-success hover:bg-success/25"
+                                                    className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-success/15 text-success hover:bg-success/25"
                                                     onClick={() => markTaskDone(task.id)}
-                                                    aria-label={t('status.done')}
-                                                    title={t('status.done')}
+                                                    aria-label={displayLabel(t, language, 'status.done', 'Done')}
+                                                    title={displayLabel(t, language, 'status.done', 'Done')}
                                                 >
-                                                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                                    <Check className="h-5 w-5" aria-hidden="true" />
                                                 </button>
                                                 {kind === 'scheduled' && (
                                                     <button
                                                         type="button"
-                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground hover:text-foreground"
+                                                        className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-muted text-muted-foreground hover:text-foreground"
                                                         onClick={() => beginEditScheduledTime(task.id)}
                                                         aria-label={t('common.edit')}
                                                         title={t('common.edit')}
                                                     >
-                                                        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                                                        <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
                                                     </button>
                                                 )}
                                                 {kind === 'scheduled' && (
                                                     <button
                                                         type="button"
-                                                        className="h-8 rounded-md bg-muted px-2 text-xs text-muted-foreground hover:text-foreground"
+                                                        className="h-11 rounded-md bg-muted px-3 text-sm text-muted-foreground hover:text-foreground"
                                                         onClick={() => updateTask(task.id, { startTime: undefined, relativeStartOffset: undefined })
                                                             .catch((error) => reportError('Failed to clear scheduled time', error))}
-                                                        title={t('calendar.unschedule')}
+                                                        title={displayLabel(t, language, 'calendar.unschedule', 'Remove from calendar')}
                                                     >
-                                                        {t('calendar.unschedule')}
+                                                        {displayLabel(t, language, 'calendar.unschedule', 'Remove from calendar')}
                                                     </button>
                                                 )}
                                             </div>
@@ -319,7 +316,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                 );
                             })}
                             {selectedTaskRows.length === 0 && (
-                                <div className="rounded-md bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                                <div className="rounded-md bg-muted/30 px-3 py-3 text-base text-muted-foreground">
                                     {t('calendar.noTasks')}
                                 </div>
                             )}
@@ -327,41 +324,8 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                     </section>
                 </div>
 
-                <aside className="space-y-3 rounded-lg border border-border bg-background/60 p-3">
-                    <div>
-                        <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
-                            {t('calendar.scheduleResults')}
-                        </div>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            {resolveText('calendar.scheduleHelp', 'Find a task and set its calendar time.')}
-                        </p>
-                    </div>
-                    <input
-                        type="text"
-                        value={scheduleQuery}
-                        onChange={(e) => updateScheduleQuery(e.target.value)}
-                        placeholder={t('calendar.schedulePlaceholder')}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                    {scheduleError && (
-                        <div className="text-xs text-destructive">{scheduleError}</div>
-                    )}
-                    {scheduleCandidates.length > 0 && (
-                        <div className="space-y-1">
-                            {scheduleCandidates.map((task) => (
-                                <button
-                                    key={task.id}
-                                    type="button"
-                                    className="block w-full truncate rounded-md bg-muted px-2 py-1.5 text-left text-xs hover:bg-muted/80"
-                                    onClick={() => scheduleTaskOnSelectedDate(task.id)}
-                                    title={task.title}
-                                >
-                                    {task.title}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </aside>
+                {/* The schedule-search aside is hidden in the simplified shell —
+                    presentation only; the controller state is intact. See DESIGN.md. */}
             </div>
         </div>
     );

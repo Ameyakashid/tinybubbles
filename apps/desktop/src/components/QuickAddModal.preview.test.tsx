@@ -73,38 +73,54 @@ beforeEach(() => {
 });
 
 describe('QuickAddModal live preview', () => {
-    it('shows what the parser found in the draft', async () => {
+    // The live preview strip is hidden in the simplified shell (see DESIGN.md
+    // — "the live parse preview... hidden"). Parsing itself is not touched:
+    // the same parseQuickAdd call that used to feed the strip still runs and
+    // still drives what gets saved, so these tests now prove the capability
+    // through the one path left to observe it — the saved task — instead of
+    // through a preview node that no longer renders.
+    it('renders no live preview strip, but still resolves tokens into the saved task', async () => {
         await openModalWithDraft();
 
-        const preview = screen.getByTestId('quick-add-preview');
-        expect(preview).toHaveTextContent('@errands');
-        expect(preview).toHaveTextContent('#family');
+        expect(screen.queryByTestId('quick-add-preview')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        await waitFor(() => expect(addTask).toHaveBeenCalled());
         // The resolved due date, not the phrase that produced it.
-        expect(preview).toHaveTextContent('Due Date');
-        expect(preview).not.toHaveTextContent('/due:tomorrow');
+        expect(addTask).toHaveBeenCalledWith('call mom', expect.objectContaining({
+            contexts: ['@errands'],
+            tags: ['#family'],
+            dueDate: expect.any(String),
+        }));
+        const [, props] = addTask.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        expect(props.dueDate).not.toContain('/due:tomorrow');
     });
 
-    it('parses the preview with the same input and options the save uses', async () => {
+    it('parses the (unrendered) preview with the same input and options the save uses', async () => {
         await openModalWithDraft();
 
         const previewCalls = coreSpies.parseQuickAdd.mock.calls.length;
         expect(previewCalls).toBeGreaterThan(0);
         const previewCall = coreSpies.parseQuickAdd.mock.calls[previewCalls - 1];
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
         await waitFor(() => expect(addTask).toHaveBeenCalled());
 
         const submitCall = coreSpies.parseQuickAdd.mock.calls[previewCalls];
         expect(submitCall).toBeDefined();
         // input, projects, areas and the options bag: same values, and the bag
-        // is literally the same object the preview memo read.
+        // is literally the same object the preview memo read. The memo still
+        // runs even though nothing renders it — it also drives whether the
+        // area selector shows (hasProjectOverride) — so this identity still
+        // guards a real invariant, not a cosmetic one.
         expect(submitCall[0]).toBe(previewCall[0]);
         expect(submitCall[1]).toBe(previewCall[1]);
         expect(submitCall[3]).toBe(previewCall[3]);
         expect(submitCall[4]).toBe(previewCall[4]);
     });
 
-    it('warns about an invalid date command instead of failing silently on save', async () => {
+    it('shows a clear warning when an invalid date command blocks the save', async () => {
         render(
             <LanguageProvider>
                 <QuickAddModal />
@@ -119,6 +135,14 @@ describe('QuickAddModal live preview', () => {
             await Promise.resolve();
         });
 
-        expect(screen.getByTestId('quick-add-preview')).toHaveTextContent('/due:notaday');
+        expect(screen.queryByTestId('quick-add-preview')).not.toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+        await act(async () => {
+            await Promise.resolve();
+        });
+
+        expect(addTask).not.toHaveBeenCalled();
+        expect(screen.getByText("I couldn't understand this date: /due:notaday")).toBeInTheDocument();
     });
 });

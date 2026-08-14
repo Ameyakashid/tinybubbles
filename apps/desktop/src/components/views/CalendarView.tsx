@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { isSameDay, isToday } from 'date-fns';
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Minus, Plus, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
-    formatI18nTemplate,
     getCalendarDayOfMonth,
     getCalendarMonthIndex,
     getShortWeekdayLabels,
@@ -18,6 +17,8 @@ import {
 
 import { ErrorBoundary } from '../ErrorBoundary';
 import { cn } from '../../lib/utils';
+import { displayLabel } from '../../lib/display-labels';
+import { useLanguage } from '../../contexts/language-context';
 import { reportError } from '../../lib/report-error';
 import { registerUndoableAction } from '../../lib/undo-registry';
 import { useUiStore } from '../../store/ui-store';
@@ -28,37 +29,22 @@ import {
     setCalendarTaskDragData,
 } from '../../lib/calendar-task-drag';
 import { useTaskListScope } from './list/task-list-scope';
-import { LIST_END_GAP, VIEW_FILTER_INPUT } from './list/list-toolbar';
+import { LIST_END_GAP } from './list/list-toolbar';
 import { collectCalendarKeyboardTasks } from './calendar/calendar-keyboard-tasks';
 import { CalendarOpenTaskModal, CalendarTaskComposerModal } from './calendar/CalendarModals';
-import { CalendarPlanningPanel } from './calendar/CalendarPlanningPanel';
 import { CalendarSelectedDayPanel } from './calendar/CalendarSelectedDayPanel';
 import { TaskQuickActionMenuHost } from '../Task/useTaskQuickActionMenuProps';
 import {
-    CALENDAR_TIMELINE_DAY_COUNT_MAX,
-    CALENDAR_TIMELINE_DAY_COUNT_MIN,
     DESKTOP_DAY_END_HOUR,
     DESKTOP_DAY_START_HOUR,
     DESKTOP_GRID_SNAP_MINUTES,
     DESKTOP_HOUR_HEIGHT,
     dayKey,
     type CalendarCellItem,
-    type CalendarViewMode,
 } from './calendar/calendar-primitives';
 import { useDesktopCalendarController } from './calendar/useDesktopCalendarController';
 
 const PROJECTED_RECURRENCE_LABEL_DATE_FORMAT = 'MMM d';
-const CALENDAR_PLANNING_PANEL_COLLAPSED_KEY = 'tinybubbles.calendar.planningPanelCollapsed';
-
-const readPlanningPanelCollapsedPreference = (): boolean => {
-    if (typeof window === 'undefined') return true;
-    try {
-        const stored = window.localStorage.getItem(CALENDAR_PLANNING_PANEL_COLLAPSED_KEY);
-        return stored === null ? true : stored === 'true';
-    } catch {
-        return true;
-    }
-};
 
 function getProjectedRecurrenceDisplayLabel(task: Task, projectedLabel: string): string {
     const occurrenceDateLabel = safeFormatDate(
@@ -69,10 +55,10 @@ function getProjectedRecurrenceDisplayLabel(task: Task, projectedLabel: string):
 }
 
 export function CalendarView() {
+    const { language } = useLanguage();
     const timelineScrollRef = useRef<HTMLDivElement | null>(null);
     const [timelineScrollbarWidth, setTimelineScrollbarWidth] = useState(0);
     const [timelineHeight, setTimelineHeight] = useState<number | null>(null);
-    const [isPlanningPanelCollapsed, setIsPlanningPanelCollapsed] = useState(readPlanningPanelCollapsedPreference);
     const controller = useDesktopCalendarController();
     const {
         calendarBodyRef,
@@ -91,33 +77,25 @@ export function CalendarView() {
         handleNextMonth,
         handlePrevMonth,
         handleToday,
-        handleViewModeChange,
         handleYearChange,
         hiddenExternalCalendarIds,
         isMonthPickerOpen,
         layoutTimedItems,
         locale,
         monthNames,
-        openDayViewForDate,
         openQuickAddForStart,
         openTaskFromCalendar,
         resolveText,
         scheduleDays,
         selectCalendarDate,
         selectedDate,
-        setTimelineDayCount,
-        timelineDayCount,
         timelineDays,
         t,
-        showCompleted,
-        toggleShowCompleted,
         toggleExternalCalendar,
         toggleMonthPicker,
-        updateViewFilterQuery,
         updateTask,
         updateTaskDateFromDrop,
         updateTaskStartTimeFromDrop,
-        viewFilterQuery,
         viewMode,
         visibleSearchMatchCount,
         weekdayHeaders,
@@ -126,8 +104,7 @@ export function CalendarView() {
     // One registration covers the whole view: the grid, the planning panel and
     // the selected-day panel all render inside it, so document order already
     // flattens them in the order the user sees.
-    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
-    useTaskListScope({
+    const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);    useTaskListScope({
         getTasks: collectCalendarKeyboardTasks,
         getSelectedIndex: () => selectedTaskIndex,
         setSelectedIndex: setSelectedTaskIndex,
@@ -161,8 +138,8 @@ export function CalendarView() {
     const handleOpenDayKeyDown = useCallback((event: KeyboardEvent<HTMLElement>, date: Date) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        openDayViewForDate(date);
-    }, [openDayViewForDate]);
+        selectCalendarDate(date);
+    }, [selectCalendarDate]);
     const handleDropOnTimelineSlot = useCallback((event: DragEvent<HTMLElement>, date: Date) => {
         const taskId = getCalendarTaskDragTaskId(event.dataTransfer);
         if (!taskId) return;
@@ -241,14 +218,6 @@ export function CalendarView() {
     const timelineScrollKey = viewMode === 'day' || viewMode === 'week'
         ? `${viewMode}:${timelineDays.map(dayKey).join('|')}`
         : '';
-    const handlePlanningPanelCollapsedChange = useCallback((collapsed: boolean) => {
-        setIsPlanningPanelCollapsed(collapsed);
-        try {
-            window.localStorage.setItem(CALENDAR_PLANNING_PANEL_COLLAPSED_KEY, collapsed ? 'true' : 'false');
-        } catch {
-            // Ignore storage failures; the in-memory state still updates.
-        }
-    }, []);
 
     useLayoutEffect(() => {
         const scroller = timelineScrollRef.current;
@@ -302,89 +271,37 @@ export function CalendarView() {
                 <div className="space-y-1">
                     <h2 className="text-3xl font-bold tracking-tight">{t('nav.calendar')}</h2>
                     <p className="text-sm text-muted-foreground">
-                        {resolveText('calendar.tasksAndEvents', 'Tasks and external events by date')}
+                        {displayLabel(t, language, 'calendar.tasksAndEvents', 'Tasks and external events by date')}
                     </p>
                 </div>
                 <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                     <button
                         type="button"
                         onClick={handleToday}
-                        className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-base font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
                     >
-                        <CalendarDays className="h-4 w-4 text-primary" aria-hidden="true" />
+                        <CalendarDays className="h-5 w-5 text-primary" aria-hidden="true" />
                         {resolveText('calendar.today', 'Today')}
                     </button>
-                    <div className="grid w-full grid-cols-2 rounded-md border border-border bg-card p-1 sm:inline-flex sm:w-auto">
-                        {([
-                            ['day', resolveText('calendar.day', 'Day')],
-                            ['week', resolveText('calendar.week', 'Week')],
-                            ['month', resolveText('calendar.month', 'Month')],
-                            ['schedule', resolveText('calendar.schedule', 'Schedule')],
-                        ] as Array<[CalendarViewMode, string]>).map(([mode, label]) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => handleViewModeChange(mode)}
-                                className={cn(
-                                    "h-7 rounded px-2.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40",
-                                    viewMode === mode
-                                        ? "bg-primary text-primary-foreground"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                )}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-                    {/* Only the week timeline splits its width across days, so the
-                        count is meaningless in Day (always one), Month and Schedule. */}
-                    {viewMode === 'week' && (
-                        <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
-                            <button
-                                type="button"
-                                onClick={() => setTimelineDayCount(timelineDayCount - 1)}
-                                disabled={timelineDayCount <= CALENDAR_TIMELINE_DAY_COUNT_MIN}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:pointer-events-none disabled:opacity-40"
-                                aria-label={resolveText('calendar.mobile.showFewerDays', 'Show fewer days')}
-                                title={resolveText('calendar.mobile.showFewerDays', 'Show fewer days')}
-                            >
-                                <Minus className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                            <span className="min-w-[4.5rem] text-center text-sm font-medium tabular-nums" aria-live="polite">
-                                {formatI18nTemplate(
-                                    // Same string mobile shows for the same setting — one
-                                    // translation, one meaning, on both platforms (#951).
-                                    resolveText('calendar.mobile.visibleDayCount', '{{dayCount}} days'),
-                                    { dayCount: timelineDayCount }
-                                )}
-                            </span>
-                            <button
-                                type="button"
-                                onClick={() => setTimelineDayCount(timelineDayCount + 1)}
-                                disabled={timelineDayCount >= CALENDAR_TIMELINE_DAY_COUNT_MAX}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:pointer-events-none disabled:opacity-40"
-                                aria-label={resolveText('calendar.mobile.showMoreDays', 'Show more days')}
-                                title={resolveText('calendar.mobile.showMoreDays', 'Show more days')}
-                            >
-                                <Plus className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                        </div>
-                    )}
+                    {/* Simplified shell (see DESIGN.md): the Day/Week/Month/Schedule
+                        mode toggles and the week day-count control are hidden — the
+                        calendar is a month grid. The modes still work via URL and
+                        the controller; this is presentation only. */}
                     <div className="flex w-full items-center gap-1 rounded-md border border-border bg-card p-1 sm:w-auto">
                         <button
                             type="button"
                             onClick={handlePrevMonth}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                             aria-label={resolveText('calendar.prevMonth', 'Previous month')}
                             title={resolveText('calendar.prevMonth', 'Previous month')}
                         >
-                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                         </button>
                         <div className="relative min-w-0 flex-1 sm:flex-none">
                             <button
                                 type="button"
                                 onClick={toggleMonthPicker}
-                                className="h-8 w-full min-w-0 rounded px-3 text-sm font-semibold hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 sm:min-w-[11rem]"
+                                className="h-11 w-full min-w-0 rounded px-3 text-base font-semibold hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 sm:min-w-[11rem]"
                                 aria-haspopup="dialog"
                                 aria-expanded={isMonthPickerOpen}
                             >
@@ -426,53 +343,18 @@ export function CalendarView() {
                         <button
                             type="button"
                             onClick={handleNextMonth}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                             aria-label={resolveText('calendar.nextMonth', 'Next month')}
                             title={resolveText('calendar.nextMonth', 'Next month')}
                         >
-                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                            <ChevronRight className="h-5 w-5" aria-hidden="true" />
                         </button>
                     </div>
                 </div>
             </header>
-            <div className="mb-4 space-y-2">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                    <div className="relative min-w-0 flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                        <input
-                            type="text"
-                            data-view-filter-input
-                            placeholder={t('common.search')}
-                            aria-label={t('common.search')}
-                            value={viewFilterQuery}
-                            onChange={(event) => updateViewFilterQuery(event.target.value)}
-                            className={cn(VIEW_FILTER_INPUT, 'pl-9')}
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        onClick={toggleShowCompleted}
-                        aria-pressed={showCompleted}
-                        className={cn(
-                            'inline-flex shrink-0 items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40',
-                            showCompleted
-                                ? 'border-primary bg-primary/10 text-primary'
-                                : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )}
-                        title={resolveText('calendar.showCompletedHint', 'Show done and archived tasks on the day they were completed')}
-                    >
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                        {resolveText('calendar.showCompleted', 'Completed')}
-                    </button>
-                </div>
-                {visibleSearchMatchCount !== null && (
-                    <div className="mt-2 text-xs text-muted-foreground" aria-live="polite">
-                        {visibleSearchMatchCount > 0
-                            ? resolveText('calendar.searchMatches', `${visibleSearchMatchCount} matches in this view`).replace('{count}', String(visibleSearchMatchCount))
-                            : resolveText('calendar.noSearchMatches', 'No matching calendar items in this view')}
-                    </div>
-                )}
-            </div>
+            {/* Search, the Completed toggle and the match-count line are hidden
+                in the simplified shell — presentation only, the controller state
+                and filtering still work underneath. See DESIGN.md. */}
 
             {externalError && (
                 <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-foreground">
@@ -513,25 +395,22 @@ export function CalendarView() {
 
             <div
                 ref={calendarBodyRef}
-                className={cn(
-                    "grid gap-6",
-                    isPlanningPanelCollapsed
-                        ? "xl:grid-cols-[minmax(0,1fr)_3.5rem]"
-                        : "xl:grid-cols-[minmax(0,1fr)_20rem]"
-                )}
+                className="grid gap-6"
             >
                 <div className="min-w-0 space-y-6">
                 {viewMode === 'month' && (
                 <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden shadow-sm">
                     {weekdayHeaders.map((day) => (
-                        <div key={day} className="bg-card p-1 text-center text-xs font-medium text-muted-foreground sm:p-2 sm:text-sm">
+                        <div key={day} className="bg-card p-1 text-center text-sm font-medium text-muted-foreground sm:p-2 sm:text-base">
                             {day}
                         </div>
                     ))}
 
                     {days.map((day, _dayIdx) => {
                         const cellItems = getCalendarItemsForDate(day);
-                        const visibleItems = cellItems.slice(0, 3);
+                        // Kid-sized cells: two big chips a child can see and hit,
+                        // then a "+N more" line — the rest live in the day panel.
+                        const visibleItems = cellItems.slice(0, 2);
                         const overflowCount = Math.max(0, cellItems.length - visibleItems.length);
                         const isSelected = selectedDate && isSameDay(day, selectedDate);
                         const todayMarkerStyle = isToday(day)
@@ -545,23 +424,23 @@ export function CalendarView() {
                             <div
                                 key={day.toString()}
                                 className={cn(
-                                    "group relative min-h-24 cursor-pointer bg-card p-1 transition-colors hover:bg-accent/50 sm:min-h-[128px] sm:p-2",
+                                    "group relative min-h-32 cursor-pointer bg-card p-1 transition-colors hover:bg-accent/50 sm:min-h-[176px] sm:p-2",
                                     !isSameCalendarMonth(day, currentMonth, calendarSystem) && "bg-muted/50 text-muted-foreground",
                                     isSelected && "ring-2 ring-primary"
                                 )}
                                 data-calendar-drop-date={dayKey(day)}
                                 role="button"
                                 tabIndex={0}
-                                aria-label={`${day.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}, ${resolveText('calendar.openDayView', 'Open day view')}`}
-                                onClick={() => openDayViewForDate(day)}
+                                aria-label={`${day.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}, ${displayLabel(t, language, 'calendar.openDayView', 'Open day view')}`}
+                                onClick={() => selectCalendarDate(day)}
                                 onKeyDown={(event) => handleOpenDayKeyDown(event, day)}
                                 onDragOver={handleCalendarTaskDragOver}
                                 onDrop={(event) => handleDropOnDueDate(event, day)}
-                                title={resolveText('calendar.openDayView', 'Open day view')}
+                                title={displayLabel(t, language, 'calendar.openDayView', 'Open day view')}
                             >
                                 <div className="mb-2 flex items-center justify-between gap-2">
                                     <div className="flex min-w-0 items-center gap-1.5">
-                                        <div className="flex h-5 w-5 items-center justify-center rounded-full text-xs font-medium sm:h-6 sm:w-6 sm:text-sm" style={todayMarkerStyle}>
+                                        <div className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium sm:h-8 sm:w-8 sm:text-base" style={todayMarkerStyle}>
                                             <span className="tabular-nums leading-none">
                                                 {getCalendarDayOfMonth(day, calendarSystem)}
                                             </span>
@@ -575,7 +454,7 @@ export function CalendarView() {
                                     {isSelected && <div className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />}
                                 </div>
 
-                                <div className="space-y-1">
+                                <div className="space-y-1.5">
                                     {visibleItems.map((item) => {
                                         const isAllDayScheduled = item.kind === 'scheduled' && !hasTimeComponent(item.task.startTime);
                                         const timeLabel = isAllDayScheduled
@@ -589,14 +468,14 @@ export function CalendarView() {
                                         if (item.kind === 'event') {
                                             const content = (
                                                 <>
-                                                    {timeLabel && <span className="mr-1 text-[10px] opacity-75">{timeLabel}</span>}
-                                                    <span>{item.title}</span>
+                                                    {timeLabel && <span className="mr-1 shrink-0 text-xs opacity-75">{timeLabel}</span>}
+                                                    <span className="min-w-0 truncate">{item.title}</span>
                                                 </>
                                             );
                                             return (
                                                 <div
                                                     key={item.id}
-                                                    className="truncate rounded border-l-[3px] bg-muted/70 px-1.5 py-1 text-xs text-muted-foreground"
+                                                    className="flex min-h-11 items-center truncate rounded border-l-[3px] bg-muted/70 px-2.5 text-sm text-muted-foreground"
                                                     style={{ borderLeftColor: getExternalCalendarColor(item.event.sourceId) }}
                                                     title={item.title}
                                                 >
@@ -613,9 +492,9 @@ export function CalendarView() {
                                             : '';
                                         const content = (
                                             <>
-                                                {timeLabel && <span className="mr-1 text-[10px] opacity-75">{timeLabel}</span>}
-                                                <span className={cn(completed && 'line-through')}>{item.title}</span>
-                                                {projected && <span className="ml-1 text-[10px] opacity-75">{projectedLabel}</span>}
+                                                {timeLabel && <span className="mr-1 shrink-0 text-xs opacity-75">{timeLabel}</span>}
+                                                <span className={cn('min-w-0 truncate', completed && 'line-through')}>{item.title}</span>
+                                                {projected && <span className="ml-1 shrink-0 text-xs opacity-75">{projectedLabel}</span>}
                                             </>
                                         );
                                         return (
@@ -627,7 +506,7 @@ export function CalendarView() {
                                                 draggable={!projected && !completed}
                                                 disabled={projected}
                                                 className={cn(
-                                                    "block w-full truncate rounded px-1.5 py-1 text-left text-xs focus:outline-none focus:ring-2 focus:ring-primary/40",
+                                                    "flex min-h-11 w-full items-center rounded px-2.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-primary/40",
                                                     projected
                                                         ? "border border-dashed border-primary/50 bg-primary/5 text-primary/80"
                                                         : completed
@@ -656,12 +535,12 @@ export function CalendarView() {
                                     {overflowCount > 0 && (
                                         <button
                                             type="button"
-                                            className="w-full rounded px-1.5 pt-0.5 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                            className="flex min-h-11 w-full items-center rounded px-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                                             onClick={(event) => {
                                                 event.stopPropagation();
-                                                openDayViewForDate(day);
+                                                selectCalendarDate(day);
                                             }}
-                                            aria-label={`${resolveText('calendar.openDayView', 'Open day view')}: ${day.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                                            aria-label={`${displayLabel(t, language, 'calendar.openDayView', 'Open day view')}: ${day.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`}
                                         >
                                             +{overflowCount} {resolveText('calendar.more', 'more')}
                                         </button>
@@ -1015,11 +894,9 @@ export function CalendarView() {
 
                 <CalendarSelectedDayPanel controller={controller} />
                 </div>
-                <CalendarPlanningPanel
-                    controller={controller}
-                    isCollapsed={isPlanningPanelCollapsed}
-                    onCollapsedChange={handlePlanningPanelCollapsedChange}
-                />
+                {/* CalendarPlanningPanel is hidden in the simplified shell —
+                    presentation only; the component and its state are intact.
+                    See DESIGN.md. */}
         </div>
             <CalendarOpenTaskModal controller={controller} />
             <CalendarTaskComposerModal controller={controller} />

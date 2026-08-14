@@ -1,4 +1,4 @@
-import { act, fireEvent, render, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project, Section, Task } from '@tinybubbles/core';
@@ -260,6 +260,12 @@ const renderWorkspaceWithKeybindings = (overrides: Record<string, unknown> = {})
     );
 };
 
+// Select stays out of the child-facing task toolbar and remains reachable in
+// the secondary project-options row regardless of the active keybinding preset.
+const enterSelectionMode = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+};
+
 describe('ProjectWorkspace Select mode', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -415,8 +421,8 @@ describe('ProjectWorkspace Select mode', () => {
         ]);
     });
 
-    it('restores project scroll after expanding completed tasks and entering selection mode', () => {
-        const { container, getByRole } = renderWorkspace({
+    it('restores project scroll after expanding completed tasks and entering selection mode', async () => {
+        const { container, getByRole } = renderWorkspaceWithKeybindings({
             showCompletedTasks: true,
             allTasks: [
                 task('active-1', 'Active task'),
@@ -439,56 +445,42 @@ describe('ProjectWorkspace Select mode', () => {
         expect(scrollContainer.scrollTop).toBe(420);
 
         scrollContainer.scrollTop = 360;
-        fireEvent.click(getByRole('button', { name: 'Select' }));
+        enterSelectionMode();
 
         expect(scrollContainer.scrollTop).toBe(360);
     });
 
-    it('keeps the first visible project task anchored when Select expands the toolbar', () => {
-        const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
-        const getRect = (top: number, bottom: number) => ({
-            top,
-            bottom,
-            left: 0,
-            right: 320,
-            width: 320,
-            height: bottom - top,
-            x: 0,
-            y: top,
-            toJSON: () => ({}),
-        } as DOMRect);
+    it('keeps the same task anchored when the Select control grows the task toolbar', () => {
+        const { container } = renderWorkspaceWithKeybindings({
+            allTasks: [
+                task('task-1', 'Earlier task'),
+            ],
+        });
+        const scrollContainer = container.querySelector('[data-project-scroll-container]') as HTMLDivElement;
+        expect(scrollContainer).toBeTruthy();
+        const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            if (this === scrollContainer) {
+                return { top: 0, bottom: 500, left: 0, right: 500, width: 500, height: 500, x: 0, y: 0, toJSON: () => ({}) };
+            }
+            if (this.getAttribute('data-task-id') === 'task-1') {
+                const top = this.querySelector('[aria-label="Select task"]') ? 140 : 100;
+                return { top, bottom: top + 80, left: 0, right: 500, width: 500, height: 80, x: 0, y: top, toJSON: () => ({}) };
+            }
+            return { top: 600, bottom: 680, left: 0, right: 500, width: 500, height: 80, x: 0, y: 600, toJSON: () => ({}) };
+        });
 
         try {
-            const { container, getByRole } = renderWorkspace({
-                allTasks: [
-                    task('task-1', 'Earlier task'),
-                    task('task-2', 'Visible task'),
-                ],
-            });
-            const scrollContainer = container.querySelector('[data-project-scroll-container]') as HTMLDivElement;
-            expect(scrollContainer).toBeTruthy();
-
-            vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getMockRect(this: HTMLElement) {
-                const element = this as HTMLElement;
-                if (element === scrollContainer) return getRect(0, 600);
-                if (element.getAttribute('data-task-id') === 'task-1') return getRect(-120, -80);
-                if (element.getAttribute('data-task-id') === 'task-2') {
-                    const selectModeActive = document.body.textContent?.includes('Exit Select') ?? false;
-                    return getRect(selectModeActive ? 160 : 120, selectModeActive ? 200 : 160);
-                }
-                return originalGetBoundingClientRect.call(element);
-            });
-
             scrollContainer.scrollTop = 360;
-            fireEvent.click(getByRole('button', { name: 'Select' }));
+            enterSelectionMode();
 
+            expect(container.querySelector('[aria-label="Select task"]')).not.toBeNull();
             expect(scrollContainer.scrollTop).toBe(400);
         } finally {
-            HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+            rectSpy.mockRestore();
         }
     });
 
-    it('shows bulk organize and area assignment for selected project tasks', () => {
+    it('shows bulk organize and area assignment for selected project tasks', async () => {
         const area = {
             id: 'area-1',
             name: 'Work',
@@ -498,14 +490,14 @@ describe('ProjectWorkspace Select mode', () => {
             updatedAt: '2026-05-12T00:00:00.000Z',
         };
         const projectTask = task('task-1', 'Move me');
-        const { getByRole } = renderWorkspace({
+        const { getByRole } = renderWorkspaceWithKeybindings({
             allTasks: [projectTask],
             areas: [area],
             sortedAreas: [area],
             selectedProjectTasks: [projectTask],
         });
 
-        fireEvent.click(getByRole('button', { name: 'Select' }));
+        enterSelectionMode();
         fireEvent.click(getByRole('checkbox', { name: 'Select task' }));
 
         expect(getByRole('button', { name: 'Bulk organize' })).toBeInTheDocument();
@@ -553,14 +545,17 @@ describe('ProjectWorkspace Select mode', () => {
         }
     });
 
-    it('selects all visible project tasks and clears the selection', () => {
+    it('selects all visible project tasks and clears the selection', async () => {
         const allTasks = [
             task('task-1', 'First task'),
             task('task-2', 'Second task'),
         ];
-        const { getAllByRole, getByRole } = renderWorkspace({ allTasks });
+        const { getAllByRole, getByRole } = renderWorkspaceWithKeybindings({ allTasks });
 
-        fireEvent.click(getByRole('button', { name: 'Select' }));
+        enterSelectionMode();
+        expect(getAllByRole('checkbox', { name: 'Select task' }).map((checkbox) => (
+            (checkbox as HTMLInputElement).checked
+        ))).toEqual([false, false]);
         expect(getByRole('button', { name: 'Select All' })).toBeEnabled();
         expect(getByRole('button', { name: 'Clear' })).toBeDisabled();
 
@@ -579,17 +574,16 @@ describe('ProjectWorkspace Select mode', () => {
         ))).toEqual([false, false]);
     });
 
-    it('selects a contiguous project task range with shift-click', () => {
+    it('selects a contiguous project task range with shift-click', async () => {
         const allTasks = [
             task('task-1', 'First task'),
             task('task-2', 'Second task'),
             task('task-3', 'Third task'),
         ];
-        const { getAllByRole, getByRole } = renderWorkspace({ allTasks });
+        const { getAllByRole } = renderWorkspaceWithKeybindings({ allTasks });
 
-        fireEvent.click(getByRole('button', { name: 'Select' }));
+        enterSelectionMode();
         const checkboxes = getAllByRole('checkbox', { name: 'Select task' });
-
         fireEvent.click(checkboxes[0]);
         fireEvent.click(checkboxes[2], { shiftKey: true });
 
@@ -605,13 +599,13 @@ describe('ProjectWorkspace Select mode', () => {
             task('task-1', 'First task'),
             task('task-2', 'Second task'),
         ];
-        const { getByRole } = renderWorkspace({
+        const { getByRole } = renderWorkspaceWithKeybindings({
             allTasks,
             batchDeleteTasks,
             requestConfirmation,
         });
 
-        fireEvent.click(getByRole('button', { name: 'Select' }));
+        enterSelectionMode();
         fireEvent.click(getByRole('button', { name: 'Select All' }));
         fireEvent.click(getByRole('button', { name: 'Delete' }));
 
@@ -638,31 +632,31 @@ describe('ProjectWorkspace Select mode', () => {
     });
 
 
-    it('clears project search from an inline clear button and refocuses the field', () => {
-        const { getByLabelText, getByPlaceholderText, queryByLabelText } = renderWorkspace();
-        const input = getByPlaceholderText('Search...') as HTMLInputElement;
+    it('hides the in-view project search field entirely, leaving global search as the only way to filter (DESIGN.md)', () => {
+        const { container, queryByPlaceholderText, queryByLabelText } = renderWorkspace();
 
-        expect(queryByLabelText('Clear search')).toBeNull();
-
-        fireEvent.change(input, { target: { value: 'first' } });
-        const clearButton = getByLabelText('Clear search');
-        fireEvent.click(clearButton);
-
-        expect(input.value).toBe('');
-        expect(document.activeElement).toBe(input);
-        expect(queryByLabelText('Clear search')).toBeNull();
+        expect(queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+        expect(queryByLabelText('Clear search')).not.toBeInTheDocument();
+        // The search row survives only as a shell for the (conditional)
+        // sidebar-expand toggle -- no search input inside it anymore.
+        expect(container.querySelector('[data-project-search-row] input')).toBeNull();
     });
 
-    it('keeps select grouped with project task controls instead of the search row', () => {
-        const { container, getByRole } = renderWorkspace();
-        const selectButton = getByRole('button', { name: 'Select' });
+    it('keeps the bulk selection toolbar grouped with project task controls instead of the search row', async () => {
+        const { container, getByRole } = renderWorkspaceWithKeybindings({
+            allTasks: [task('task-1', 'First task')],
+        });
         const searchRow = container.querySelector('[data-project-search-row]');
         const toolbar = container.querySelector('[data-project-task-toolbar]');
 
         expect(searchRow).not.toBeNull();
         expect(toolbar).not.toBeNull();
-        expect(searchRow).not.toContainElement(selectButton);
-        expect(toolbar).toContainElement(selectButton);
+
+        enterSelectionMode();
+        const selectAllButton = getByRole('button', { name: 'Select All' });
+
+        expect(searchRow).not.toContainElement(selectAllButton);
+        expect(toolbar).toContainElement(selectAllButton);
     });
 
     it('condenses the project task toolbar while scrolled down and expands at the top', () => {

@@ -1,13 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, waitFor } from '@testing-library/react';
 
+import { LanguageProvider } from '../contexts/language-context';
 import { MindSweepLauncher } from './MindSweepModal';
 
 const t = (key: string) => key;
 
+// The launcher button's key ("mindSweep.launchButton") is overridden by the
+// shell's English-only plain-language layer (src/lib/display-labels.ts, see
+// DESIGN.md) to "Get it all out", even though `t` is mocked to echo raw keys
+// everywhere else. displayLabel() reads the active language from
+// LanguageContext, so the component must be rendered inside a
+// LanguageProvider (it defaults to 'en' in tests) for that override to apply
+// at all -- without it, useLanguage() throws.
+const LAUNCH_BUTTON_NAME = 'Get it all out';
+
 const openFlow = (addTask = vi.fn().mockResolvedValue(undefined)) => {
-    const utils = render(<MindSweepLauncher t={t} addTask={addTask} />);
-    fireEvent.click(utils.getByRole('button', { name: 'mindSweep.launchButton' }));
+    const utils = render(
+        <LanguageProvider>
+            <MindSweepLauncher t={t} addTask={addTask} />
+        </LanguageProvider>,
+    );
+    fireEvent.click(utils.getByRole('button', { name: LAUNCH_BUTTON_NAME }));
     return { ...utils, addTask };
 };
 
@@ -21,9 +35,11 @@ describe('MindSweepLauncher', () => {
 
     it('traps focus inside the modal and restores focus on close', async () => {
         const { getByRole, queryByRole } = render(
-            <MindSweepLauncher t={t} addTask={vi.fn().mockResolvedValue(undefined)} />,
+            <LanguageProvider>
+                <MindSweepLauncher t={t} addTask={vi.fn().mockResolvedValue(undefined)} />
+            </LanguageProvider>,
         );
-        const launcher = getByRole('button', { name: 'mindSweep.launchButton' });
+        const launcher = getByRole('button', { name: LAUNCH_BUTTON_NAME });
         launcher.focus();
         fireEvent.click(launcher);
 

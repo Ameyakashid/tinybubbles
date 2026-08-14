@@ -66,7 +66,6 @@ interface TaskItemDisplayProps {
     showProjectBadgeInActions?: boolean;
     showProjectBadgeInMetadata?: boolean;
     readOnly: boolean;
-    compactMetaEnabled?: boolean;
     dense?: boolean;
     actionsOverlay?: boolean;
     dragHandle?: ReactNode;

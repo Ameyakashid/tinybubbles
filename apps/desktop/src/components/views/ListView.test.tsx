@@ -102,20 +102,28 @@ describe('ListView', () => {
     expect(html).not.toContain('data-view-filter-input');
   });
 
-  it('uses a compact one-line quick-add hint in the inbox list footer', () => {
-    const { getByRole, getByText, queryByPlaceholderText, queryByText } = renderListView('inbox', 'Inbox');
+  // The syntax hint row (the "Try: ..." example and its help button) is
+  // hidden in the simplified shell (see DESIGN.md); the placeholder now
+  // teaches by example instead ("Add Task... e.g. Feed the cat" — the
+  // English-only display-labels.ts override for quickAdd.example). Typed
+  // token syntax still parses at submit, exercised elsewhere in this file
+  // (e.g. "applies trailing date NLP in the desktop inline inbox quick add").
+  it('shows a plain-language placeholder instead of the syntax hint in the inbox list footer', () => {
+    const { getByRole, queryByPlaceholderText, queryByRole, queryByText } = renderListView('inbox', 'Inbox');
 
-    expect(queryByPlaceholderText(/Add Task/i)).toBeInTheDocument();
-    expect(getByText('Try: Call mom /due:tomorrow 5pm @phone #family')).toBeInTheDocument();
-    expect(getByRole('button', { name: 'Quick Add syntax help' })).toHaveAttribute(
-      'title',
-      expect.stringContaining('/start:<when>')
-    );
+    expect(queryByPlaceholderText('Add Task... e.g. Feed the cat')).toBeInTheDocument();
+    expect(getByRole('combobox', { name: 'Add Task' })).toBeInTheDocument();
+    expect(queryByRole('button', { name: 'Quick Add syntax help' })).not.toBeInTheDocument();
+    expect(queryByText('Try: Call mom /due:tomorrow 5pm @phone #family')).not.toBeInTheDocument();
     expect(queryByText(/Quick add supports/)).not.toBeInTheDocument();
   });
 
-  it('trades the syntax hint for a live read-out of what the draft parses to', () => {
-    const { getByPlaceholderText, getByTestId, queryByText } = renderListView('inbox', 'Inbox');
+  // The live parse-preview strip is hidden alongside the syntax hint (same
+  // DESIGN.md note); nothing renders a "what this parses to" read-out any
+  // more. The parser itself is untouched underneath — proven by the trailing
+  // date NLP submit test below, which still gets a resolved dueDate back.
+  it('renders no live parse-preview strip while the draft is being typed', () => {
+    const { getByPlaceholderText, queryByTestId, queryByText } = renderListView('inbox', 'Inbox');
 
     act(() => {
       fireEvent.change(getByPlaceholderText(/Add Task/i), {
@@ -123,9 +131,7 @@ describe('ListView', () => {
       });
     });
 
-    const preview = getByTestId('quick-add-preview');
-    expect(preview).toHaveTextContent('@phone');
-    expect(preview).toHaveTextContent('#family');
+    expect(queryByTestId('quick-add-preview')).not.toBeInTheDocument();
     expect(queryByText('Try: Call mom /due:tomorrow 5pm @phone #family')).not.toBeInTheDocument();
   });
 
@@ -144,8 +150,11 @@ describe('ListView', () => {
     });
     useTaskStore.setState({ addTask, tasks: [], _allTasks: [] });
 
+    // The launcher button's key ("mindSweep.launchButton") is overridden by
+    // the shell's English-only plain-language layer (display-labels.ts, see
+    // DESIGN.md) to "Get it all out".
     const { getByRole } = renderListView('inbox', 'Inbox');
-    fireEvent.click(getByRole('button', { name: /mind sweep/i }));
+    fireEvent.click(getByRole('button', { name: 'Get it all out' }));
 
     const introDialog = getByRole('dialog');
     fireEvent.click(within(introDialog).getByRole('button', { name: /start/i }));

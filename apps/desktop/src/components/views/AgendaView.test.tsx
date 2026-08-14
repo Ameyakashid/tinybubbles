@@ -65,15 +65,9 @@ const renderAgenda = () => render(
     </LanguageProvider>
 );
 
-// AgendaHeader's controls row (Top 3 / Filters / Show details / Group) is
-// hidden in the simplified shell (see DESIGN.md) — there is no "Filters"
-// button left in the Focus view to click. The filters/sort panel is still
-// reachable exactly the way DESIGN.md describes for a hidden toolbar: "via
-// stored preferences". Applying an existing saved Focus filter (here, an
-// empty bootstrap one) from the still-visible chip row renders
-// AgendaFiltersPanel, whose own internal Show/Hide toggle — a different
-// control from the removed header button — then reveals the sort/search/
-// token/project/energy controls exactly as before.
+// The simplified header keeps one quiet Filters entry point. The adult Top 3,
+// details, and grouping controls remain absent, but filtering must be reachable
+// on a fresh install rather than only through pre-existing persisted state.
 const FOCUS_FILTER_BOOTSTRAP_NAME = 'Open filters';
 const focusFilterBootstrap = () => ({
     id: 'focus-filter-bootstrap',
@@ -84,8 +78,7 @@ const focusFilterBootstrap = () => ({
     updatedAt: nowIso,
 });
 const openFocusFilters = (getByRole: (role: string, options?: { name: string | RegExp }) => HTMLElement) => {
-    fireEvent.click(getByRole('button', { name: FOCUS_FILTER_BOOTSTRAP_NAME }));
-    fireEvent.click(getByRole('button', { name: /^Show$/i }));
+    fireEvent.click(getByRole('button', { name: /^Filters$/i }));
 };
 
 describe('AgendaView', () => {
@@ -145,7 +138,7 @@ describe('AgendaView', () => {
         expect(sectionClassName).not.toContain('dark:to-amber');
     });
 
-    it('keeps today focus visible when Top 3 mode is enabled', () => {
+    it('ignores the obsolete stored Top 3 preference and keeps the full Focus list', () => {
         const task = (id: string, title: string, createdAt: string): Task => ({
             id,
             title,
@@ -182,14 +175,14 @@ describe('AgendaView', () => {
             },
         }));
 
-        const { getByTestId, getByText, queryByText } = renderAgenda();
+        const { getByTestId, getByText } = renderAgenda();
 
         expect(getByTestId('todays-focus-section')).toBeInTheDocument();
         expect(getByText('Focused task')).toBeInTheDocument();
         expect(getByText('Top task 1')).toBeInTheDocument();
         expect(getByText('Top task 2')).toBeInTheDocument();
         expect(getByText('Top task 3')).toBeInTheDocument();
-        expect(queryByText('Top task 4')).not.toBeInTheDocument();
+        expect(getByText('Top task 4')).toBeInTheDocument();
     });
 
     it('collapses expanded task details when page details are turned off', () => {
@@ -333,17 +326,25 @@ describe('AgendaView', () => {
         expect(queryByRole('button', { name: 'New saved filter' })).not.toBeInTheDocument();
     });
 
-    // AgendaHeader's Filters button is hidden in the simplified shell (see
-    // DESIGN.md), and there is no fallback control anywhere else in Focus —
-    // unlike Inbox's "Show details", there is no keyboard shortcut for it
-    // either. The filters panel stays collapsed with no way to open it from
-    // a blank Focus view.
-    it('keeps Focus filters collapsed, with no Filters toggle to open them', () => {
+    it('keeps Focus filters collapsed by default and offers a fresh-install entry point', () => {
         const { queryByRole, queryByPlaceholderText } = renderAgenda();
 
-        expect(queryByRole('button', { name: /^Filters$/i })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: /^Filters$/i })).toHaveAttribute('aria-expanded', 'false');
         expect(queryByPlaceholderText('Search...')).not.toBeInTheDocument();
         expect(document.getElementById('agenda-filters-panel')).not.toBeInTheDocument();
+    });
+
+    it('restores an open Focus filter panel from persisted view state', () => {
+        window.localStorage.setItem(focusViewStateStorageKey, JSON.stringify({
+            filtersOpen: true,
+            focusSortBy: 'due',
+        }));
+
+        const { queryByRole, getByPlaceholderText } = renderAgenda();
+
+        expect(queryByRole('button', { name: /^Filters$/i })).toHaveAttribute('aria-expanded', 'true');
+        expect(getByPlaceholderText('Search...')).toBeInTheDocument();
+        expect(document.getElementById('agenda-filters-panel')).toBeInTheDocument();
     });
 
     it('does not let earlier non-Focus tasks hide the next task in a sequential project', () => {
@@ -1854,22 +1855,15 @@ describe('AgendaView', () => {
         expect(secondRender.getByRole('button', { name: /^Next Actions\s*\(1\)$/i })).toHaveAttribute('aria-expanded', 'false');
     });
 
-    // AgendaHeader's own Filters button (and its aria-expanded) is gone (see
-    // DESIGN.md); the panel keeps its own separate Show/Hide toggle with the
-    // same aria-expanded wiring once the panel is reachable at all (here, via
-    // a bootstrap saved filter — see openFocusFilters above).
-    it('exposes the filter panel state with aria-expanded, on the panel\'s own toggle', () => {
-        useTaskStore.setState({
-            settings: { savedFilters: [focusFilterBootstrap()] },
-        });
+    it('exposes filter panel state from the fresh-install header toggle', () => {
         const { getByRole } = renderAgenda();
 
-        fireEvent.click(getByRole('button', { name: FOCUS_FILTER_BOOTSTRAP_NAME }));
-        const filtersButton = getByRole('button', { name: /^Show$/i });
+        const filtersButton = getByRole('button', { name: /^Filters$/i });
         expect(filtersButton).toHaveAttribute('aria-expanded', 'false');
 
         fireEvent.click(filtersButton);
-        expect(getByRole('button', { name: /^Hide$/i })).toHaveAttribute('aria-expanded', 'true');
+        expect(filtersButton).toHaveAttribute('aria-expanded', 'true');
+        expect(document.getElementById('agenda-filters-panel')).toBeInTheDocument();
     });
 
     it('allows hiding the filter panel after selecting a filter', () => {

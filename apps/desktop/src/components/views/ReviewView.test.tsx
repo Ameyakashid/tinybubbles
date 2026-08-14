@@ -248,7 +248,10 @@ describe('ReviewView', () => {
         await waitForExternalCalendarIdle();
         expect(getByRole('heading', { level: 1, name: 'Process Inbox' })).toBeInTheDocument();
         expect(getByText('Inbox Zero Goal')).toBeInTheDocument();
-        expect(getByRole('button', { name: 'Process Inbox (1)' })).toBeInTheDocument();
+        // The action button's key ("process.btn") is overridden by the
+        // shell's English-only plain-language layer (display-labels.ts, see
+        // DESIGN.md) to "Tidy up".
+        expect(getByRole('button', { name: 'Tidy up (1)' })).toBeInTheDocument();
 
         fireEvent.click(getByText('Next Step'));
         expect(getByRole('heading', { level: 1, name: 'Stale items' })).toBeInTheDocument();

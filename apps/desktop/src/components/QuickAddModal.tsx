@@ -11,7 +11,6 @@ import {
     findSelectableProjectByTitleAndArea,
     getQuickAddProjectInitialProps,
     buildQuickAddParseOptions,
-    buildQuickAddPreviewEntries,
     parseQuickAdd,
     normalizeFocusTaskLimit,
     getDefaultTaskAreaMode,
@@ -45,6 +44,7 @@ import { MAX_AUDIO_RECORDING_SECONDS } from '../lib/audio-capture-buffer';
 import { AudioCaptureError, startAudioCapture, type AudioCaptureSession } from '../lib/audio-capture';
 import { processAudioCapture, resolveSpeechCapture, type SpeechToTextResult } from '../lib/speech-to-text';
 import { dispatchNavigateEvent } from '../lib/navigation-events';
+import { displayLabel } from '../lib/display-labels';
 import { Dialog, DialogBody } from './ui/Dialog';
 import { useUiStore } from '../store/ui-store';
 import {
@@ -56,8 +56,6 @@ import { QUICK_ADD_MAIN_WINDOW_LABEL, QUICK_ADD_SAVED_EVENT } from '../lib/quick
 import { consumeQuickAddPending, hideQuickAddWindow } from '../lib/quick-add-window';
 import { TaskInput } from './Task/TaskInput';
 import { AreaSelector } from './ui/AreaSelector';
-import { QuickAddSyntaxHint } from './ui/QuickAddSyntaxHint';
-import { QuickAddPreview } from './QuickAddPreview';
 import { FocusStarIcon } from './FocusStarIcon';
 
 // Relative to the managed data dir (portable-aware, #855).
@@ -166,7 +164,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         () => Array.from(new Set([...allContexts, ...allTags])).sort(),
         [allContexts, allTags]
     );
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const [isOpen, setIsOpen] = useState(false);
     const [value, setValue] = useState('');
     const [selectedAreaId, setSelectedAreaId] = useState('');
@@ -215,10 +213,6 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         [value, projects, areas, quickAddParseOptions],
     );
     // Same parse object the submit path uses, shaped for display only.
-    const previewEntries = useMemo(
-        () => buildQuickAddPreviewEntries(parsedInput, { t, projects, areas, rawInput: value }),
-        [areas, parsedInput, projects, t, value],
-    );
     const hasProjectOverride = Boolean(initialProps?.projectId || parsedInput.props.projectId || parsedInput.projectTitle);
     const showAreaSelector = !hasProjectOverride;
     const isPastingImage = pastingImageCount > 0;
@@ -851,6 +845,9 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
         }
         const parsed = parseQuickAdd(value, currentProjects, new Date(), currentAreas, quickAddParseOptions);
         if (parsed.invalidDateCommands && parsed.invalidDateCommands.length > 0) {
+            setBulkQuickAddError(
+                `${displayLabel(t, language, 'quickAdd.invalidDateCommand', 'Invalid date command')}: ${parsed.invalidDateCommands.join(', ')}`
+            );
             return;
         }
         const result = await createTaskFromParsedQuickAdd({
@@ -1055,7 +1052,10 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                     );
                                     return created?.id ?? null;
                                 }}
-                                onChange={(next) => setValue(next)}
+                                onChange={(next) => {
+                                    setValue(next);
+                                    setBulkQuickAddError(null);
+                                }}
                                 onPaste={handleQuickAddPaste}
                                 onKeyDown={(e) => {
                                     if (e.key === 'Escape') {
@@ -1076,7 +1076,7 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 }}
                                 placeholder={t('nav.addTask')}
                                 className={cn(
-                                    "w-full rounded-lg border border-border bg-card py-3 pl-4 pr-12 shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary",
+                                    "w-full rounded-lg border border-border bg-card py-3.5 pl-4 pr-12 text-base shadow-sm transition-colors focus:border-transparent focus:ring-2 focus:ring-primary",
                                 )}
                             />
                             {/* "Add to today's focus" star sits inside the field's right edge —
@@ -1106,7 +1106,9 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 <FocusStarIcon filled={focusNewTask} className="h-[18px] w-[18px]" />
                             </button>
                         </div>
-                        <QuickAddPreview entries={previewEntries} />
+                        {/* Parse preview, example line and syntax help are hidden in
+                            the simplified shell — typed tokens still parse at save.
+                            See DESIGN.md. */}
                         {isPastingImage ? (
                             <p className="text-xs text-muted-foreground">
                                 {tFallback(t, 'quickAdd.pastedImageSaving', 'Attaching image...')}
@@ -1137,15 +1139,6 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 />
                             </div>
                         )}
-                        <p className="text-xs text-muted-foreground">{t('quickAdd.example')}</p>
-                        <details className="text-xs text-muted-foreground">
-                            <summary className="w-fit cursor-pointer whitespace-nowrap rounded-sm font-medium text-foreground/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-                                {t('quickAdd.syntaxHelp')}
-                            </summary>
-                            <p className="mt-2 leading-5">
-                                <QuickAddSyntaxHint text={t('quickAdd.help')} />
-                            </p>
-                        </details>
                         {scheduledLabel && (
                             <p className="text-xs text-muted-foreground">
                                 {t('calendar.scheduleAction')}: {scheduledLabel}
@@ -1198,11 +1191,11 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                 title={SAVE_SHORTCUT_HINT}
                                 disabled={saveDisabled}
                                 className={cn(
-                                    'px-3 py-1.5 rounded-md text-sm bg-primary text-primary-foreground hover:bg-primary/90',
+                                    'h-11 rounded-md bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90',
                                     saveDisabled && 'opacity-50 cursor-not-allowed hover:bg-primary',
                                 )}
                             >
-                                {t('common.save')}
+                                {t('common.add')}
                             </button>
                         </div>
                     </form>

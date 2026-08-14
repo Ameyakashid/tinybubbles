@@ -502,7 +502,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const inboxLabel = tFallback(t, 'nav.inbox', 'Inbox');
     const inboxCaptureLabel = `${addTaskLabel} (${inboxLabel})`;
     const searchTitleLabel = tFallback(t, 'search.title', 'Search');
-    const searchScopeLabel = tFallback(t, 'search.scopeHint', 'Tasks, projects, people');
+    const searchScopeLabel = displayLabel(t, language, 'search.scopeHint', 'Tasks, projects, people');
 
     const savedSearches = settings?.savedSearches || [];
 

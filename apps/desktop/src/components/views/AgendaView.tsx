@@ -55,6 +55,7 @@ const AGENDA_VIRTUALIZATION_THRESHOLD = 25;
 const NO_PROJECT_FILTER_ID = SAVED_FILTER_NO_PROJECT_ID;
 const AGENDA_ACTIVE_STATUSES: Task['status'][] = ['inbox', 'next', 'waiting', 'someday'];
 const DEFAULT_FOCUS_SORT_BY: SortField = 'default';
+const FOCUS_SORT_FIELDS: SortField[] = ['default', 'due', 'start', 'priority', 'created', 'created-desc'];
 const FOCUS_VIEW_STATE_STORAGE_KEY = 'tinybubbles:view:focus:v1';
 
 type FocusSectionKey = 'schedule' | 'nextActions' | 'reviewDue';
@@ -65,6 +66,8 @@ type SetFocusCollapsedGroups = (
 type FocusPersistedViewState = {
     expandedSections: Record<FocusSectionKey, boolean>;
     collapsedGroups: CollapsedGroups<NextGroupBy>;
+    filtersOpen: boolean;
+    focusSortBy: SortField;
 };
 
 const DEFAULT_FOCUS_VIEW_STATE: FocusPersistedViewState = {
@@ -74,6 +77,8 @@ const DEFAULT_FOCUS_VIEW_STATE: FocusPersistedViewState = {
         reviewDue: true,
     },
     collapsedGroups: emptyCollapsedGroups(FOCUS_AXES),
+    filtersOpen: false,
+    focusSortBy: DEFAULT_FOCUS_SORT_BY,
 };
 
 function sanitizeFocusViewState(value: unknown, fallback: FocusPersistedViewState): FocusPersistedViewState {
@@ -90,6 +95,10 @@ function sanitizeFocusViewState(value: unknown, fallback: FocusPersistedViewStat
             reviewDue: typeof expandedSections.reviewDue === 'boolean' ? expandedSections.reviewDue : fallback.expandedSections.reviewDue,
         },
         collapsedGroups: sanitizeCollapsedGroups(FOCUS_AXES, parsed.collapsedGroups, fallback.collapsedGroups),
+        filtersOpen: typeof parsed.filtersOpen === 'boolean' ? parsed.filtersOpen : fallback.filtersOpen,
+        focusSortBy: FOCUS_SORT_FIELDS.includes(parsed.focusSortBy as SortField)
+            ? parsed.focusSortBy as SortField
+            : fallback.focusSortBy,
     };
 }
 
@@ -184,7 +193,6 @@ function AgendaTaskList({
                         taskId={task.id}
                         buildFocusToggle={buildFocusToggle}
                         showProjectBadgeInActions={false}
-                        compactMetaEnabled={showListDetails}
                         enableDoubleClickEdit
                         projectDeadlineLabel={getProjectDeadlineLabel?.(task.id)}
                     />
@@ -222,7 +230,6 @@ function AgendaTaskList({
                             taskId={task.id}
                             buildFocusToggle={buildFocusToggle}
                             showProjectBadgeInActions={false}
-                            compactMetaEnabled={showListDetails}
                             enableDoubleClickEdit
                             projectDeadlineLabel={getProjectDeadlineLabel?.(task.id)}
                         />
@@ -256,18 +263,12 @@ export function AgendaView() {
     const { t, language } = useLanguage();
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const localDayKey = useLocalDayKey();
-    const { showListDetails, nextGroupBy, top3Only, setListOptions, collapseAllTaskDetails, setProjectView, showToast } = useUiStore((state) => ({
+    const { showListDetails, nextGroupBy, setProjectView, showToast } = useUiStore((state) => ({
         showListDetails: state.listOptions.showDetails,
         nextGroupBy: state.listOptions.nextGroupBy,
-        top3Only: state.listOptions.focusTop3Only,
-        setListOptions: state.setListOptions,
-        collapseAllTaskDetails: state.collapseAllTaskDetails,
         setProjectView: state.setProjectView,
         showToast: state.showToast,
     }));
-    const [filtersOpen, setFiltersOpen] = useState(false);
-    const [focusSortBy, setFocusSortBy] = useState<SortField>(DEFAULT_FOCUS_SORT_BY);
-    const resetFocusSort = useCallback(() => setFocusSortBy(DEFAULT_FOCUS_SORT_BY), []);
     const [saveFilterPromptOpen, setSaveFilterPromptOpen] = useState(false);
     const filterInputRef = useRef<HTMLInputElement | null>(null);
     const [persistedViewState, setPersistedViewState] = usePersistedViewState(
@@ -276,6 +277,18 @@ export function AgendaView() {
         sanitizeFocusViewState
     );
     const expandedSections = persistedViewState.expandedSections;
+    const filtersOpen = persistedViewState.filtersOpen;
+    const focusSortBy = persistedViewState.focusSortBy;
+    const setFiltersOpen = useCallback((open: boolean) => {
+        setPersistedViewState((current) => ({ ...current, filtersOpen: open }));
+    }, [setPersistedViewState]);
+    const toggleFiltersOpen = useCallback(() => {
+        setPersistedViewState((current) => ({ ...current, filtersOpen: !current.filtersOpen }));
+    }, [setPersistedViewState]);
+    const setFocusSortBy = useCallback((sortBy: SortField) => {
+        setPersistedViewState((current) => ({ ...current, focusSortBy: sortBy }));
+    }, [setPersistedViewState]);
+    const resetFocusSort = useCallback(() => setFocusSortBy(DEFAULT_FOCUS_SORT_BY), [setFocusSortBy]);
     const prioritiesEnabled = settings?.features?.priorities !== false;
     const timeEstimatesEnabled = settings?.features?.timeEstimates !== false;
     const pomodoroEnabled = settings?.features?.pomodoro === true;
@@ -564,10 +577,6 @@ export function AgendaView() {
         unbindSavedFilter();
         setFocusSortBy(value);
     }, [unbindSavedFilter]);
-    const updateFocusGroupBy = useCallback((value: NextGroupBy) => {
-        unbindSavedFilter();
-        setListOptions({ nextGroupBy: value });
-    }, [setListOptions, unbindSavedFilter]);
     const applySavedFocusFilter = useCallback((filter: SavedFilter) => {
         applySavedSelections(filter);
         setFocusSortBy(filter.sortBy ?? DEFAULT_FOCUS_SORT_BY);
@@ -774,25 +783,9 @@ export function AgendaView() {
         getProjectDeadlineBoostLabel(sections.projectDeadlineBoosts.get(taskId), resolveText)
     ), [resolveText, sections.projectDeadlineBoosts]);
     const focusedCount = focusedTasks.length;
-    const { top3Tasks, remainingCount } = useMemo(() => {
-        const byId = new Map<string, Task>();
-        [...sections.schedule, ...sections.nextActions, ...sections.reviewDue].forEach((task) => {
-            if (!byId.has(task.id)) {
-                byId.set(task.id, task);
-            }
-        });
-        const candidates = Array.from(byId.values());
-        const top3 = candidates.slice(0, 3);
-        return {
-            top3Tasks: top3,
-            remainingCount: Math.max(candidates.length - top3.length, 0),
-        };
-    }, [sections]);
-
     // The keyboard scope walks exactly what is on screen, in render order:
     // collapsed sections and collapsed groups contribute no rows.
     const visibleTasks = useMemo(() => {
-        if (top3Only) return [...focusedTasks, ...top3Tasks];
         const visible = [...focusedTasks];
         if (expandedSections.schedule) visible.push(...sections.schedule);
         if (expandedSections.nextActions) visible.push(...visibleNextActions);
@@ -802,8 +795,6 @@ export function AgendaView() {
         expandedSections,
         focusedTasks,
         sections,
-        top3Only,
-        top3Tasks,
         visibleNextActions,
     ]);
     const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
@@ -878,14 +869,6 @@ export function AgendaView() {
         });
         return Array.from(byId.values());
     })();
-    const handleToggleDetails = useCallback(() => {
-        if (showListDetails) {
-            collapseAllTaskDetails();
-            setListOptions({ showDetails: false });
-            return;
-        }
-        setListOptions({ showDetails: true });
-    }, [collapseAllTaskDetails, setListOptions, showListDetails]);
     const focusDndSensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -928,7 +911,6 @@ export function AgendaView() {
                             dragAriaLabel={focusDragAriaLabel}
                             buildFocusToggle={buildFocusToggle}
                             showProjectBadgeInActions={false}
-                            compactMetaEnabled={showListDetails}
                             enableDoubleClickEdit
                         />
                     ))}
@@ -950,7 +932,6 @@ export function AgendaView() {
                     taskId={task.id}
                     buildFocusToggle={buildFocusToggle}
                     showProjectBadgeInActions={false}
-                    compactMetaEnabled={showListDetails}
                     enableDoubleClickEdit
                 />
             ))}
@@ -979,18 +960,10 @@ export function AgendaView() {
             <div className={cn("space-y-6 w-full", LIST_END_GAP)} data-list-end>
             <AgendaHeader
                 language={language}
-                filterCount={activeFilterCount}
                 filtersOpen={filtersOpen}
                 nextActionsCount={nextActionsCount}
-                nextGroupBy={effectiveNextGroupBy}
-                onChangeGroupBy={updateFocusGroupBy}
-                onToggleFilters={() => setFiltersOpen((prev) => !prev)}
-                onToggleDetails={handleToggleDetails}
-                onToggleTop3={() => setListOptions({ focusTop3Only: !top3Only })}
-                resolveText={resolveText}
-                showListDetails={showListDetails}
+                onToggleFilters={toggleFiltersOpen}
                 t={t}
-                top3Only={top3Only}
             />
 
             {savedFocusFilters.length > 0 && (
@@ -1078,7 +1051,7 @@ export function AgendaView() {
                     onSearchChange={setSearchQuery}
                     onSortChange={updateFocusSortBy}
                     onToggleEnergy={toggleEnergyFilter}
-                    onToggleFiltersOpen={() => setFiltersOpen((prev) => !prev)}
+                    onToggleFiltersOpen={toggleFiltersOpen}
                     onToggleProject={toggleProjectFilter}
                     onTogglePriority={togglePriorityFilter}
                     onToggleTime={toggleTimeFilter}
@@ -1117,41 +1090,7 @@ export function AgendaView() {
                 </div>
             )}
 
-            {top3Only ? (
-                <div className="space-y-4">
-                    {todaysFocusSection}
-                    <div className="space-y-2">
-                        <h3 className="font-semibold">{t('agenda.top3Title')}</h3>
-                        {top3Tasks.length > 0 ? (
-                            <div className="divide-y divide-border/30">
-                                {top3Tasks.map(task => (
-                                    <StoreTaskItem
-                                        key={task.id}
-                                        taskId={task.id}
-                                        buildFocusToggle={buildFocusToggle}
-                                        showProjectBadgeInActions={false}
-                                        compactMetaEnabled={showListDetails}
-                                        enableDoubleClickEdit
-                                        projectDeadlineLabel={getProjectDeadlineLabel(task.id)}
-                                    />
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-muted-foreground text-sm">{t('agenda.noTasks')}</p>
-                        )}
-                    </div>
-                    {remainingCount > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setListOptions({ focusTop3Only: false })}
-                            className="text-xs px-3 py-2 rounded bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
-                        >
-                            {t('agenda.showMore').replace('{{count}}', `${remainingCount}`)}
-                        </button>
-                    )}
-                </div>
-            ) : (
-                <>
+            <>
                     {todaysFocusSection}
 
                     {/* Other Sections */}
@@ -1265,10 +1204,9 @@ export function AgendaView() {
                             t={t}
                         />
                     </div>
-                </>
-            )}
+            </>
 
-            {!top3Only && !hasAgendaContent && (
+            {!hasAgendaContent && (
                 <div className="flex flex-col items-center gap-1 py-8 text-center text-muted-foreground">
                     <CheckCircle2 className="h-6 w-6 text-success/80" aria-hidden="true" strokeWidth={1.5} />
                     <p className="text-base font-medium text-foreground">{t('agenda.allClear')}</p>

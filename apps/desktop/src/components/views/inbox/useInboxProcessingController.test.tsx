@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Project, Task } from '@tinybubbles/core';
+import type { AppSettings, Project, Task } from '@tinybubbles/core';
 import { useInboxProcessingController } from './useInboxProcessingController';
 
 const makeTask = (id: string, status: Task['status'] = 'inbox'): Task => ({
@@ -130,7 +130,7 @@ describe('useInboxProcessingController not-actionable destinations', () => {
         // Re-enable them here the way Settings would, so this still exercises
         // the underlying commit carrying picked organization fields through
         // to Waiting rather than testing a path the default config skips.
-        const settingsWithOrganizationFields = { gtd: { taskEditor: { hidden: [] as string[] } } };
+        const settingsWithOrganizationFields: AppSettings = { gtd: { taskEditor: { hidden: [] } } };
         const { result } = renderHook(() => {
             const [isProcessing, setIsProcessing] = useState(true);
             return useInboxProcessingController({
@@ -175,7 +175,7 @@ describe('useInboxProcessingController not-actionable destinations', () => {
     // above wouldn't even be reachable — this documents what actually
     // happens for a session that never customises Settings back on.
     it('drops contexts and tags when delegated to Waiting under the default (reduced) task-editor fields', async () => {
-        const updateTask = vi.fn(async () => ({ success: true }));
+        const updateTask = vi.fn(async (_taskId: string, _fields: Record<string, unknown>) => ({ success: true }));
         const { result } = renderController(updateTask);
 
         await waitFor(() => {
@@ -191,7 +191,7 @@ describe('useInboxProcessingController not-actionable destinations', () => {
             await result.current.wizardProps.handleConfirmWaiting();
         });
 
-        const [, fields] = updateTask.mock.calls[0] as [string, Record<string, unknown>];
+        const [, fields] = updateTask.mock.calls[0];
         expect(fields).toMatchObject({ status: 'waiting', projectId: 'p1' });
         expect(fields).not.toHaveProperty('contexts');
         expect(fields).not.toHaveProperty('tags');

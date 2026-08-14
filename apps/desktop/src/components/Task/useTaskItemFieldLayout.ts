@@ -162,10 +162,14 @@ export function useTaskItemFieldLayout({
     const isFieldVisible = useCallback(
         (fieldId: TaskEditorFieldId) => {
             if (isReference && referenceHiddenFields.has(fieldId)) return false;
+            // Status is a fixed editor capability. Keep it available on a fresh
+            // install even though it is not part of the four optional defaults;
+            // an explicit layout customization can still hide it.
+            if (fieldId === 'status' && explicitHidden === undefined) return true;
             if (fieldId === 'assignedTo' && editStatus === 'waiting' && !isAssignedToExplicitlyHidden) return true;
             return !hiddenSet.has(fieldId) || hasValue(fieldId);
         },
-        [editStatus, hasValue, hiddenSet, isAssignedToExplicitlyHidden, isReference, referenceHiddenFields]
+        [editStatus, explicitHidden, hasValue, hiddenSet, isAssignedToExplicitlyHidden, isReference, referenceHiddenFields]
     );
     const showProjectField = isFieldVisible('project');
     const showAreaField = isFieldVisible('area') && !editProjectId;

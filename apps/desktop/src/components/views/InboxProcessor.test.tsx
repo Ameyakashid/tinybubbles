@@ -168,12 +168,19 @@ describe('InboxProcessor', () => {
         cleanup();
     });
 
+    // The start-processing button's key ("process.btn") is overridden by the
+    // shell's English-only plain-language layer (src/lib/display-labels.ts,
+    // see DESIGN.md) to "Tidy up", even though `t` is mocked to echo raw keys
+    // everywhere else. Querying the rendered "Tidy up (<count>)" text is a
+    // stronger check than the old key-based query: it would catch that label
+    // silently breaking or reverting to the raw key.
+
     it('shows an error toast when project conversion fails', async () => {
         useUiStore.setState({ toasts: [] });
         const { getByRole, getByText, addProject } = renderInboxProcessor();
         addProject.mockRejectedValueOnce(new Error('disk full'));
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepYes'));
@@ -194,7 +201,7 @@ describe('InboxProcessor', () => {
     it('creates extra next actions in the new project when added at the split step (#827)', async () => {
         const { getByRole, getByText, getAllByPlaceholderText, addTask, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepYes'));
@@ -230,7 +237,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
 
         expect(getByText('process.quickDesc')).toBeTruthy();
         expect(queryByText('process.refineDesc')).toBeNull();
@@ -254,7 +261,7 @@ describe('InboxProcessor', () => {
             areas: [workArea],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
 
         expect(queryByRole('button', { name: 'Work' })).not.toBeInTheDocument();
 
@@ -291,7 +298,7 @@ describe('InboxProcessor', () => {
             projects: [workProject, homeProject],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'projects.noArea' }));
         fireEvent.click(getByRole('option', { name: 'Work' }));
         fireEvent.click(getByRole('button', { name: 'process.project' }));
@@ -316,7 +323,7 @@ describe('InboxProcessor', () => {
             projects: [workProject, homeProject],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
 
         expect(container.innerHTML.indexOf('taskEdit.areaLabel')).toBeLessThan(
             container.innerHTML.indexOf('taskEdit.projectLabel'),
@@ -339,7 +346,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         expect(getByText('process.quickDesc').closest('.rounded-xl')).toHaveClass('overflow-visible');
 
         fireEvent.click(getByRole('button', { name: 'process.modeGuided' }));
@@ -349,7 +356,7 @@ describe('InboxProcessor', () => {
     it('routes actionable multi-step tasks directly to project conversion', async () => {
         const { getByRole, getByText, addProject, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepYes'));
@@ -375,7 +382,7 @@ describe('InboxProcessor', () => {
         const { getByRole, getByText, addProject, updateTask } = renderInboxProcessor();
         addProject.mockRejectedValueOnce(new Error('disk full'));
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepYes'));
@@ -393,7 +400,7 @@ describe('InboxProcessor', () => {
     it('continues to normal two-minute flow when item is a single action', () => {
         const { getByRole, getByText } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepNo'));
@@ -404,7 +411,7 @@ describe('InboxProcessor', () => {
     it('merges the two-minute shortcut into the actionable step by default', async () => {
         const { getByRole, getByText, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
 
         fireEvent.click(getByText('process.doneIt'));
@@ -422,7 +429,7 @@ describe('InboxProcessor', () => {
     it('keeps scheduling hidden by default while reference stays available', () => {
         const { getByRole, getByText, queryByText } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
 
         expect(queryByText('process.reference')).toBeNull();
@@ -447,7 +454,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
 
         fireEvent.click(getByText('inbox.no'));
@@ -463,7 +470,7 @@ describe('InboxProcessor', () => {
             gtd: { taskEditor: { hidden: [] } },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
         fireEvent.click(getByText('process.reference'));
         fireEvent.change(getByLabelText('taskEdit.contextsLabel'), {
@@ -493,7 +500,7 @@ describe('InboxProcessor', () => {
             gtd: { taskEditor: { hidden: [] } },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('inbox.no'));
         fireEvent.click(getByText('process.reference'));
@@ -529,7 +536,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
 
         fireEvent.click(getByText('inbox.no'));
@@ -548,7 +555,7 @@ describe('InboxProcessor', () => {
     it('moves a task to next with a date-only start date from the guided Later shortcut', async () => {
         const { getByRole, getByText, getByLabelText, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('inbox.no'));
         fireEvent.click(getByText('Later'));
@@ -583,7 +590,7 @@ describe('InboxProcessor', () => {
             tasks: [inboxTask, inboxTaskTwo],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         scrollIntoView.mockClear();
         fireEvent.click(getByRole('button', { name: 'process.next' }));
 
@@ -598,7 +605,7 @@ describe('InboxProcessor', () => {
     it('moves a task to next with a date-only start date from the quick Later outcome', async () => {
         const { getByRole, getByText, getByLabelText, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
         fireEvent.click(getByText('Later'));
         fireEvent.change(getByLabelText('taskEdit.startDateLabel'), {
@@ -626,7 +633,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
 
         expect(queryByLabelText('taskEdit.energyLevel')).toBeNull();
@@ -657,7 +664,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
 
         fireEvent.change(getByLabelText('taskEdit.titleLabel'), {
@@ -727,7 +734,7 @@ describe('InboxProcessor', () => {
             tasks: [inboxTask, inboxTaskTwo],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.change(getByLabelText('taskEdit.titleLabel'), {
             target: { value: 'Clarified launch' },
         });
@@ -757,7 +764,7 @@ describe('InboxProcessor', () => {
             tasks: [inboxTask, inboxTaskTwo],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.keyDown(document, { key: 'Enter', ctrlKey: true });
 
         await waitFor(() => {
@@ -783,7 +790,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.change(getByLabelText('taskEdit.descriptionLabel'), {
             target: { value: 'Captured context' },
         });
@@ -809,7 +816,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.keyDown(getByLabelText('taskEdit.descriptionLabel'), { key: 'Enter' });
 
         expect(updateTask).not.toHaveBeenCalled();
@@ -825,7 +832,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
 
         const contextsInput = getByLabelText('taskEdit.contextsLabel') as HTMLInputElement;
@@ -864,7 +871,7 @@ describe('InboxProcessor', () => {
             allTags: ['#deep-work', '#writing'],
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
 
         const contextsInput = getByLabelText('taskEdit.contextsLabel') as HTMLInputElement;
@@ -907,7 +914,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepNo'));
@@ -947,7 +954,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
         fireEvent.change(getByLabelText('taskEdit.startDateLabel'), {
             target: { value: '2026-03-23' },
@@ -978,7 +985,7 @@ describe('InboxProcessor', () => {
             quickAddAutoClean: true,
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.change(getByDisplayValue('Plan launch'), {
             target: {
                 value: 'Clarified task /start:2026-03-23 12:00 /due:2026-03-24 13:00 /review:2026-03-25 14:00',
@@ -1011,7 +1018,7 @@ describe('InboxProcessor', () => {
         useUiStore.setState({ toasts: [] });
         const { getByRole, getByLabelText, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByRole('button', { name: 'process.modeQuick' }));
         fireEvent.change(getByLabelText('taskEdit.titleLabel'), {
             target: { value: 'Broken task /due:2026-04-31' },
@@ -1041,7 +1048,7 @@ describe('InboxProcessor', () => {
             },
         });
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepNo'));
@@ -1077,7 +1084,7 @@ describe('InboxProcessor', () => {
     it('moves delegated tasks to waiting with assignedTo instead of mutating the description', async () => {
         const { getByRole, getByText, getByPlaceholderText, updateTask } = renderInboxProcessor();
 
-        fireEvent.click(getByRole('button', { name: /process\.btn/i }));
+        fireEvent.click(getByRole('button', { name: /^Tidy up \(\d+\)$/i }));
         fireEvent.click(getByText('process.refineNext'));
         fireEvent.click(getByText('process.yesActionable'));
         fireEvent.click(getByText('process.moreThanOneStepNo'));

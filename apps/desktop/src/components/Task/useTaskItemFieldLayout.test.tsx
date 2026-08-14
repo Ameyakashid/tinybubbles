@@ -61,13 +61,10 @@ describe('useTaskItemFieldLayout', () => {
             },
         })));
 
-        // DEFAULT_TASK_EDITOR_VISIBLE (task-item-helpers.ts) was reduced to
-        // dueDate/description/checklist/attachments; 'status' is a fixed field
-        // (TASK_EDITOR_FIXED_FIELDS) but has no "already has a value" escape
-        // hatch (hasValue('status') is hardcoded false), so it now falls out of
-        // the default basic fields along with the rest of the shrunk set.
+        // The four optional defaults stay shallow, while fixed status remains
+        // reachable without requiring a trip to Settings.
         expect(result.current.basicFields).toEqual(expect.arrayContaining(['contexts', 'dueDate']));
-        expect(result.current.basicFields).not.toContain('status');
+        expect(result.current.basicFields).toContain('status');
         expect(result.current.organizationFields).not.toContain('priority');
         expect(result.current.organizationFields).not.toContain('energyLevel');
         expect(result.current.organizationFields).not.toContain('assignedTo');
@@ -136,10 +133,9 @@ describe('useTaskItemFieldLayout', () => {
             draft: { status: 'reference' },
         })));
 
-        // Reference editing used to keep 'status' pinned in basicFields; with the
-        // reduced default visible set 'status' is hidden regardless of the draft's
-        // status (see the shallow-editor test above).
-        expect(result.current.basicFields).not.toContain('status');
+        // Reference-only action fields stay hidden, but status remains available
+        // so the task can be moved out of Reference.
+        expect(result.current.basicFields).toContain('status');
         expect(result.current.basicFields).not.toContain('dueDate');
         expect(result.current.schedulingFields).toEqual([]);
         expect(result.current.basicFields).toContain('contexts');
@@ -198,17 +194,14 @@ describe('useTaskItemFieldLayout', () => {
         expect(result.current.basicFieldsAfterOrganizers).toEqual(['status']);
     });
 
-    it('keeps status out of the default basic fields, but pinned above the organizer row once a saved layout reveals it', () => {
-        // With zero saved customization, the reduced default visible set hides
-        // 'status' (and the empty-by-default 'project'/'area') entirely — there is
-        // no per-row status control anymore (TaskItemDisplay's showStatusSelect
-        // defaults to false), and now the editor's Basic section shows nothing in
-        // its place either.
+    it('keeps status reachable by default and pinned above the organizer row in a saved layout', () => {
+        // With zero saved customization, status remains fixed in the editor while
+        // the empty-by-default project and area fields stay hidden.
         const { result } = renderHook(() => useTaskItemFieldLayout(buildParams()));
 
-        expect(result.current.basicFields).not.toContain('status');
+        expect(result.current.basicFields).toContain('status');
         expect(result.current.organizerFields).toEqual([]);
-        expect(result.current.basicFieldsBeforeOrganizers).toEqual(['contexts', 'dueDate']);
+        expect(result.current.basicFieldsBeforeOrganizers).toEqual(['status', 'contexts', 'dueDate']);
         expect(result.current.basicFieldsAfterOrganizers).toEqual([]);
 
         // Settings can still re-enable every field (DESIGN.md); once nothing is

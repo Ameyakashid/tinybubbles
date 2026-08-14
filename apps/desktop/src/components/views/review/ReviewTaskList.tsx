@@ -74,7 +74,6 @@ export function ReviewTaskList({
                     <StoreTaskItem
                         key={task.id}
                         taskId={task.id}
-                        compactMetaEnabled={showListDetails}
                         showProjectBadgeInActions={false}
                         selectionMode={selectionMode}
                         isMultiSelected={multiSelectedIds.has(task.id)}
@@ -107,7 +106,6 @@ export function ReviewTaskList({
                             <div className="pb-1.5">
                                 <StoreTaskItem
                                     taskId={task.id}
-                                    compactMetaEnabled={showListDetails}
                                     showProjectBadgeInActions={false}
                                     selectionMode={selectionMode}
                                     isMultiSelected={multiSelectedIds.has(task.id)}

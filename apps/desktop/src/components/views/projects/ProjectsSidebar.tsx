@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { AlertTriangle, ChevronDown, ChevronRight, ChevronsLeft, CornerDownRight, Folder, Plus } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { displayLabel } from '../../../lib/display-labels';
+import { useLanguage } from '../../../contexts/language-context';
 import { FocusStarIcon } from '../../FocusStarIcon';
 import { SortableProjectRow } from './SortableRows';
 import { LIST_END_GAP } from '../list/list-toolbar';
@@ -80,11 +82,7 @@ interface ProjectsSidebarProps {
 export function ProjectsSidebar({
     t,
     areaFilterLabel,
-    selectedTag,
     noAreaId,
-    allTagsId,
-    noTagsId,
-    tagOptions,
     isCreating,
     isCreatingProject,
     newProjectTitle,
@@ -95,7 +93,6 @@ export function ProjectsSidebar({
     onCreateProject,
     onChangeNewProjectTitle,
     onChangeNewProjectAreaId,
-    onSelectTag,
     groupedActiveProjects,
     groupedDeferredProjects,
     groupedArchivedProjects,
@@ -118,6 +115,7 @@ export function ProjectsSidebar({
     onToggleCollapsed,
 }: ProjectsSidebarProps) {
     const focusedCount = focusedProjectCount;
+    const { language } = useLanguage();
     const [contextMenu, setContextMenu] = useState<{ projectId: string; x: number; y: number } | null>(null);
     const contextMenuRef = useRef<HTMLDivElement | null>(null);
     const contextMenuReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -266,44 +264,25 @@ export function ProjectsSidebar({
                     <button
                         type="button"
                         onClick={onToggleCollapsed}
-                        className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+                        className="h-11 w-11 flex items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
                         title={collapseLabel}
                         aria-label={collapseLabel}
                         aria-controls="projects-sidebar-panel"
                         aria-expanded={true}
                     >
-                        <ChevronsLeft className="w-4 h-4" />
+                        <ChevronsLeft className="w-5 h-5" />
                     </button>
                 )}
             </div>
 
-            <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    {t('projects.tagFilter')}
-                </label>
-                <select
-                    aria-label={t('projects.tagFilter')}
-                    value={selectedTag}
-                    onChange={(e) => onSelectTag(e.target.value)}
-                    className="w-full h-8 text-xs bg-background border border-border rounded px-2 text-foreground"
-                >
-                    <option value={allTagsId}>{t('projects.allTags')}</option>
-                    {tagOptions.list.map((tag) => (
-                        <option key={tag} value={tag}>
-                            {tag}
-                        </option>
-                    ))}
-                    {tagOptions.hasNoTags && (
-                        <option value={noTagsId}>{t('projects.noTags')}</option>
-                    )}
-                </select>
-            </div>
+            {/* The tag filter is hidden in the simplified shell (see DESIGN.md);
+                the props stay wired so the filter state still works elsewhere. */}
 
             <form
                 onSubmit={onCreateProject}
-                className="rounded-lg border border-border/70 bg-card/40 p-2.5 space-y-2"
+                className="rounded-lg border border-border/70 bg-card/40 p-3 space-y-2"
             >
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="text-sm font-medium text-muted-foreground">
                     {createProjectLabel}
                 </label>
                 <div className="flex items-center gap-2">
@@ -313,19 +292,19 @@ export function ProjectsSidebar({
                         onChange={(e) => onChangeNewProjectTitle(e.target.value)}
                         onFocus={onStartCreate}
                         placeholder={t('projects.projectName')}
-                        className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60 disabled:cursor-not-allowed"
                         disabled={isCreatingProject}
                         aria-busy={isCreatingProject}
                         aria-label={t('projects.projectName')}
                     />
                     <button
                         type="submit"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={!newProjectTitle.trim() || isCreatingProject}
                         title={t('projects.create')}
                         aria-label={createProjectLabel}
                     >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-5 h-5" />
                     </button>
                 </div>
                 {(isCreating || newProjectTitle.trim().length > 0) && areaOptions.length > 0 && (
@@ -333,7 +312,7 @@ export function ProjectsSidebar({
                         aria-label={t('projects.areaLabel')}
                         value={newProjectAreaId}
                         onChange={(e) => onChangeNewProjectAreaId(e.target.value)}
-                        className="w-full h-8 text-xs bg-background border border-border rounded px-2 text-foreground"
+                        className="w-full h-11 text-sm bg-background border border-border rounded px-2 text-foreground"
                         disabled={isCreatingProject}
                     >
                         <option value="">{t('projects.noArea')}</option>
@@ -363,8 +342,8 @@ export function ProjectsSidebar({
 
             <div className="space-y-3 overflow-y-auto flex-1">
                 {groupedActiveProjects.length > 0 && (
-                    <div className="pt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        {t('projects.activeSection')}
+                    <div className="pt-2 text-sm font-medium text-muted-foreground">
+                        {displayLabel(t, language, 'projects.activeSection', 'Active Projects')}
                     </div>
                 )}
                 {groupedActiveProjects.length > 0 && (
@@ -376,10 +355,13 @@ export function ProjectsSidebar({
 
                             return (
                                 <ProjectAreaDropZone key={areaId} section="active" areaId={areaId} className="space-y-1 rounded-lg">
+                                    {/* Area group headers only render when areas exist —
+                                        with none set up, "No area" is just noise (DESIGN.md). */}
+                                    {areaById.size > 0 && (
                                     <button
                                         type="button"
                                         onClick={() => onToggleAreaCollapse('active', areaId)}
-                                        className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                                        className="w-full flex min-h-11 items-center justify-between px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         <span className="flex items-center gap-2">
                                             {area?.color && (
@@ -393,6 +375,7 @@ export function ProjectsSidebar({
                                         </span>
                                         {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                     </button>
+                                    )}
                                     {!isCollapsed && (
                                             <SortableContext items={areaProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
                                                 {areaProjects.map((project) => {
@@ -405,7 +388,7 @@ export function ProjectsSidebar({
                                                     {({ handle, isDragging, isTaskOver }) => (
                                                 <div
                                                     className={cn(
-                                                        "group rounded-lg cursor-pointer transition-colors text-sm",
+                                                        "group rounded-lg cursor-pointer transition-colors text-base",
                                                         selectedProjectId === project.id
                                                             ? "bg-primary/10 text-primary"
                                                             : project.isFocused
@@ -430,8 +413,8 @@ export function ProjectsSidebar({
                                                                 });
                                                             }}
                                                         >
-                                                    <div className="flex items-center gap-2 px-2 py-2">
-                                                                <span className="opacity-40 group-hover:opacity-100 transition-opacity">
+                                                    <div className="flex items-center gap-2 px-3 py-2">
+                                                                <span className="opacity-50">
                                                                     {handle}
                                                                 </span>
                                                                 <button
@@ -441,32 +424,32 @@ export function ProjectsSidebar({
                                                                         toggleProjectFocus(project.id);
                                                                     }}
                                                                     className={cn(
-                                                                        "text-sm transition-colors",
+                                                                        "inline-flex h-11 w-11 items-center justify-center text-sm transition-colors",
                                                                         project.isFocused ? "text-warning" : "text-muted-foreground hover:text-warning",
                                                                         !project.isFocused && focusedCount >= 5 && "opacity-30 cursor-not-allowed",
                                                                     )}
                                                                     title={project.isFocused ? removeFromFocusLabel : focusedCount >= 5 ? maxFocusedProjectsLabel : addToFocusLabel}
                                                                     aria-label={project.isFocused ? removeFromFocusLabel : addToFocusLabel}
                                                                 >
-                                                                    <FocusStarIcon className="w-4 h-4" filled={project.isFocused} />
+                                                                    <FocusStarIcon className="w-5 h-5" filled={project.isFocused} />
                                                                 </button>
-                                                                <Folder className="w-4 h-4" style={{ color: getProjectColor(project) }} />
+                                                                <Folder className="w-5 h-5" style={{ color: getProjectColor(project) }} />
                                                                 <span className="flex-1 truncate font-medium" title={project.title}>
                                                                     {project.title}
                                                                 </span>
-                                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted/60 text-muted-foreground min-w-5 text-center">
+                                                                <span className="text-xs px-2 py-1 rounded-full bg-muted/60 text-muted-foreground min-w-5 text-center">
                                                                     {activeTaskCount}
                                                                 </span>
                                                             </div>
-                                                            <div className="px-2 pb-2 pl-10">
+                                                            <div className="px-3 pb-2 pl-12">
                                                                 {nextAction ? (
-                                                                    <span className="text-xs text-muted-foreground truncate flex items-center gap-1" title={nextAction.title}>
-                                                                        <CornerDownRight className="w-3 h-3" />
+                                                                    <span className="text-sm text-muted-foreground truncate flex items-center gap-1" title={nextAction.title}>
+                                                                        <CornerDownRight className="w-3.5 h-3.5" />
                                                                         {nextAction.title}
                                                                     </span>
                                                                 ) : project.isFocused && activeTaskCount > 0 ? (
-                                                                    <span className="text-xs text-warning flex items-center gap-1">
-                                                                        <AlertTriangle className="w-3 h-3" />
+                                                                    <span className="text-sm text-warning flex items-center gap-1">
+                                                                        <AlertTriangle className="w-3.5 h-3.5" />
                                                                         {t('projects.noNextAction')}
                                                                     </span>
                                                                 ) : null}
@@ -490,9 +473,9 @@ export function ProjectsSidebar({
                         <button
                             type="button"
                             onClick={onToggleDeferredProjects}
-                            className="w-full flex items-center justify-between py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                            className="w-full flex min-h-11 items-center justify-between py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                         >
-                            <span>{t('projects.deferredSection')}</span>
+                            <span>{displayLabel(t, language, 'projects.deferredSection', 'Someday / Waiting')}</span>
                             {showDeferredProjects ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </button>
                         {showDeferredProjects && (
@@ -504,10 +487,11 @@ export function ProjectsSidebar({
 
                                         return (
                                             <ProjectAreaDropZone key={`deferred-${areaId}`} section="deferred" areaId={areaId} className="space-y-1 rounded-lg">
-                                                <button
+                                                {areaById.size > 0 && (
+<button
                                                     type="button"
                                                     onClick={() => onToggleAreaCollapse('deferred', areaId)}
-                                                    className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                                                    className="w-full flex min-h-11 items-center justify-between px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                                                 >
                                                     <span className="flex items-center gap-2">
                                                         {area?.color && (
@@ -521,6 +505,7 @@ export function ProjectsSidebar({
                                                     </span>
                                                     {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                 </button>
+)}
                                                 {!isCollapsed && (
                                                         <SortableContext items={areaProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
                                                             {areaProjects.map((project) => (
@@ -528,7 +513,7 @@ export function ProjectsSidebar({
                                                                 {({ handle, isDragging, isTaskOver }) => (
                                                                     <div
                                                                     className={cn(
-                                                                        "group rounded-lg cursor-pointer transition-colors text-sm",
+                                                                        "group rounded-lg cursor-pointer transition-colors text-base",
                                                                         selectedProjectId === project.id
                                                                             ? "bg-primary/10 text-primary"
                                                                             : "hover:bg-muted/40 text-foreground",
@@ -550,15 +535,15 @@ export function ProjectsSidebar({
                                                                             });
                                                                         }}
                                                                     >
-                                                                        <div className="flex items-center gap-2 px-2 py-2">
-                                                                            <span className="opacity-40 group-hover:opacity-100 transition-opacity">
+                                                                        <div className="flex items-center gap-2 px-3 py-2">
+                                                                            <span className="opacity-50">
                                                                                 {handle}
                                                                             </span>
-                                                                            <Folder className="w-4 h-4" style={{ color: getProjectColor(project) }} />
+                                                                            <Folder className="w-5 h-5" style={{ color: getProjectColor(project) }} />
                                                                             <span className="flex-1 truncate font-medium" title={project.title}>
                                                                                 {project.title}
                                                                             </span>
-                                                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground uppercase">
+                                                                            <span className="text-xs px-2 py-1 rounded-full bg-muted/60 text-muted-foreground uppercase">
                                                                                 {tFallback(t, `status.${project.status}`, project.status)}
                                                                             </span>
                                                                         </div>
@@ -582,7 +567,7 @@ export function ProjectsSidebar({
                         <button
                             type="button"
                             onClick={onToggleArchivedProjects}
-                            className="w-full flex items-center justify-between py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                            className="w-full flex min-h-11 items-center justify-between py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <span>{tFallback(t, 'status.archived', 'Archived')}</span>
                             {showArchivedProjects ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -596,10 +581,11 @@ export function ProjectsSidebar({
 
                                         return (
                                             <ProjectAreaDropZone key={`archived-${areaId}`} section="archived" areaId={areaId} className="space-y-1 rounded-lg">
-                                                <button
+                                                {areaById.size > 0 && (
+<button
                                                     type="button"
                                                     onClick={() => onToggleAreaCollapse('archived', areaId)}
-                                                    className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground transition-colors"
+                                                    className="w-full flex min-h-11 items-center justify-between px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                                                 >
                                                     <span className="flex items-center gap-2">
                                                         {area?.color && (
@@ -613,6 +599,7 @@ export function ProjectsSidebar({
                                                     </span>
                                                     {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                                                 </button>
+)}
                                                 {!isCollapsed && (
                                                         <SortableContext items={areaProjects.map((project) => project.id)} strategy={verticalListSortingStrategy}>
                                                             {areaProjects.map((project) => (
@@ -620,7 +607,7 @@ export function ProjectsSidebar({
                                                                     {({ handle, isDragging }) => (
                                                                         <div
                                                                             className={cn(
-                                                                                "group rounded-lg cursor-pointer transition-colors text-sm",
+                                                                                "group rounded-lg cursor-pointer transition-colors text-base",
                                                                                 selectedProjectId === project.id
                                                                                     ? "bg-primary/10 text-primary"
                                                                                     : "hover:bg-muted/40 text-foreground",
@@ -641,15 +628,15 @@ export function ProjectsSidebar({
                                                                                 });
                                                                             }}
                                                                         >
-                                                                            <div className="flex items-center gap-2 px-2 py-2">
-                                                                                <span className="opacity-40 group-hover:opacity-100 transition-opacity">
+                                                                            <div className="flex items-center gap-2 px-3 py-2">
+                                                                                <span className="opacity-50">
                                                                                     {handle}
                                                                                 </span>
-                                                                                <Folder className="w-4 h-4" style={{ color: getProjectColor(project) }} />
+                                                                                <Folder className="w-5 h-5" style={{ color: getProjectColor(project) }} />
                                                                                 <span className="flex-1 truncate font-medium" title={project.title}>
                                                                                     {project.title}
                                                                                 </span>
-                                                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground uppercase">
+                                                                                <span className="text-xs px-2 py-1 rounded-full bg-muted/60 text-muted-foreground uppercase">
                                                                                     {tFallback(t, `status.${project.status}`, project.status)}
                                                                                 </span>
                                                                             </div>
@@ -683,7 +670,7 @@ export function ProjectsSidebar({
                         <button
                             type="button"
                             onClick={onStartCreate}
-                            className="text-xs px-3 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="h-11 rounded-md bg-primary px-4 text-sm text-primary-foreground hover:bg-primary/90 transition-colors"
                         >
                             {t('projects.create')}
                         </button>

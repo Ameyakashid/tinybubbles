@@ -329,7 +329,6 @@ export function ReviewView() {
                             <StoreTaskItem
                                 key={task.id}
                                 taskId={task.id}
-                                compactMetaEnabled={showListDetails}
                                 showProjectBadgeInActions={false}
                                 selectionMode={selectionMode}
                                 isMultiSelected={multiSelectedIds.has(task.id)}

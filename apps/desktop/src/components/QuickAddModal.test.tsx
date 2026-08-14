@@ -184,7 +184,7 @@ describe('QuickAddModal', () => {
             await Promise.resolve();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => {
             expect(tauriMocks.emitTo).toHaveBeenCalledWith(
@@ -241,7 +241,7 @@ describe('QuickAddModal', () => {
             await Promise.resolve();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => {
             expect(addTask).toHaveBeenCalledWith('Area filtered capture', expect.objectContaining({
@@ -290,7 +290,7 @@ describe('QuickAddModal', () => {
         });
 
         fireEvent.click(screen.getByRole('button', { name: "Add to today's focus" }));
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => {
             expect(addTask).toHaveBeenCalledWith('File Q3 estimated tax payment', expect.objectContaining({
@@ -341,7 +341,7 @@ describe('QuickAddModal', () => {
             await Promise.resolve();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => {
             expect(addProject).toHaveBeenCalledWith('Launch', expect.any(String), { areaId: 'area-work' });
@@ -410,7 +410,7 @@ describe('QuickAddModal', () => {
             await Promise.resolve();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => {
             expect(addTask).toHaveBeenCalled();
@@ -436,7 +436,7 @@ describe('QuickAddModal', () => {
             await Promise.resolve();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => {
             expect(addTask).toHaveBeenCalled();
@@ -564,7 +564,7 @@ describe('QuickAddModal', () => {
             expect(screen.getByText('1 image attached')).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => expect(addTask).toHaveBeenCalled());
         expect(fsMocks.mkdir).toHaveBeenCalledWith('/data/tinybubbles/quick-add-images', {
@@ -612,7 +612,7 @@ describe('QuickAddModal', () => {
             expect(screen.getByText('1 image attached')).toBeInTheDocument();
         });
 
-        const saveButton = screen.getByRole('button', { name: 'Save' });
+        const saveButton = screen.getByRole('button', { name: 'Add' });
         await waitFor(() => expect(saveButton).not.toBeDisabled());
         fireEvent.click(saveButton);
 
@@ -707,7 +707,7 @@ describe('QuickAddModal', () => {
         expect(screen.getByPlaceholderText('Add Task')).toHaveValue('WeCom message one WeCom message two');
         expect(screen.queryByText('Create 2 tasks?')).not.toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
         await waitFor(() => expect(addTask).toHaveBeenCalledTimes(1));
         expect(addTask).toHaveBeenCalledWith(

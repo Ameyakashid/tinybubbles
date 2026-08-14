@@ -90,7 +90,6 @@ interface TaskItemProps {
         alwaysVisible?: boolean;
     };
     readOnly?: boolean;
-    compactMetaEnabled?: boolean;
     enableDoubleClickEdit?: boolean;
     showHoverHint?: boolean;
     editorPresentation?: TaskEditorPresentation;
@@ -122,7 +121,6 @@ export const TaskItem = memo(function TaskItem({
     dragHandle,
     focusToggle,
     readOnly = false,
-    compactMetaEnabled = true,
     enableDoubleClickEdit = false,
     showHoverHint = true,
     editorPresentation,
@@ -1334,7 +1332,6 @@ export const TaskItem = memo(function TaskItem({
                                 showProjectBadgeInActions={showProjectBadgeInActions}
                                 showProjectBadgeInMetadata={showProjectBadgeInMetadata}
                                 readOnly={effectiveReadOnly}
-                                compactMetaEnabled={compactMetaEnabled}
                                 dense={isDense}
                                 actionsOverlay={actionsOverlay}
                                 dragHandle={dragHandle}

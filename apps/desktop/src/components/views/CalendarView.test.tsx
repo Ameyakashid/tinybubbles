@@ -1,4 +1,4 @@
-import { act, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Area, Project, Task } from '@tinybubbles/core';
 
@@ -152,15 +152,6 @@ const selectDay = async (dayText: string) => {
     });
 };
 
-const expandPlanningPanel = async () => {
-    const expandButton = screen.queryByRole('button', { name: 'Expand planning panel' });
-    if (!expandButton) return;
-    await act(async () => {
-        fireEvent.click(expandButton);
-        await Promise.resolve();
-    });
-};
-
 const openNewTaskComposerForDay = async (dayText: string) => {
     await selectDay(dayText);
     await act(async () => {
@@ -309,22 +300,10 @@ describe('CalendarView', () => {
 
         expect(screen.getAllByText(/Launch window/).length).toBeGreaterThan(0);
 
-        const searchInput = document.querySelector('[data-view-filter-input]') as HTMLInputElement;
-        await act(async () => {
-            fireEvent.change(searchInput, { target: { value: 'not-launch' } });
-            await Promise.resolve();
-        });
-
-        expect(screen.getByText('No matching calendar items in this view')).toBeInTheDocument();
-        expect(screen.queryByText(/Launch window/)).not.toBeInTheDocument();
-
-        await act(async () => {
-            fireEvent.change(searchInput, { target: { value: 'Launch' } });
-            await Promise.resolve();
-        });
-
-        expect(screen.getByText('1 matches in this view')).toBeInTheDocument();
-        expect(screen.getAllByText(/Launch window/).length).toBeGreaterThan(0);
+        // The search input, the "No matching..." empty state and the match-count
+        // line are hidden in the simplified shell (DESIGN.md) -- the controller's
+        // filtering still works, but there is no UI to drive it from here anymore.
+        expect(document.querySelector('[data-view-filter-input]')).not.toBeInTheDocument();
     });
 
     it('surfaces partial external calendar failures without dropping loaded events', async () => {
@@ -395,7 +374,7 @@ describe('CalendarView', () => {
         expect(chip).not.toHaveTextContent(/12:00/);
     });
 
-    it('opens the day view when month overflow is clicked', async () => {
+    it('selects the day in place instead of switching to day view when month overflow is clicked', async () => {
         storeMocks.taskStoreState.tasks = Array.from({ length: 5 }, (_, index) => makeTask({
             id: `overflow-task-${index}`,
             title: `Overflow task ${index + 1}`,
@@ -405,29 +384,42 @@ describe('CalendarView', () => {
         renderCalendar();
         await flushCalendarEffects();
 
-        const overflowButton = screen.getByRole('button', { name: /open day view: apr 4, 2026/i });
+        // The "calendar.openDayView" label is overridden to "Show this day" for
+        // English (see display-labels.ts); clicking it now calls
+        // selectCalendarDate, not openDayViewForDate, so the grid stays in month
+        // mode and the selected-day panel opens below it instead of trapping the
+        // user in day view with no visible way back (DESIGN.md).
+        const overflowButton = screen.getByRole('button', { name: /show this day: apr 4, 2026/i });
         await act(async () => {
             fireEvent.click(overflowButton);
             await Promise.resolve();
         });
 
-        expect(window.location.search).toContain('calendarView=day');
+        expect(window.location.search).toContain('calendarView=month');
         expect(window.location.search).toContain('calendarDate=2026-04-04');
         expect(screen.queryByText('+2 more')).not.toBeInTheDocument();
+        // All 5 tasks -- not just the 2 the grid cell shows -- are reachable in
+        // the panel that opened.
+        expect(screen.getAllByText('Overflow task 1').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Overflow task 5').length).toBeGreaterThan(0);
     });
 
-    it('opens an empty month day from the keyboard', async () => {
+    it('selects an empty month day from the keyboard without switching to day view', async () => {
         renderCalendar();
         await flushCalendarEffects();
 
-        const dayCell = screen.getByRole('button', { name: /apr 5, 2026, open day view/i });
+        const dayCell = screen.getByRole('button', { name: /apr 5, 2026, show this day/i });
         await act(async () => {
             fireEvent.keyDown(dayCell, { key: 'Enter' });
             await Promise.resolve();
         });
 
-        expect(window.location.search).toContain('calendarView=day');
+        // Enter opens the selected-day panel in place; the (now hidden) day view
+        // mode is never entered, so calendarView stays month.
+        expect(window.location.search).toContain('calendarView=month');
         expect(window.location.search).toContain('calendarDate=2026-04-05');
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+        expect(screen.getByText('No tasks for this day')).toBeInTheDocument();
     });
 
     it('rejects composer submissions when the end time is before the start time', async () => {
@@ -582,7 +574,10 @@ describe('CalendarView', () => {
         await flushCalendarEffects();
         await openNewTaskComposerForDay('4');
 
-        fireEvent.click(screen.getByRole('button', { name: 'Existing task' }));
+        // "calendar.existingTask" is overridden to "Pick a task" for English
+        // (see display-labels.ts) -- the raw translation key's fallback never
+        // renders once the shell's language is 'en'.
+        fireEvent.click(screen.getByRole('button', { name: 'Pick a task' }));
         fireEvent.click(screen.getByRole('button', { name: /Write proposal/ }));
 
         await act(async () => {
@@ -597,85 +592,21 @@ describe('CalendarView', () => {
         expect(storeMocks.taskStoreState.addTask).not.toHaveBeenCalled();
     });
 
-    it('plans unscheduled next actions from the calendar side panel', async () => {
-        storeMocks.taskStoreState.tasks = [
-            makeTask({
-                id: 'task-plan',
-                title: 'Draft planning memo',
-            }),
-            makeTask({
-                id: 'task-deadline',
-                title: 'Review deadline brief',
-                dueDate: '2026-04-10T17:00:00.000Z',
-            }),
-            makeTask({
-                id: 'task-scheduled',
-                title: 'Already scheduled',
-                startTime: '2026-04-04T09:00:00.000Z',
-            }),
-            makeTask({
-                id: 'task-focused',
-                title: 'Focused today',
-                isFocusedToday: true,
-            }),
-        ];
-
-        renderCalendar();
-        await flushCalendarEffects();
-        await expandPlanningPanel();
-
-        const panel = screen.getByText('Plan next actions').closest('aside') as HTMLElement;
-        expect(within(panel).getByText('Draft planning memo')).toBeInTheDocument();
-        expect(within(panel).getByText('Review deadline brief')).toBeInTheDocument();
-        expect(within(panel).queryByText('Already scheduled')).not.toBeInTheDocument();
-        expect(within(panel).queryByText('Focused today')).not.toBeInTheDocument();
-
-        await selectDay('4');
-        const planTitle = panel.querySelector('[data-task-id="task-plan"]') as HTMLElement;
-        const planCard = planTitle.closest('[data-planning-task-id]') as HTMLElement;
-        await act(async () => {
-            fireEvent.click(within(planCard).getByRole('button', { name: 'Schedule' }));
-            await Promise.resolve();
-        });
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-            await Promise.resolve();
-        });
-
-        expect(storeMocks.taskStoreState.updateTask).toHaveBeenCalledWith('task-plan', expect.objectContaining({
-            startTime: new Date(2026, 3, 4, 8, 0).toISOString(),
-        }));
-    });
-
-
-    it('explains disabled planning schedule buttons until a day is selected', async () => {
-        storeMocks.taskStoreState.tasks = [
-            makeTask({
-                id: 'task-plan',
-                title: 'Draft planning memo',
-            }),
-        ];
-
-        renderCalendar();
-        await flushCalendarEffects();
-        await expandPlanningPanel();
-
-        const panel = screen.getByText('Plan next actions').closest('aside') as HTMLElement;
-        const planTitle = within(panel).getByText('Draft planning memo');
-        const planCard = planTitle.closest('[data-planning-task-id]') as HTMLElement;
-        const disabledHintTarget = within(planCard).getByTitle('Select a day to plan first.');
-        const scheduleButton = within(disabledHintTarget).getByRole('button', { name: 'Schedule' });
-
-        expect(scheduleButton).toBeDisabled();
-        expect(within(planCard).getByText('Select a day to plan first.')).toHaveClass('sr-only');
-
-        await selectDay('4');
-
-        expect(within(planCard).queryByTitle('Select a day to plan first.')).not.toBeInTheDocument();
-        expect(within(planCard).getByRole('button', { name: 'Schedule' })).toBeEnabled();
-    });
-
-    it('defaults the calendar planning panel to collapsed and keeps the disclosure reversible', async () => {
+    // The three tests below ("plans unscheduled next actions...", "explains
+    // disabled planning schedule buttons...", "defaults the calendar planning
+    // panel to collapsed...") exercised CalendarPlanningPanel's disclosure
+    // toggle and its Schedule buttons. DESIGN.md records that panel as hidden
+    // entirely in the simplified shell: CalendarView.tsx no longer imports or
+    // renders CalendarPlanningPanel at all, so there is no expand/collapse
+    // control, no keyboard shortcut, and nothing in the DOM to assert those
+    // interactions against -- unlike the Day/Week/Schedule modes, which stay
+    // reachable via keyboard even with their buttons hidden. That makes those
+    // three tests obsolete rather than merely stale, so they are replaced by
+    // one test asserting the panel has no surviving entry point. The
+    // underlying planning logic (getCalendarPlanningCandidates ordering) is
+    // still covered at the controller level by
+    // "refreshes recurrence projections and planning candidates..." below.
+    it('renders no planning panel or disclosure control, even with schedulable tasks present', async () => {
         storeMocks.taskStoreState.tasks = [
             makeTask({
                 id: 'task-plan',
@@ -686,24 +617,10 @@ describe('CalendarView', () => {
         renderCalendar();
         await flushCalendarEffects();
 
+        expect(screen.queryByText('Plan next actions')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Expand planning panel' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Collapse planning panel' })).not.toBeInTheDocument();
         expect(screen.queryByText('Draft planning memo')).not.toBeInTheDocument();
-        await expandPlanningPanel();
-        expect(screen.getByText('Draft planning memo')).toBeInTheDocument();
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Collapse planning panel' }));
-            await Promise.resolve();
-        });
-
-        expect(screen.queryByText('Draft planning memo')).not.toBeInTheDocument();
-        expect(window.localStorage.getItem('tinybubbles.calendar.planningPanelCollapsed')).toBe('true');
-
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Expand planning panel' }));
-            await Promise.resolve();
-        });
-
-        expect(screen.getByText('Draft planning memo')).toBeInTheDocument();
-        expect(window.localStorage.getItem('tinybubbles.calendar.planningPanelCollapsed')).toBe('false');
     });
 
     it('shows date-only start times as all-day scheduled tasks on the calendar', async () => {
@@ -727,7 +644,7 @@ describe('CalendarView', () => {
         expect(screen.getByText('Timed start')).toBeInTheDocument();
     });
 
-    it('reveals done and archived tasks on their completion date only while the toggle is on (#955)', async () => {
+    it('hides done and archived tasks by default with no in-app Completed toggle, but still honors a stored preference (#955)', async () => {
         const openTask = makeTask({
             id: 'task-open',
             title: 'Still open',
@@ -753,31 +670,31 @@ describe('CalendarView', () => {
         storeMocks.taskStoreState.tasks = [openTask, doneTask];
         storeMocks.taskStoreState._allTasks = [openTask, doneTask, archivedTask];
 
-        renderCalendar();
+        const initialRender = renderCalendar();
         await flushCalendarEffects();
 
+        // The Completed look-back toggle is hidden entirely in the simplified
+        // shell (DESIGN.md) -- there is no button left to reveal done/archived
+        // tasks, so they stay invisible by default.
+        expect(screen.queryByRole('button', { name: 'Completed' })).not.toBeInTheDocument();
         expect(screen.queryByText('Finished thing')).not.toBeInTheDocument();
         expect(screen.queryByText('Archived thing')).not.toBeInTheDocument();
+        initialRender.unmount();
 
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
-            await Promise.resolve();
-        });
+        // The underlying preference (e.g. carried over from before this pass)
+        // still works when set directly -- only the in-app control to flip it
+        // is gone, so this is the only way left to exercise it.
+        window.localStorage.setItem('tinybubbles.calendar.showCompleted', 'true');
+        renderCalendar();
+        await flushCalendarEffects();
 
         const completedItem = screen.getAllByText('Finished thing')[0];
         expect(completedItem).toBeInTheDocument();
         expect(screen.getAllByText('Archived thing').length).toBeGreaterThan(0);
         // A record of what happened, not a plan that can be dragged elsewhere.
         expect(completedItem.closest('button')).toHaveAttribute('draggable', 'false');
-        expect(window.localStorage.getItem('tinybubbles.calendar.showCompleted')).toBe('true');
-
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
-            await Promise.resolve();
-        });
-
-        expect(screen.queryByText('Finished thing')).not.toBeInTheDocument();
         expect(screen.getByText('Still open')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Completed' })).not.toBeInTheDocument();
     });
 
     it('paints a daily recurring task into every visible day in the month, read-only', async () => {
@@ -942,6 +859,10 @@ describe('CalendarView', () => {
     });
 
     it('counts a filtered recurring task once, not once per painted occurrence (correction pass finding 4)', async () => {
+        // The search input and match-count line are hidden in the simplified
+        // shell (DESIGN.md), but the controller still computes
+        // visibleSearchMatchCount -- exercise it directly at the hook level
+        // instead of through the now-absent UI.
         const recurringTask = makeTask({
             id: 'task-recurring-daily-count',
             title: 'Daily standup',
@@ -951,18 +872,22 @@ describe('CalendarView', () => {
         });
         storeMocks.taskStoreState.tasks = [recurringTask];
 
-        renderCalendar();
+        let controller!: ReturnType<typeof useDesktopCalendarController>;
+        render(
+            <LanguageProvider>
+                <DesktopControllerHost onResult={(value) => { controller = value; }} />
+            </LanguageProvider>
+        );
         await flushCalendarEffects();
 
-        const searchInput = document.querySelector('[data-view-filter-input]') as HTMLInputElement;
         await act(async () => {
-            fireEvent.change(searchInput, { target: { value: 'Daily standup' } });
+            controller.updateViewFilterQuery('Daily standup');
             await Promise.resolve();
         });
 
         // Without keying on the source task, this would report one match per painted
         // day (dozens) instead of one match for the one recurring task.
-        expect(screen.getByText('1 matches in this view')).toBeInTheDocument();
+        expect(controller.visibleSearchMatchCount).toBe(1);
     });
 
     it('keeps completed work from archived projects in history without admitting deferred or deleted projects', async () => {
@@ -997,12 +922,11 @@ describe('CalendarView', () => {
         storeMocks.taskStoreState.tasks = [archivedProjectTask, somedayProjectTask, deletedProjectTask];
         storeMocks.taskStoreState._allTasks = [archivedProjectTask, somedayProjectTask, deletedProjectTask];
 
+        // The Completed toggle button is hidden entirely (DESIGN.md); set the
+        // preference it used to drive directly since there is no UI control left.
+        window.localStorage.setItem('tinybubbles.calendar.showCompleted', 'true');
         renderCalendar();
         await flushCalendarEffects();
-        await act(async () => {
-            fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
-            await Promise.resolve();
-        });
 
         expect(screen.getAllByText('Finished archived project work').length).toBeGreaterThan(0);
         expect(screen.queryByText('Deferred project history')).not.toBeInTheDocument();

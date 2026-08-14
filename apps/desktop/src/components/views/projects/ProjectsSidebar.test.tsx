@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectsSidebar } from './ProjectsSidebar';
 import { getProjectAreaCollapseKey } from './project-area-collapse';
+import { LanguageProvider } from '../../../contexts/language-context';
 
 const now = '2026-04-02T12:00:00.000Z';
 const noAreaId = '__no_area__';
@@ -92,7 +93,8 @@ function SidebarHarness() {
     }, [selectedProject?.id, selectedProject?.title]);
 
     return (
-        <div>
+        <LanguageProvider>
+            <div>
             <label>
                 Project title
                 <input
@@ -150,7 +152,8 @@ function SidebarHarness() {
                 onDuplicateProject={vi.fn()}
                 draggingSection={null}
             />
-        </div>
+            </div>
+        </LanguageProvider>
     );
 }
 
@@ -164,55 +167,7 @@ function renderSidebarWithSpy(
 ) {
 
     render(
-        <ProjectsSidebar
-            t={t}
-            selectedTag={allTagsId}
-            noAreaId={noAreaId}
-            allTagsId={allTagsId}
-            noTagsId={noTagsId}
-            tagOptions={{ list: [], hasNoTags: true }}
-            isCreating={false}
-            isCreatingProject={false}
-            newProjectTitle=""
-            newProjectAreaId=""
-            areaOptions={[]}
-            onStartCreate={vi.fn()}
-            onCancelCreate={vi.fn()}
-            onCreateProject={vi.fn()}
-            onChangeNewProjectTitle={vi.fn()}
-            onChangeNewProjectAreaId={vi.fn()}
-            onSelectTag={vi.fn()}
-            groupedActiveProjects={[[noAreaId, projects]]}
-            groupedDeferredProjects={[]}
-            groupedArchivedProjects={[]}
-            areaById={new Map()}
-            collapsedAreas={{}}
-            onToggleAreaCollapse={vi.fn()}
-            showDeferredProjects={false}
-            onToggleDeferredProjects={vi.fn()}
-            showArchivedProjects={false}
-            onToggleArchivedProjects={vi.fn()}
-            selectedProjectId={'project-alpha'}
-            onSelectProject={onSelectProject}
-            getProjectColor={(project) => project.color}
-            projectTaskSummaryById={projectTaskSummaryById}
-            projects={projects}
-            focusedProjectCount={projects.filter((project) => project.isFocused && !project.deletedAt).length}
-            toggleProjectFocus={vi.fn()}
-            onDuplicateProject={vi.fn()}
-            draggingSection={null}
-        />
-    );
-
-    return { onSelectProject };
-}
-
-describe('ProjectsSidebar', () => {
-    it('keeps project creation visible as an inline field below the filters', () => {
-        const onCreateProject = vi.fn((event: FormEvent) => event.preventDefault());
-        const onChangeNewProjectTitle = vi.fn();
-
-        render(
+        <LanguageProvider>
             <ProjectsSidebar
                 t={t}
                 selectedTag={allTagsId}
@@ -227,11 +182,11 @@ describe('ProjectsSidebar', () => {
                 areaOptions={[]}
                 onStartCreate={vi.fn()}
                 onCancelCreate={vi.fn()}
-                onCreateProject={onCreateProject}
-                onChangeNewProjectTitle={onChangeNewProjectTitle}
+                onCreateProject={vi.fn()}
+                onChangeNewProjectTitle={vi.fn()}
                 onChangeNewProjectAreaId={vi.fn()}
                 onSelectTag={vi.fn()}
-                groupedActiveProjects={[[noAreaId, [buildProject('project-alpha', 'Alpha', 0)]]]}
+                groupedActiveProjects={[[noAreaId, projects]]}
                 groupedDeferredProjects={[]}
                 groupedArchivedProjects={[]}
                 areaById={new Map()}
@@ -241,16 +196,68 @@ describe('ProjectsSidebar', () => {
                 onToggleDeferredProjects={vi.fn()}
                 showArchivedProjects={false}
                 onToggleArchivedProjects={vi.fn()}
-                selectedProjectId={null}
-                onSelectProject={vi.fn()}
+                selectedProjectId={'project-alpha'}
+                onSelectProject={onSelectProject}
                 getProjectColor={(project) => project.color}
-                projectTaskSummaryById={new Map()}
-                projects={[buildProject('project-alpha', 'Alpha', 0)]}
-                focusedProjectCount={0}
+                projectTaskSummaryById={projectTaskSummaryById}
+                projects={projects}
+                focusedProjectCount={projects.filter((project) => project.isFocused && !project.deletedAt).length}
                 toggleProjectFocus={vi.fn()}
                 onDuplicateProject={vi.fn()}
                 draggingSection={null}
             />
+        </LanguageProvider>
+    );
+
+    return { onSelectProject };
+}
+
+describe('ProjectsSidebar', () => {
+    it('keeps project creation visible as an inline field below the filters', () => {
+        const onCreateProject = vi.fn((event: FormEvent) => event.preventDefault());
+        const onChangeNewProjectTitle = vi.fn();
+
+        render(
+            <LanguageProvider>
+                <ProjectsSidebar
+                    t={t}
+                    selectedTag={allTagsId}
+                    noAreaId={noAreaId}
+                    allTagsId={allTagsId}
+                    noTagsId={noTagsId}
+                    tagOptions={{ list: [], hasNoTags: true }}
+                    isCreating={false}
+                    isCreatingProject={false}
+                    newProjectTitle=""
+                    newProjectAreaId=""
+                    areaOptions={[]}
+                    onStartCreate={vi.fn()}
+                    onCancelCreate={vi.fn()}
+                    onCreateProject={onCreateProject}
+                    onChangeNewProjectTitle={onChangeNewProjectTitle}
+                    onChangeNewProjectAreaId={vi.fn()}
+                    onSelectTag={vi.fn()}
+                    groupedActiveProjects={[[noAreaId, [buildProject('project-alpha', 'Alpha', 0)]]]}
+                    groupedDeferredProjects={[]}
+                    groupedArchivedProjects={[]}
+                    areaById={new Map()}
+                    collapsedAreas={{}}
+                    onToggleAreaCollapse={vi.fn()}
+                    showDeferredProjects={false}
+                    onToggleDeferredProjects={vi.fn()}
+                    showArchivedProjects={false}
+                    onToggleArchivedProjects={vi.fn()}
+                    selectedProjectId={null}
+                    onSelectProject={vi.fn()}
+                    getProjectColor={(project) => project.color}
+                    projectTaskSummaryById={new Map()}
+                    projects={[buildProject('project-alpha', 'Alpha', 0)]}
+                    focusedProjectCount={0}
+                    toggleProjectFocus={vi.fn()}
+                    onDuplicateProject={vi.fn()}
+                    draggingSection={null}
+                />
+            </LanguageProvider>
         );
 
         const projectName = screen.getByLabelText('Project name');
@@ -269,44 +276,46 @@ describe('ProjectsSidebar', () => {
         ];
 
         render(
-            <ProjectsSidebar
-                t={t}
-                selectedTag={allTagsId}
-                noAreaId={noAreaId}
-                allTagsId={allTagsId}
-                noTagsId={noTagsId}
-                tagOptions={{ list: [], hasNoTags: true }}
-                isCreating={true}
-                isCreatingProject={false}
-                newProjectTitle=""
-                newProjectAreaId=""
-                areaOptions={areas}
-                onStartCreate={vi.fn()}
-                onCancelCreate={vi.fn()}
-                onCreateProject={vi.fn((event: FormEvent) => event.preventDefault())}
-                onChangeNewProjectTitle={vi.fn()}
-                onChangeNewProjectAreaId={onChangeNewProjectAreaId}
-                onSelectTag={vi.fn()}
-                groupedActiveProjects={[]}
-                groupedDeferredProjects={[]}
-                groupedArchivedProjects={[]}
-                areaById={new Map(areas.map((area) => [area.id, area]))}
-                collapsedAreas={{}}
-                onToggleAreaCollapse={vi.fn()}
-                showDeferredProjects={false}
-                onToggleDeferredProjects={vi.fn()}
-                showArchivedProjects={false}
-                onToggleArchivedProjects={vi.fn()}
-                selectedProjectId={null}
-                onSelectProject={vi.fn()}
-                getProjectColor={(project) => project.color}
-                projectTaskSummaryById={new Map()}
-                projects={[]}
-                focusedProjectCount={0}
-                toggleProjectFocus={vi.fn()}
-                onDuplicateProject={vi.fn()}
-                draggingSection={null}
-            />
+            <LanguageProvider>
+                <ProjectsSidebar
+                    t={t}
+                    selectedTag={allTagsId}
+                    noAreaId={noAreaId}
+                    allTagsId={allTagsId}
+                    noTagsId={noTagsId}
+                    tagOptions={{ list: [], hasNoTags: true }}
+                    isCreating={true}
+                    isCreatingProject={false}
+                    newProjectTitle=""
+                    newProjectAreaId=""
+                    areaOptions={areas}
+                    onStartCreate={vi.fn()}
+                    onCancelCreate={vi.fn()}
+                    onCreateProject={vi.fn((event: FormEvent) => event.preventDefault())}
+                    onChangeNewProjectTitle={vi.fn()}
+                    onChangeNewProjectAreaId={onChangeNewProjectAreaId}
+                    onSelectTag={vi.fn()}
+                    groupedActiveProjects={[]}
+                    groupedDeferredProjects={[]}
+                    groupedArchivedProjects={[]}
+                    areaById={new Map(areas.map((area) => [area.id, area]))}
+                    collapsedAreas={{}}
+                    onToggleAreaCollapse={vi.fn()}
+                    showDeferredProjects={false}
+                    onToggleDeferredProjects={vi.fn()}
+                    showArchivedProjects={false}
+                    onToggleArchivedProjects={vi.fn()}
+                    selectedProjectId={null}
+                    onSelectProject={vi.fn()}
+                    getProjectColor={(project) => project.color}
+                    projectTaskSummaryById={new Map()}
+                    projects={[]}
+                    focusedProjectCount={0}
+                    toggleProjectFocus={vi.fn()}
+                    onDuplicateProject={vi.fn()}
+                    draggingSection={null}
+                />
+            </LanguageProvider>
         );
 
         const areaSelect = screen.getByLabelText('Area');
@@ -373,44 +382,46 @@ describe('ProjectsSidebar', () => {
         const longTitle = 'An unusually long project title that needs more room in the sidebar';
 
         render(
-            <ProjectsSidebar
-                t={t}
-                selectedTag={allTagsId}
-                noAreaId={noAreaId}
-                allTagsId={allTagsId}
-                noTagsId={noTagsId}
-                tagOptions={{ list: [], hasNoTags: true }}
-                isCreating={false}
-                isCreatingProject={false}
-                newProjectTitle=""
-                newProjectAreaId=""
-                areaOptions={[]}
-                onStartCreate={vi.fn()}
-                onCancelCreate={vi.fn()}
-                onCreateProject={vi.fn()}
-                onChangeNewProjectTitle={vi.fn()}
-                onChangeNewProjectAreaId={vi.fn()}
-                onSelectTag={vi.fn()}
-                groupedActiveProjects={[[noAreaId, [buildProject('project-long', longTitle, 0)]]]}
-                groupedDeferredProjects={[]}
-                groupedArchivedProjects={[]}
-                areaById={new Map()}
-                collapsedAreas={{}}
-                onToggleAreaCollapse={vi.fn()}
-                showDeferredProjects={false}
-                onToggleDeferredProjects={vi.fn()}
-                showArchivedProjects={false}
-                onToggleArchivedProjects={vi.fn()}
-                selectedProjectId={null}
-                onSelectProject={vi.fn()}
-                getProjectColor={(project) => project.color}
-                projectTaskSummaryById={new Map()}
-                projects={[buildProject('project-long', longTitle, 0)]}
-                focusedProjectCount={0}
-                toggleProjectFocus={vi.fn()}
-                onDuplicateProject={vi.fn()}
-                draggingSection={null}
-            />
+            <LanguageProvider>
+                <ProjectsSidebar
+                    t={t}
+                    selectedTag={allTagsId}
+                    noAreaId={noAreaId}
+                    allTagsId={allTagsId}
+                    noTagsId={noTagsId}
+                    tagOptions={{ list: [], hasNoTags: true }}
+                    isCreating={false}
+                    isCreatingProject={false}
+                    newProjectTitle=""
+                    newProjectAreaId=""
+                    areaOptions={[]}
+                    onStartCreate={vi.fn()}
+                    onCancelCreate={vi.fn()}
+                    onCreateProject={vi.fn()}
+                    onChangeNewProjectTitle={vi.fn()}
+                    onChangeNewProjectAreaId={vi.fn()}
+                    onSelectTag={vi.fn()}
+                    groupedActiveProjects={[[noAreaId, [buildProject('project-long', longTitle, 0)]]]}
+                    groupedDeferredProjects={[]}
+                    groupedArchivedProjects={[]}
+                    areaById={new Map()}
+                    collapsedAreas={{}}
+                    onToggleAreaCollapse={vi.fn()}
+                    showDeferredProjects={false}
+                    onToggleDeferredProjects={vi.fn()}
+                    showArchivedProjects={false}
+                    onToggleArchivedProjects={vi.fn()}
+                    selectedProjectId={null}
+                    onSelectProject={vi.fn()}
+                    getProjectColor={(project) => project.color}
+                    projectTaskSummaryById={new Map()}
+                    projects={[buildProject('project-long', longTitle, 0)]}
+                    focusedProjectCount={0}
+                    toggleProjectFocus={vi.fn()}
+                    onDuplicateProject={vi.fn()}
+                    draggingSection={null}
+                />
+            </LanguageProvider>
         );
 
         expect(screen.getByText(longTitle)).toHaveAttribute('title', longTitle);
@@ -438,47 +449,52 @@ describe('ProjectsSidebar', () => {
         const archivedProject = { ...buildProject('project-archived', 'Archived Project', 1), status: 'archived' as const };
 
         render(
-            <ProjectsSidebar
-                t={t}
-                selectedTag={allTagsId}
-                noAreaId={noAreaId}
-                allTagsId={allTagsId}
-                noTagsId={noTagsId}
-                tagOptions={{ list: [], hasNoTags: true }}
-                isCreating={false}
-                isCreatingProject={false}
-                newProjectTitle=""
-                newProjectAreaId=""
-                areaOptions={[]}
-                onStartCreate={vi.fn()}
-                onCancelCreate={vi.fn()}
-                onCreateProject={vi.fn()}
-                onChangeNewProjectTitle={vi.fn()}
-                onChangeNewProjectAreaId={vi.fn()}
-                onSelectTag={vi.fn()}
-                groupedActiveProjects={[]}
-                groupedDeferredProjects={[[noAreaId, [waitingProject]]]}
-                groupedArchivedProjects={[[noAreaId, [archivedProject]]]}
-                areaById={new Map()}
-                collapsedAreas={{}}
-                onToggleAreaCollapse={vi.fn()}
-                showDeferredProjects={true}
-                onToggleDeferredProjects={vi.fn()}
-                showArchivedProjects={true}
-                onToggleArchivedProjects={vi.fn()}
-                selectedProjectId={null}
-                onSelectProject={vi.fn()}
-                getProjectColor={(project) => project.color}
-                projectTaskSummaryById={new Map()}
-                projects={[waitingProject, archivedProject]}
-                focusedProjectCount={0}
-                toggleProjectFocus={vi.fn()}
-                onDuplicateProject={vi.fn()}
-                draggingSection={null}
-            />
+            <LanguageProvider>
+                <ProjectsSidebar
+                    t={t}
+                    selectedTag={allTagsId}
+                    noAreaId={noAreaId}
+                    allTagsId={allTagsId}
+                    noTagsId={noTagsId}
+                    tagOptions={{ list: [], hasNoTags: true }}
+                    isCreating={false}
+                    isCreatingProject={false}
+                    newProjectTitle=""
+                    newProjectAreaId=""
+                    areaOptions={[]}
+                    onStartCreate={vi.fn()}
+                    onCancelCreate={vi.fn()}
+                    onCreateProject={vi.fn()}
+                    onChangeNewProjectTitle={vi.fn()}
+                    onChangeNewProjectAreaId={vi.fn()}
+                    onSelectTag={vi.fn()}
+                    groupedActiveProjects={[]}
+                    groupedDeferredProjects={[[noAreaId, [waitingProject]]]}
+                    groupedArchivedProjects={[[noAreaId, [archivedProject]]]}
+                    areaById={new Map()}
+                    collapsedAreas={{}}
+                    onToggleAreaCollapse={vi.fn()}
+                    showDeferredProjects={true}
+                    onToggleDeferredProjects={vi.fn()}
+                    showArchivedProjects={true}
+                    onToggleArchivedProjects={vi.fn()}
+                    selectedProjectId={null}
+                    onSelectProject={vi.fn()}
+                    getProjectColor={(project) => project.color}
+                    projectTaskSummaryById={new Map()}
+                    projects={[waitingProject, archivedProject]}
+                    focusedProjectCount={0}
+                    toggleProjectFocus={vi.fn()}
+                    onDuplicateProject={vi.fn()}
+                    draggingSection={null}
+                />
+            </LanguageProvider>
         );
 
-        const deferredToggle = screen.getByRole('button', { name: 'Deferred projects' });
+        // "projects.deferredSection" is overridden to "Later" for English (see
+        // display-labels.ts) -- the test's raw `t` mock's "Deferred projects"
+        // never renders once the shell's language is 'en'.
+        const deferredToggle = screen.getByRole('button', { name: 'Later' });
         const deferredSection = deferredToggle.parentElement;
         const archivedToggle = screen.getByRole('button', { name: 'Archived' });
         const archivedSection = archivedToggle.parentElement;
@@ -497,44 +513,46 @@ describe('ProjectsSidebar', () => {
         const waitingProject = { ...buildProject('project-waiting', 'Waiting Project', 1), areaId, status: 'waiting' as const };
 
         render(
-            <ProjectsSidebar
-                t={t}
-                selectedTag={allTagsId}
-                noAreaId={noAreaId}
-                allTagsId={allTagsId}
-                noTagsId={noTagsId}
-                tagOptions={{ list: [], hasNoTags: true }}
-                isCreating={false}
-                isCreatingProject={false}
-                newProjectTitle=""
-                newProjectAreaId=""
-                areaOptions={[]}
-                onStartCreate={vi.fn()}
-                onCancelCreate={vi.fn()}
-                onCreateProject={vi.fn()}
-                onChangeNewProjectTitle={vi.fn()}
-                onChangeNewProjectAreaId={vi.fn()}
-                onSelectTag={vi.fn()}
-                groupedActiveProjects={[[areaId, [activeProject]]]}
-                groupedDeferredProjects={[[areaId, [waitingProject]]]}
-                groupedArchivedProjects={[]}
-                areaById={new Map([[areaId, { id: areaId, name: 'Test area', color: '#3b82f6', order: 0, createdAt: now, updatedAt: now }]])}
-                collapsedAreas={{ [getProjectAreaCollapseKey('active', areaId)]: true }}
-                onToggleAreaCollapse={vi.fn()}
-                showDeferredProjects={true}
-                onToggleDeferredProjects={vi.fn()}
-                showArchivedProjects={false}
-                onToggleArchivedProjects={vi.fn()}
-                selectedProjectId={null}
-                onSelectProject={vi.fn()}
-                getProjectColor={(project) => project.color}
-                projectTaskSummaryById={new Map()}
-                projects={[activeProject, waitingProject]}
-                focusedProjectCount={0}
-                toggleProjectFocus={vi.fn()}
-                onDuplicateProject={vi.fn()}
-                draggingSection={null}
-            />
+            <LanguageProvider>
+                <ProjectsSidebar
+                    t={t}
+                    selectedTag={allTagsId}
+                    noAreaId={noAreaId}
+                    allTagsId={allTagsId}
+                    noTagsId={noTagsId}
+                    tagOptions={{ list: [], hasNoTags: true }}
+                    isCreating={false}
+                    isCreatingProject={false}
+                    newProjectTitle=""
+                    newProjectAreaId=""
+                    areaOptions={[]}
+                    onStartCreate={vi.fn()}
+                    onCancelCreate={vi.fn()}
+                    onCreateProject={vi.fn()}
+                    onChangeNewProjectTitle={vi.fn()}
+                    onChangeNewProjectAreaId={vi.fn()}
+                    onSelectTag={vi.fn()}
+                    groupedActiveProjects={[[areaId, [activeProject]]]}
+                    groupedDeferredProjects={[[areaId, [waitingProject]]]}
+                    groupedArchivedProjects={[]}
+                    areaById={new Map([[areaId, { id: areaId, name: 'Test area', color: '#3b82f6', order: 0, createdAt: now, updatedAt: now }]])}
+                    collapsedAreas={{ [getProjectAreaCollapseKey('active', areaId)]: true }}
+                    onToggleAreaCollapse={vi.fn()}
+                    showDeferredProjects={true}
+                    onToggleDeferredProjects={vi.fn()}
+                    showArchivedProjects={false}
+                    onToggleArchivedProjects={vi.fn()}
+                    selectedProjectId={null}
+                    onSelectProject={vi.fn()}
+                    getProjectColor={(project) => project.color}
+                    projectTaskSummaryById={new Map()}
+                    projects={[activeProject, waitingProject]}
+                    focusedProjectCount={0}
+                    toggleProjectFocus={vi.fn()}
+                    onDuplicateProject={vi.fn()}
+                    draggingSection={null}
+                />
+            </LanguageProvider>
         );
 
         expect(screen.queryByText('Active Project')).not.toBeInTheDocument();

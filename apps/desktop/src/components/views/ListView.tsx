@@ -1,9 +1,8 @@
 import React, { memo, useState, useMemo, useDeferredValue, useEffect, useRef, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { AlertTriangle, Folder, HelpCircle } from 'lucide-react';
+import { AlertTriangle, Folder } from 'lucide-react';
 import { buildProjectOrderMap,
     buildQuickAddParseOptions,
-    buildQuickAddPreviewEntries,
     compareTasksByProjectThenOrder,
     createTaskFilterPredicate,
     DEFAULT_AREA_COLOR,
@@ -34,7 +33,6 @@ import { BulkSelectionToolbar } from './list/BulkSelectionToolbar';
 import { ListBulkActions } from './list/ListBulkActions';
 import { ListFiltersPanel } from './list/ListFiltersPanel';
 import { ListQuickAdd } from './list/ListQuickAdd';
-import { QuickAddPreview } from '../QuickAddPreview';
 import { PromptModal } from '../PromptModal';
 import { TokenPickerModal } from '../TokenPickerModal';
 import { InboxProcessor } from './InboxProcessor';
@@ -81,7 +79,6 @@ import {
     LIST_VIRTUAL_OVERSCAN_ROWS,
     LIST_VIRTUAL_ROW_ESTIMATE,
 } from './list/virtual-list';
-import { QuickAddSyntaxHint } from '../ui/QuickAddSyntaxHint';
 import { useFutureStartRevealTick, useLocalDayKey } from '../../hooks/useLocalDayKey';
 import { resolveDoneTaskSortBy, resolveNonDoneTaskSortBy } from '../../lib/task-list-sort';
 
@@ -168,7 +165,7 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     // every render would invalidate every list memo downstream.
     const { areaById, projectById: metadataProjectMap, resolvedAreaFilter } = useAreaVisibility();
     const [newTaskTitle, setNewTaskTitle] = useState('');
-    const [quickAddSyntaxOpen, setQuickAddSyntaxOpen] = useState(false);
+
     const [mindSweepOpen, setMindSweepOpen] = useState(false);
     const {
         criteria: listFilterCriteria,
@@ -285,12 +282,8 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     );
 
     const {
-        aiEnabled,
-        copilotSuggestion,
-        copilotApplied,
         copilotContext,
         copilotTags,
-        applyCopilotSuggestion,
         resetCopilot,
     } = useListCopilot({
         settings,
@@ -784,15 +777,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const isNextView = statusFilter === 'next';
     const isWaitingView = statusFilter === 'waiting';
     const showQuickAdd = isInbox;
-    // Live parse of the draft, with the options handleAddTask submits with, so
-    // the strip can never claim something the save would not do.
-    const quickAddPreviewEntries = useMemo(() => {
-        if (!showQuickAdd || !newTaskTitle.trim()) return [];
-        return buildQuickAddPreviewEntries(
-            parseQuickAdd(newTaskTitle, projects, new Date(), areas, quickAddParseOptions),
-            { t, projects, areas, rawInput: newTaskTitle },
-        );
-    }, [areas, newTaskTitle, projects, quickAddParseOptions, showQuickAdd, t]);
     const priorityOptions = PRIORITY_FILTER_OPTIONS;
     const timeEstimateOptions = TIME_ESTIMATE_FILTER_OPTIONS;
     const formatEstimate = (value: TimeEstimate) => formatTimeEstimateLabel(value, { t });
@@ -886,7 +870,6 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 onToggleSelectId={toggleMultiSelect}
                 showQuickDone={showQuickDone}
                 readOnly={readOnly}
-                compactMetaEnabled={showListDetails}
                 showProjectBadgeInActions={false}
             />
         );
@@ -1164,55 +1147,10 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                                 onOpenAudio={() => openQuickAdd(statusFilter, 'audio')}
                                 onResetCopilot={resetCopilot}
                             />
-                            {aiEnabled && copilotSuggestion && !copilotApplied && (
-                                <button
-                                    type="button"
-                                    onClick={() => applyCopilotSuggestion(copilotSuggestion)}
-                                    className="mt-2 rounded border border-border bg-muted/30 px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60"
-                                >
-                                    ✨ {t('copilot.suggested')}{' '}
-                                    {copilotSuggestion.context ? `${copilotSuggestion.context} ` : ''}
-                                    {copilotSuggestion.tags?.length ? copilotSuggestion.tags.join(' ') : ''}
-                                    <span className="ml-2 text-muted-foreground/70">{t('copilot.applyHint')}</span>
-                                </button>
-                            )}
-                            {aiEnabled && copilotApplied && (
-                                <div className="mt-2 rounded border border-border bg-muted/30 px-2 py-1 text-xs text-muted-foreground">
-                                    ✅ {t('copilot.applied')}{' '}
-                                    {copilotContext ? `${copilotContext} ` : ''}
-                                    {copilotTags.length ? copilotTags.join(' ') : ''}
-                                </div>
-                            )}
-                            {!isProcessing && (
-                                <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                                    <div className="flex min-w-0 items-center gap-1.5">
-                                        {/* The preview takes the syntax hint's row rather than adding
-                                            one: with a draft to describe it is the better use of the
-                                            space, and the list below never shifts. */}
-                                        <QuickAddPreview entries={quickAddPreviewEntries} className="min-w-0" />
-                                        {quickAddPreviewEntries.length === 0 ? (
-                                            <span className="min-w-0 truncate">
-                                                {t('quickAdd.inlineHint')}
-                                            </span>
-                                        ) : null}
-                                        <button
-                                            type="button"
-                                            onClick={() => setQuickAddSyntaxOpen((open) => !open)}
-                                            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
-                                            aria-label={t('quickAdd.syntaxHelp')}
-                                            aria-expanded={quickAddSyntaxOpen}
-                                            title={t('quickAdd.help')}
-                                        >
-                                            <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                                        </button>
-                                    </div>
-                                    {quickAddSyntaxOpen && (
-                                        <p className="rounded border border-border bg-muted/30 px-2 py-1 leading-relaxed text-muted-foreground">
-                                            <QuickAddSyntaxHint text={t('quickAdd.help')} />
-                                        </p>
-                                    )}
-                                </div>
-                            )}
+                            {/* AI copilot chips and the token-syntax hint row are
+                                hidden in the simplified shell — parsing, previews and
+                                copilot application still work underneath (typed tokens
+                                parse at save). See DESIGN.md. */}
                         </>
                     )}
                 </div>

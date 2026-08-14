@@ -21,6 +21,23 @@ const DISPLAY_LABEL_OVERRIDES: Record<string, string> = {
     'list.someday': 'Maybe later',
     'list.waiting': 'Waiting',
     'nav.trash': 'Deleted',
+    'calendar.openDayView': 'Show this day',
+    'calendar.items': 'to do',
+    'calendar.deadline': 'Due',
+    'calendar.unschedule': 'Take off this day',
+    'calendar.existingTask': 'Pick a task',
+    'calendar.schedulePlaceholder': 'Find a task...',
+    'quickAdd.example': 'e.g. Feed the cat',
+    'quickAdd.invalidDateCommand': "I couldn't understand this date",
+    'projects.activeSection': 'My lists',
+    'projects.deferredSection': 'Later',
+    'projects.selectProject': 'Pick a list to see its tasks',
+    'process.btn': 'Tidy up',
+    'mindSweep.launchButton': 'Get it all out',
+    'mindSweep.title': 'Get it all out',
+    'calendar.tasksAndEvents': 'See what is coming up',
+    'search.scopeHint': 'Find anything',
+    'inbox.projectHint': 'If something needs lots of steps, you can turn it into a list while you tidy up.',
 };
 
 /** The translated label for `key`, unless the shell overrides it with plainer words. */

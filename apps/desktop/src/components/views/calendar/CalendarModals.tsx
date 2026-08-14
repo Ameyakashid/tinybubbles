@@ -8,6 +8,8 @@ import { Dialog, DialogBody } from '../../ui/Dialog';
 import { DateField } from '../../ui/DateField';
 import { QuickAddSyntaxHint } from '../../ui/QuickAddSyntaxHint';
 import { cn } from '../../../lib/utils';
+import { displayLabel } from '../../../lib/display-labels';
+import { useLanguage } from '../../../contexts/language-context';
 import { useNativeDateInputLocale } from '../../../hooks/use-native-date-input-locale';
 import { DESKTOP_GRID_SNAP_MINUTES, combineDateAndTime } from './calendar-primitives';
 import type { DesktopCalendarController } from './useDesktopCalendarController';
@@ -87,7 +89,6 @@ export function CalendarOpenTaskModal({ controller }: CalendarOpenTaskModalProps
                 project={openProject}
                 showQuickDone={false}
                 readOnly={false}
-                compactMetaEnabled={true}
                 editorPresentation="inline"
             />
         </Dialog>
@@ -115,6 +116,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
         updateTaskComposerStart,
         updateTaskComposerTitle,
     } = controller;
+    const { language } = useLanguage();
     const { nativeDateInputLocale, dateFormatSetting } = useNativeDateInputLocale();
     const dateLabel = resolveText('calendar.date', 'Date');
 
@@ -177,7 +179,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                             )}
                         >
-                            {resolveText('calendar.existingTask', 'Existing task')}
+                            {displayLabel(t, language, 'calendar.existingTask', 'Existing task')}
                         </button>
                     </div>
 
@@ -213,7 +215,7 @@ export function CalendarTaskComposerModal({ controller }: CalendarTaskComposerMo
                                         value={taskComposer.query}
                                         onChange={(event) => updateTaskComposerQuery(event.target.value)}
                                         className="w-full rounded-md border border-border bg-background py-2 pl-9 pr-3 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary/30"
-                                        placeholder={t('calendar.schedulePlaceholder')}
+                                        placeholder={displayLabel(t, language, 'calendar.schedulePlaceholder', 'Search tasks to schedule...')}
                                     />
                                 </div>
                             </label>

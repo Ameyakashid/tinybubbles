@@ -1020,7 +1020,7 @@ describe('TaskItem', () => {
         };
         const { getByText } = render(
             <LanguageProvider>
-                <TaskItem task={taskWithDueDate} compactMetaEnabled />
+                <TaskItem task={taskWithDueDate} />
             </LanguageProvider>
         );
         expect(getByText(safeFormatDate('2026-03-20', 'P'))).toBeInTheDocument();
@@ -1634,14 +1634,9 @@ describe('TaskItem', () => {
         expect(root?.className).toContain('focus-within:bg-primary/5');
     });
 
-    it('offers no per-row status selector; status (including archived) stays reachable only through a saved editor layout', () => {
-        // The row-level status <select> is entirely gone by default
-        // (TaskItemDisplay's showStatusSelect defaults to false, and no view
-        // opts it back in — DESIGN.md). With zero saved customization, the
-        // reduced default task-editor field set (task-item-helpers.ts) also
-        // drops 'status' out of the editor's Basic section — status has no
-        // "already has a value" escape hatch, so a fresh install shows no
-        // status control anywhere, row or editor, until Settings re-enables it.
+    it('offers no per-row status selector but keeps every status reachable in the default editor', () => {
+        // The row-level status selector stays hidden in the simplified shell;
+        // editing the task exposes the fixed status control by default.
         const { queryByLabelText, getAllByRole, queryByRole } = render(
             <LanguageProvider>
                 <TaskItem task={mockTask} />
@@ -1650,7 +1645,7 @@ describe('TaskItem', () => {
         expect(queryByLabelText(/task status/i)).toBeNull();
 
         fireEvent.click(getAllByRole('button', { name: /edit/i })[0]);
-        expect(queryByRole('button', { name: 'Archived' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Archived' })).toBeInTheDocument();
     });
 
     it('reveals archived as a status pill in the editor once a saved layout un-hides status', () => {

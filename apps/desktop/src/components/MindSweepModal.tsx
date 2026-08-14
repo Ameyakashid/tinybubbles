@@ -2,6 +2,8 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Brain, X } from 'lucide-react';
 import { getMindSweepGroups, type MindSweepScope, type Task } from '@tinybubbles/core';
 import { Dialog, DialogBody } from './ui/Dialog';
+import { displayLabel } from '../lib/display-labels';
+import { useLanguage } from '../contexts/language-context';
 
 type MindSweepModalProps = {
     isOpen: boolean;
@@ -13,6 +15,7 @@ type MindSweepModalProps = {
 const INTRO_STEP = -1;
 
 export function MindSweepModal({ isOpen, onClose, t, addTask }: MindSweepModalProps) {
+    const { language } = useLanguage();
     const [scope, setScope] = useState<MindSweepScope>('all');
     const [stepIndex, setStepIndex] = useState(INTRO_STEP);
     const [draft, setDraft] = useState('');
@@ -91,7 +94,7 @@ export function MindSweepModal({ isOpen, onClose, t, addTask }: MindSweepModalPr
                 <div className="flex items-center justify-between">
                     <h2 id={titleId} className="text-lg font-semibold flex items-center gap-2">
                         <Brain className="w-5 h-5" />
-                        {t('mindSweep.title')}
+                        {displayLabel(t, language, 'mindSweep.title', 'Mind Sweep')}
                     </h2>
                     <button
                         onClick={onClose}
@@ -239,13 +242,14 @@ type MindSweepTriggerProps = {
 };
 
 export function MindSweepTrigger({ t, onOpen, variant = 'secondary' }: MindSweepTriggerProps) {
+    const { language } = useLanguage();
     const buttonClass = variant === 'primary'
         ? 'w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 px-4 rounded-lg font-medium hover:bg-primary/90 transition-colors'
-        : 'flex items-center justify-center gap-2 whitespace-nowrap border border-border text-muted-foreground px-3 rounded-lg text-sm font-medium hover:bg-accent hover:text-foreground transition-colors';
+        : 'flex min-h-11 items-center justify-center gap-2 whitespace-nowrap border border-border text-muted-foreground px-3 rounded-lg text-sm font-medium hover:bg-accent hover:text-foreground transition-colors';
     return (
         <button type="button" onClick={onOpen} className={buttonClass}>
             <Brain className="w-4 h-4" />
-            {t('mindSweep.launchButton')}
+            {displayLabel(t, language, 'mindSweep.launchButton', 'Mind Sweep')}
         </button>
     );
 }
