@@ -42,14 +42,14 @@ export default {
                 input: "hsl(var(--input))",
                 ring: "hsl(var(--ring))",
             },
-            // Tiny Bubbles soft theme (see DESIGN.md): every corner in the app
-            // gets rounder in one place. Class names are unchanged.
+            // Tiny Bubbles "Sunlit Rockpool" (see DESIGN.md): every corner in
+            // the app gets rounder in one place. Class names are unchanged.
             borderRadius: {
-                md: "0.625rem",
-                lg: "0.875rem",
-                xl: "1.25rem",
-                "2xl": "1.75rem",
-                "3xl": "2.25rem",
+                md: "0.75rem",
+                lg: "1.125rem",
+                xl: "1.5rem",
+                "2xl": "2rem",
+                "3xl": "2.5rem",
             },
         },
     },

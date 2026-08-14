@@ -562,10 +562,10 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     const inlineLeftControls = !actionsOverlay && (showQuickDoneButton || dragHandle);
     const showActionTags = false;
 
-    // Inbox items are unprocessed captures, not a done/not-done checklist, so the
-    // quick-complete check stays hidden at rest and only reveals on row hover (for the
-    // 2-minute rule). Actionable lists (next, projects, focus) show it at rest.
-    const isInboxItem = task.status === 'inbox';
+    // The complete control is the app's core loop, so it is a bubble: round,
+    // chunky, 40px, and ALWAYS visible — hover-reveal hides it from touch users
+    // and breaks "controls never move between states" (DESIGN.md). This replaces
+    // the old inbox hover-reveal (the 2-minute-rule rationale) on purpose.
     // Waiting/Someday tasks promote to Next instead of completing — the natural
     // transition when an item unblocks, matching the mobile swipe action.
     const quickActionIsPromote = task.status === 'waiting' || task.status === 'someday';
@@ -587,13 +587,13 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                 : undefined}
             aria-label={quickActionIsPromote ? t('status.next') : t('status.done')}
             className={cn(
+                "inline-flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100",
                 quickActionIsPromote
-                    ? "text-info hover:text-info/80 p-1 rounded hover:bg-info/20"
-                    : "text-success hover:text-success/80 p-1 rounded hover:bg-success/20",
-                isInboxItem && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity motion-reduce:transition-none",
+                    ? "border-info/50 text-info hover:bg-info/10"
+                    : "border-success/60 text-success hover:bg-success/10",
             )}
         >
-            {quickActionIsPromote ? <ArrowRight className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+            {quickActionIsPromote ? <ArrowRight className="w-5 h-5" /> : <Check className="w-5 h-5" />}
         </button>
     );
 

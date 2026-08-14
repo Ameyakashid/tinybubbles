@@ -22,7 +22,7 @@ export function AgendaHeader({
                 <h2 className="text-3xl font-bold tracking-tight">
                     {t('agenda.title')}
                 </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm lowercase text-muted-foreground">
                     {nextActionsCount} {displayLabel(t, language, 'agenda.nextActions', 'to do')}
                 </p>
             </div>

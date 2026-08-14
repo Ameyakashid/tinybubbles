@@ -17,7 +17,7 @@ type TranslateFn = (key: string) => string;
 const DISPLAY_LABEL_OVERRIDES: Record<string, string> = {
     'status.next': 'To do',
     'status.someday': 'Maybe later',
-    'agenda.nextActions': 'to do',
+    'agenda.nextActions': 'To do',
     'list.someday': 'Maybe later',
     'list.waiting': 'Waiting',
     'nav.trash': 'Deleted',

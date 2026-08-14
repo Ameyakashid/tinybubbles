@@ -631,6 +631,16 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
 
     return (
         <div className="flex h-screen overflow-hidden bg-background text-foreground">
+            {/* Sunlit Rockpool ambient layer: a few slow bubbles drifting behind
+                the content. Pure decoration — hidden from AT, inert to pointer,
+                stilled under prefers-reduced-motion (DESIGN.md). */}
+            <div className="rockpool-bubbles" aria-hidden="true">
+                <span className="rockpool-bubble" style={{ left: '8%', top: '18%', width: '5.5rem', height: '5.5rem', animationDuration: '17s' }} />
+                <span className="rockpool-bubble" style={{ left: '86%', top: '12%', width: '3rem', height: '3rem', animationDuration: '13s', animationDelay: '-4s' }} />
+                <span className="rockpool-bubble" style={{ left: '72%', top: '68%', width: '6.5rem', height: '6.5rem', animationDuration: '21s', animationDelay: '-9s' }} />
+                <span className="rockpool-bubble" style={{ left: '30%', top: '82%', width: '2.25rem', height: '2.25rem', animationDuration: '12s', animationDelay: '-2s' }} />
+                <span className="rockpool-bubble" style={{ left: '55%', top: '38%', width: '1.5rem', height: '1.5rem', animationDuration: '15s', animationDelay: '-7s' }} />
+            </div>
             <a
                 href="#main-content"
                 className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground"
@@ -640,16 +650,20 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
             {/* Sidebar */}
             {!isFocusMode && (
                 <aside className={cn(
-                    "border-r border-border bg-card flex flex-col",
+                    "relative z-10 border-r border-border bg-card flex flex-col",
                     isCollapsed ? "w-16 p-2" : "w-64 px-3 pt-5 pb-3"
                 )}>
                 <div className={cn("flex items-center gap-2 px-1.5 mb-6", isCollapsed && "justify-center")}>
                     {!isCollapsed && (
-                        <img
-                            src="/logo.png"
-                            alt="Tiny Bubbles"
-                            className="w-7 h-7 rounded-md"
-                        />
+                        <span role="img" aria-label="Tiny Bubbles" title="Tiny Bubbles" className="inline-flex">
+                            <svg viewBox="0 0 32 32" className="w-8 h-8" aria-hidden="true">
+                                <circle cx="13" cy="17" r="9" fill="hsl(var(--primary) / 0.18)" stroke="hsl(var(--primary))" strokeWidth="1.6" />
+                                <circle cx="24" cy="9" r="5.5" fill="hsl(var(--focus-star) / 0.25)" stroke="hsl(var(--focus-star-outline))" strokeWidth="1.4" />
+                                <circle cx="25.5" cy="24" r="3.5" fill="hsl(var(--info) / 0.2)" stroke="hsl(var(--info))" strokeWidth="1.3" />
+                                <circle cx="10" cy="14" r="2" fill="hsl(0 0% 100% / 0.8)" />
+                                <circle cx="22.5" cy="7.5" r="1.2" fill="hsl(0 0% 100% / 0.8)" />
+                            </svg>
+                        </span>
                     )}
                     {!isCollapsed && <h1 className="text-base font-semibold tracking-tight">{t('app.name')}</h1>}
                     <button
@@ -926,7 +940,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                 // tabIndex=-1 makes this a programmatic focus target for the
                 // "enter list" fallback; it is never keyboard-tabbable, so it
                 // must not paint a focus ring around the whole list (#890).
-                className="flex-1 overflow-auto focus:outline-none"
+                className="relative z-10 flex-1 overflow-auto focus:outline-none"
                 data-main-content
                 tabIndex={-1}
                 role="main"

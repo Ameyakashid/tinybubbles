@@ -24,46 +24,46 @@
 @layer base {
   :root {
     color-scheme: light;
-    /* Tiny Bubbles soft theme (see DESIGN.md): warm foam background, deep-sea
-     * ink text, muted teal primary. Calm and rounded, never stark. */
-    --background: 160 33% 97%;
-    --foreground: 200 30% 20%;
+    /* Tiny Bubbles — "Sunlit Rockpool" (see DESIGN.md): warm sand under shallow
+     * water. Cream base, deep-sea ink, rockpool teal, sunny spark. */
+    --background: 42 47% 96%;
+    --foreground: 202 32% 21%;
 
     --card: 0 0% 100%;
-    --card-foreground: 200 30% 20%;
+    --card-foreground: 202 32% 21%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 200 30% 20%;
+    --popover-foreground: 202 32% 21%;
 
-    --primary: 172 56% 30%;
-    --primary-foreground: 160 33% 98%;
+    --primary: 174 52% 30%;
+    --primary-foreground: 48 60% 97%;
 
-    --secondary: 160 25% 93%;
-    --secondary-foreground: 200 30% 22%;
+    --secondary: 174 32% 91%;
+    --secondary-foreground: 202 32% 22%;
 
-    --muted: 160 22% 94%;
-    --muted-foreground: 200 14% 38%;
+    --muted: 40 32% 92%;
+    --muted-foreground: 204 15% 38%;
 
-    --accent: 160 32% 91%;
-    --accent-foreground: 200 30% 20%;
+    --accent: 174 38% 89%;
+    --accent-foreground: 202 32% 21%;
 
-    --destructive: 5 65% 48%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 157 43% 34%;
+    --destructive: 8 62% 50%;
+    --destructive-foreground: 48 60% 97%;
+    --success: 152 45% 34%;
     --success-foreground: 0 0% 100%;
-    --warning: 36 80% 36%;
+    --warning: 36 82% 38%;
     --warning-foreground: 0 0% 100%;
     --focus-star: 45 100% 55%;
     --focus-star-outline: 38 92% 34%;
     --info: 199 55% 40%;
     --info-foreground: 0 0% 100%;
 
-    --border: 160 18% 86%;
-    --input: 160 18% 86%;
-    --ring: 172 56% 32%;
+    --border: 38 28% 85%;
+    --input: 38 28% 85%;
+    --ring: 174 52% 32%;
 
     --status-inbox: 214 60% 50%;
-    --status-next: 157 43% 34%;
+    --status-next: 152 45% 34%;
     --status-waiting: 36 75% 38%;
     --status-someday: 270 45% 60%;
     --status-reference: 199 55% 38%;
@@ -85,34 +85,34 @@
     --badge-info-bg: 210 40% 96%;
     --badge-info-fg: 220 10% 30%;
 
-    --radius: 0.85rem;
+    --radius: 1rem;
     --tinybubbles-text-scale: 1;
   }
 
   .dark {
     color-scheme: dark;
-    /* Tiny Bubbles soft dark (see DESIGN.md): deep calm sea at night — same
-     * hue family as the light theme, gentle saturation, no stark blue. */
-    --background: 200 25% 12%;          /* deep sea water */
-    --foreground: 180 20% 88%;          /* soft foam text */
+    /* Tiny Bubbles "Sunlit Rockpool" dark (see DESIGN.md): the pool at night —
+     * warm deep water, moonlit foam text, seafoam primary. */
+    --background: 205 28% 13%;          /* warm deep water */
+    --foreground: 42 22% 88%;           /* moonlit warm foam */
 
-    --card: 200 22% 16%;
-    --card-foreground: 180 20% 88%;
+    --card: 204 24% 17%;
+    --card-foreground: 42 22% 88%;
 
-    --popover: 200 22% 14%;
-    --popover-foreground: 180 20% 88%;
+    --popover: 204 24% 15%;
+    --popover-foreground: 42 22% 88%;
 
     --primary: 172 45% 55%;             /* soft seafoam teal */
     --primary-foreground: 200 30% 12%;
 
-    --secondary: 200 18% 22%;
-    --secondary-foreground: 180 18% 85%;
+    --secondary: 204 20% 22%;
+    --secondary-foreground: 42 18% 85%;
 
-    --muted: 200 16% 22%;
-    --muted-foreground: 190 12% 65%;
+    --muted: 204 18% 22%;
+    --muted-foreground: 40 12% 66%;
 
-    --accent: 190 20% 24%;
-    --accent-foreground: 180 20% 88%;
+    --accent: 190 22% 24%;
+    --accent-foreground: 42 20% 88%;
 
     --destructive: 5 60% 62%;
     --destructive-foreground: 0 60% 12%;
@@ -125,8 +125,8 @@
     --info: 199 55% 62%;
     --info-foreground: 200 40% 12%;
 
-    --border: 200 16% 27%;
-    --input: 200 16% 27%;
+    --border: 204 16% 28%;
+    --input: 204 16% 28%;
     --ring: 172 45% 50%;               /* matches primary */
 
     --status-inbox: 214 55% 65%;
@@ -820,5 +820,48 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   SUNLIT ROCKPOOL — ambient life (see DESIGN.md)
+   A few bubbles drifting slowly through the app background: constant, slow,
+   ignorable. Richness that never asks for attention. Pure decoration.
+   ========================================================================== */
+
+@keyframes rockpool-drift {
+  0% { transform: translateY(0) translateX(0); }
+  50% { transform: translateY(-1.6rem) translateX(0.7rem); }
+  100% { transform: translateY(0) translateX(0); }
+}
+
+.rockpool-bubbles {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.rockpool-bubble {
+  position: absolute;
+  border-radius: 9999px;
+  border: 1.5px solid hsl(var(--primary) / 0.14);
+  background:
+    radial-gradient(circle at 32% 28%, hsl(0 0% 100% / 0.55), transparent 55%),
+    hsl(var(--primary) / 0.05);
+  animation: rockpool-drift 14s ease-in-out infinite;
+}
+
+.dark .rockpool-bubble {
+  border-color: hsl(var(--primary) / 0.2);
+  background:
+    radial-gradient(circle at 32% 28%, hsl(0 0% 100% / 0.22), transparent 55%),
+    hsl(var(--primary) / 0.07);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rockpool-bubble {
+    animation: none !important;
   }
 }

@@ -18,6 +18,7 @@ import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAd
 import type { MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@tinybubbles/core';
 import { useTaskFilterSelections } from '@tinybubbles/core/task-filter-selections';
 import { useLanguage } from '../../contexts/language-context';
+import { displayLabel } from '../../lib/display-labels';
 import { cn } from '../../lib/utils';
 import { useUiStore } from '../../store/ui-store';
 import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X } from 'lucide-react';
@@ -1117,7 +1118,7 @@ export function AgendaView() {
                         {effectiveNextGroupBy === 'none' ? (
                             sections.nextActions.length > 0 && (
                                 <AgendaCollapsibleSection
-                                    title={t('agenda.nextActions')}
+                                    title={displayLabel(t, language, 'agenda.nextActions', 'Next Actions')}
                                     icon={ArrowRight}
                                     color="text-info"
                                     count={sections.nextActions.length}
@@ -1137,7 +1138,7 @@ export function AgendaView() {
                         ) : (
                             sections.nextActions.length > 0 && (
                                 <AgendaCollapsibleSection
-                                    title={t('agenda.nextActions')}
+                                    title={displayLabel(t, language, 'agenda.nextActions', 'Next Actions')}
                                     icon={ArrowRight}
                                     color="text-info"
                                     count={sections.nextActions.length}
