@@ -35,6 +35,7 @@ import {
     type AllowedAuthTokenInput,
 } from './server-auth';
 import {
+    applyRequestCorsOrigin,
     AUTH_FAILURE_RATE_MAX,
     CLOUD_API_REV_BY,
     corsOrigin,
@@ -1453,6 +1454,9 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
                     }
                 })();
                 attachRequestId(response, requestId);
+                // Every response funnels through here, so a multi-origin CORS
+                // config is resolved against the request exactly once.
+                applyRequestCorsOrigin(response, req);
                 const completion: CloudRequestCompletion = {
                     requestId,
                     method: req.method,
