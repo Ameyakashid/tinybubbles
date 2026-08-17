@@ -167,6 +167,25 @@ bun install
 bun run dev
 ```
 
+### Parent (admin) flavour
+
+One codebase ships two apps. Built with `VITE_TINYBUBBLES_FLAVOUR=parent`, the desktop app
+becomes **Tiny Bubbles Parent**: the full UI with a Parent identity that opens on a Family
+dashboard (overdue / due today / coming up / recently finished). Point its self-hosted sync
+at the **same server URL and token** as the child's device and everything flows both ways
+through the ordinary sync engine — a task the parent adds appears on the child's device, a
+completion the child makes appears on the parent's dashboard. The parent flavour keeps
+appearance/language device-local by default and skips the sample-data onboarding so nothing
+is seeded into the child's namespace.
+
+```bash
+cd apps/desktop
+VITE_TINYBUBBLES_FLAVOUR=parent bunx vite   # parent web app (dev)
+```
+
+Serving browsers on more than one origin from one sync server: give
+`TINYBUBBLES_CLOUD_CORS_ORIGIN` a comma-separated origin list.
+
 See [`docs/`](docs/) for the inherited build and deployment guides, and
 [`docker/README.md`](docker/README.md) for the Docker setup.
 
