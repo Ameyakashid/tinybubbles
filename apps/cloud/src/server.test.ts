@@ -28,6 +28,7 @@ import {
     CLOUD_SECTION_PATCH_ALLOWED_PROP_KEYS,
     CLOUD_TASK_CREATION_ALLOWED_PROP_KEYS,
     CLOUD_TASK_PATCH_ALLOWED_PROP_KEYS,
+    applyCorsOriginForRequest,
     corsOrigin,
     createInternalServerErrorResponse,
     errorResponse,
@@ -402,6 +403,50 @@ describe('cloud server utils', () => {
         expect(response.headers.get('Access-Control-Allow-Origin')).toBe(corsOrigin);
         expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Authorization, Content-Type');
         expect(response.headers.get('Access-Control-Allow-Methods')).toBe('GET,HEAD,PUT,POST,PATCH,DELETE,OPTIONS');
+    });
+
+    test('multi-origin CORS echoes an allowlisted request origin and varies by Origin', () => {
+        const allowed = ['http://localhost:5173', 'http://localhost:5273'];
+
+        // Allowlisted second origin: header swaps from the static default.
+        const matched = errorResponse('Unauthorized', 401);
+        applyCorsOriginForRequest(
+            matched,
+            new Request('http://x/v1/tasks', { headers: { Origin: 'http://localhost:5273' } }),
+            allowed,
+        );
+        expect(matched.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5273');
+        expect(matched.headers.get('Vary')).toBe('Origin');
+
+        // Unknown origin: default header stays, but the response still varies.
+        const unmatched = errorResponse('Unauthorized', 401);
+        applyCorsOriginForRequest(
+            unmatched,
+            new Request('http://x/v1/tasks', { headers: { Origin: 'http://evil.example' } }),
+            allowed,
+        );
+        expect(unmatched.headers.get('Access-Control-Allow-Origin')).toBe(corsOrigin);
+        expect(unmatched.headers.get('Vary')).toBe('Origin');
+
+        // Single-origin config: exact legacy behaviour, no Vary added.
+        const single = errorResponse('Unauthorized', 401);
+        applyCorsOriginForRequest(
+            single,
+            new Request('http://x/v1/tasks', { headers: { Origin: 'http://localhost:5273' } }),
+            ['http://localhost:5173'],
+        );
+        expect(single.headers.get('Access-Control-Allow-Origin')).toBe(corsOrigin);
+        expect(single.headers.get('Vary')).toBeNull();
+
+        // An existing Vary header is extended, not clobbered.
+        const varied = errorResponse('Unauthorized', 401);
+        varied.headers.set('Vary', 'Accept-Encoding');
+        applyCorsOriginForRequest(
+            varied,
+            new Request('http://x/v1/tasks', { headers: { Origin: 'http://localhost:5273' } }),
+            allowed,
+        );
+        expect(varied.headers.get('Vary')).toBe('Accept-Encoding, Origin');
     });
 
     test('returns no-content CORS preflight responses', async () => {

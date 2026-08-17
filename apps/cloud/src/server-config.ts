@@ -99,17 +99,57 @@ export const logError = (message: CloudLogMessage, context: CloudFailureContext)
     writeLog({ ts: new Date().toISOString(), level: 'error', scope: 'cloud', message, context });
 };
 
+// TINYBUBBLES_CLOUD_CORS_ORIGIN accepts a comma-separated list of origins.
+// One server now legitimately serves browser clients on different origins —
+// the kid app and the parent (admin) app share a token namespace but are
+// separate deployments — and CORS allows exactly one origin per response, so
+// with several configured the effective origin is chosen per request
+// (applyRequestCorsOrigin below).
 const configuredCorsOrigin = (process.env.TINYBUBBLES_CLOUD_CORS_ORIGIN || '').trim();
-if (configuredCorsOrigin === '*') {
+const configuredCorsOrigins = configuredCorsOrigin
+    ? configuredCorsOrigin.split(',').map((origin) => origin.trim()).filter(Boolean)
+    : [];
+if (configuredCorsOrigins.includes('*')) {
     throw new Error('TINYBUBBLES_CLOUD_CORS_ORIGIN cannot be "*" in production. Set an explicit origin.');
 }
 const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase();
 const isProductionEnv = nodeEnv === 'production';
-if (!configuredCorsOrigin && isProductionEnv) {
+if (configuredCorsOrigins.length === 0 && isProductionEnv) {
     throw new Error('TINYBUBBLES_CLOUD_CORS_ORIGIN must be set in production.');
 }
 
-export const corsOrigin = configuredCorsOrigin || 'http://localhost:5173';
+export const allowedCorsOrigins: readonly string[] = configuredCorsOrigins;
+/** Default (and, with a single-origin config, only) CORS origin — unchanged behaviour. */
+export const corsOrigin = configuredCorsOrigins[0] || 'http://localhost:5173';
+
+/**
+ * With multiple configured origins, swap the static default for the request's
+ * own Origin when it is on the allowlist, and mark the response as varying by
+ * Origin so caches keep the per-origin answers apart. With zero or one
+ * configured origin this is a no-op, preserving the original behaviour
+ * byte for byte.
+ */
+export const applyCorsOriginForRequest = (
+    response: Response,
+    req: Request,
+    allowed: readonly string[],
+): void => {
+    if (allowed.length <= 1) return;
+    const origin = (req.headers.get('Origin') || '').trim();
+    if (origin && allowed.includes(origin)) {
+        response.headers.set('Access-Control-Allow-Origin', origin);
+    }
+    const vary = response.headers.get('Vary');
+    if (!vary) {
+        response.headers.set('Vary', 'Origin');
+    } else if (!vary.split(',').some((value) => value.trim().toLowerCase() === 'origin')) {
+        response.headers.set('Vary', `${vary}, Origin`);
+    }
+};
+
+export const applyRequestCorsOrigin = (response: Response, req: Request): void => {
+    applyCorsOriginForRequest(response, req, allowedCorsOrigins);
+};
 const maxTaskTitleLengthValue = Number(process.env.TINYBUBBLES_CLOUD_MAX_TASK_TITLE_LENGTH || 500);
 export const MAX_TASK_TITLE_LENGTH = Number.isFinite(maxTaskTitleLengthValue) && maxTaskTitleLengthValue > 0
     ? Math.floor(maxTaskTitleLengthValue)
