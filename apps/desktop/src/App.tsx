@@ -129,6 +129,12 @@ import { useUiStore } from './store/ui-store';
 import { useObsidianStore } from './store/obsidian-store';
 import type { SettingsOnboardingHintPage, SettingsPage } from './components/views/SettingsView';
 import { installKeyringFallbackWarningListener } from './lib/keyring-fallback-warning';
+import { FLAVOUR_DEFAULT_VIEW, flavourAppName, isParentFlavour } from './config/flavour';
+import {
+    computeParentSyncPreferenceDefaults,
+    markParentSyncDefaultsApplied,
+    wereParentSyncDefaultsApplied,
+} from './lib/parent-sync-defaults';
 
 const ProjectsView = import.meta.env.DEV
     ? ProjectsViewEager
@@ -137,8 +143,11 @@ const SettingsView = lazy(wrapSettingsOpenImport(
     'settings-view-chunk',
     () => import('./components/views/SettingsView').then((m) => ({ default: m.SettingsView }))
 ));
+const FamilyDashboardView = lazy(() => (
+    import('./components/views/FamilyDashboardView').then((m) => ({ default: m.FamilyDashboardView }))
+));
 
-const DEFAULT_DESKTOP_VIEW = 'agenda';
+const DEFAULT_DESKTOP_VIEW = FLAVOUR_DEFAULT_VIEW;
 const DESKTOP_ONBOARDING_STORAGE_KEY = 'tinybubbles:desktop:first-run-onboarding:v1';
 const DONATION_PROMPT_ENABLED = (
     import.meta.env.VITE_DONATION_PROMPT_ENABLED === '1'
@@ -319,7 +328,7 @@ function App() {
         ).map((task) => task.title).join(FOCUS_TITLE_SEPARATOR)
     ));
     const trayTooltip = useMemo(() => buildTrayTooltip({
-        appName: translateWithFallback(t, 'app.name', 'Tiny Bubbles'),
+        appName: flavourAppName(translateWithFallback(t, 'app.name', 'Tiny Bubbles')),
         focusLabel: translateWithFallback(t, 'agenda.todaysFocus', "Today's Focus"),
         titles: focusTaskTitles ? focusTaskTitles.split(FOCUS_TITLE_SEPARATOR) : [],
     }), [focusTaskTitles, t]);
@@ -1153,6 +1162,8 @@ function App() {
             return <SearchView savedSearchId={savedSearchId} />;
         }
         switch (activeView) {
+            case 'familyDashboard':
+                return <FamilyDashboardView onOpenSyncSettings={openSyncSettings} />;
             case 'inbox':
                 return <ListView title={t('list.inbox')} statusFilter="inbox" />;
             case 'agenda':
@@ -1243,9 +1254,40 @@ function App() {
         };
     }, [currentView]);
 
+    // Parent flavour: the window carries the Parent identity. The base
+    // index.html title is shared by both flavours, so it is set at runtime.
+    useEffect(() => {
+        if (!isParentFlavour) return;
+        document.title = flavourAppName('Tiny Bubbles');
+    }, []);
+
+    // Parent flavour: default the device-local settings groups (appearance,
+    // language) out of sync — once, on first run. See parent-sync-defaults.ts.
+    useEffect(() => {
+        if (!isParentFlavour) return;
+        if (!hasHydratedSettings || isLoading) return;
+        if (wereParentSyncDefaultsApplied(window.localStorage)) return;
+        const nextPreferences = computeParentSyncPreferenceDefaults(
+            useTaskStore.getState().settings?.syncPreferences,
+        );
+        if (!nextPreferences) {
+            markParentSyncDefaultsApplied(window.localStorage);
+            return;
+        }
+        updateSettings({ syncPreferences: nextPreferences })
+            .then(() => markParentSyncDefaultsApplied(window.localStorage))
+            .catch((error) => {
+                void logError(error, { scope: 'settings', step: 'parentSyncDefaults' });
+            });
+    }, [hasHydratedSettings, isLoading, updateSettings]);
+
     useEffect(() => {
         if (!hasHydratedSettings || isLoading) return;
-        if (desktopOnboardingDismissed || visibleDataCount > 0) {
+        // The stock first-run dialog offers "Start fresh", which seeds sample
+        // data — into the CHILD's namespace once the parent connects. The
+        // parent flavour's first screen is the Family dashboard, whose
+        // not-syncing state links straight to Settings → Sync instead.
+        if (isParentFlavour || desktopOnboardingDismissed || visibleDataCount > 0) {
             setDesktopOnboardingGateSettled(true);
             return;
         }

@@ -22,6 +22,7 @@ import {
     AlertTriangle,
     Plus,
     RefreshCw,
+    Users,
     type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -39,6 +40,7 @@ import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
 import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
 import { stageCalendarDropLanding } from '../lib/calendar-view-params';
+import { flavourAppName, isParentFlavour } from '../config/flavour';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -295,6 +297,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         'search',
         'agenda',
         'obsidian',
+        'familyDashboard',
     ]);
     const isWideView = wideViews.has(currentView);
     const fullWidthViews = new Set([
@@ -307,6 +310,15 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
     const isFullWidthView = fullWidthViews.has(currentView);
 
     const navSections = useMemo<NavSection[]>(() => ([
+        // Parent flavour only: the family dashboard is the parent's home —
+        // what the child's device has synced, arranged for a parent's questions.
+        ...(isParentFlavour ? [{
+            key: 'family',
+            label: tFallback(t, 'nav.sectionFamily', 'Family'),
+            items: [
+                { id: 'familyDashboard', fallbackLabel: 'Dashboard', icon: Users, tone: 'primary' as const },
+            ],
+        }] : []),
         {
             key: 'focus',
             label: tFallback(t, 'nav.sectionFocus', 'Focus'),
@@ -668,11 +680,11 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                     {!isCollapsed && (
                         <img
                             src="/logo.png"
-                            alt="Tiny Bubbles"
+                            alt={flavourAppName('Tiny Bubbles')}
                             className="w-7 h-7 rounded-md"
                         />
                     )}
-                    {!isCollapsed && <h1 className="text-base font-semibold tracking-tight">{t('app.name')}</h1>}
+                    {!isCollapsed && <h1 className="text-base font-semibold tracking-tight">{flavourAppName(t('app.name'))}</h1>}
                     <button
                         onClick={toggleSidebar}
                         className={cn(

@@ -9,6 +9,7 @@ const LAST_VIEW_STORAGE_KEY = 'tinybubbles-last-view';
 // view-url-params.ts can build its own, larger allow-list on top of it —
 // the URL is a separate, explicit signal that settings/obsidian may use.
 export const RESTORABLE_VIEWS = new Set([
+    'familyDashboard',
     'inbox',
     'agenda',
     'next',

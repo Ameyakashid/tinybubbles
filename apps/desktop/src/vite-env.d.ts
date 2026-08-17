@@ -8,6 +8,7 @@ interface ImportMetaEnv {
     readonly VITE_DROPBOX_APP_KEY?: string;
     readonly VITE_FEEDBACK_ENDPOINT_URL?: string;
     readonly VITE_DONATION_PROMPT_ENABLED?: string;
+    readonly VITE_TINYBUBBLES_FLAVOUR?: string;
 }
 
 interface ImportMeta {
