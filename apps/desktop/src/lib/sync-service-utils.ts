@@ -51,7 +51,19 @@ export const fallbackHashString = (value: string): string => {
 
 export const yieldToRenderer = async (): Promise<void> => {
     if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        // Hidden/minimized webviews are allowed to suspend animation frames.
+        // A sync holds the whole-document lane while yielding, so waiting only
+        // for rAF can otherwise block every later sync/restore indefinitely.
+        await new Promise<void>((resolve) => {
+            let settled = false;
+            const finish = () => {
+                if (settled) return;
+                settled = true;
+                resolve();
+            };
+            window.requestAnimationFrame(finish);
+            window.setTimeout(finish, 50);
+        });
         return;
     }
     await sleep(0);
