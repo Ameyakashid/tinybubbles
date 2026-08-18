@@ -11,6 +11,7 @@ import { invokeNative, preloadNativeTransport } from './lib/tauri-invoke';
 import { reportError } from './lib/report-error';
 import { webStorage } from './lib/storage-adapter-web';
 import { isDiagnosticsEnabled, logError, logInfo, logWarn, setupGlobalErrorLogging } from './lib/app-log';
+import { isParentFlavour } from './config/flavour';
 import {
     THEME_STORAGE_KEY,
     applyNativeTheme,
@@ -78,6 +79,11 @@ const installCoreLoggerBridge = () => {
 // Initialize theme immediately before React renders to prevent flash
 const savedTheme = coerceDesktopThemeMode(localStorage.getItem(THEME_STORAGE_KEY));
 applyThemeMode(savedTheme);
+// Parent flavour carries its own palette (index.css, "Evening Tide"), scoped
+// off this attribute so the default flavour keeps the stock theme.
+if (isParentFlavour) {
+    document.documentElement.dataset.flavour = 'parent';
+}
 if ((savedTheme ?? 'system') === 'system' && isTauriRuntime()) {
     void resolveSystemThemeCommandPreference(
         (step, error) => void logError(error, { scope: 'theme', step: `startup-command:${step}` }),

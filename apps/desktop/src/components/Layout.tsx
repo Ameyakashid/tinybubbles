@@ -38,6 +38,7 @@ import { ToastHost } from './ToastHost';
 import { areaFilterSelectionToFilters, resolveAreaFilterSelection, taskMatchesAreaFilterSelection, type AreaFilterSelection } from '@tinybubbles/core';
 import { SyncService } from '../lib/sync-service';
 import { SidebarAreaFilter } from './ui/SidebarAreaFilter';
+import { ParentIdentityMark } from './ParentIdentityMark';
 import { getCalendarTaskDragTaskId, hasCalendarTaskDragData } from '../lib/calendar-task-drag';
 import { stageCalendarDropLanding } from '../lib/calendar-view-params';
 import { flavourAppName, isParentFlavour } from '../config/flavour';
@@ -573,8 +574,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
         const stored = settings?.filters;
         const next = areaFilterSelectionToFilters(resolvedAreaFilter);
         if (stored?.areaId === next.areaId
-            && (stored?.areaIds ?? []).join(' ') === next.areaIds.join(' ')
-            && (stored?.excludedAreaIds ?? []).join(' ') === next.excludedAreaIds.join(' ')) return;
+            && (stored?.areaIds ?? []).join('\0') === next.areaIds.join('\0')
+            && (stored?.excludedAreaIds ?? []).join('\0') === next.excludedAreaIds.join('\0')) return;
         updateSettings({ filters: { ...(stored ?? {}), ...next } })
             .catch((error) => reportError('Failed to update area filter', error));
     }, [areas.length, resolvedAreaFilter, settings?.filters, updateSettings]);
@@ -677,14 +678,23 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                     isCollapsed ? "w-16 p-2" : "w-64 px-3 pt-5 pb-3"
                 )}>
                 <div className={cn("flex items-center gap-2 px-1.5 mb-6", isCollapsed && "justify-center")}>
-                    {!isCollapsed && (
-                        <img
-                            src="/logo.png"
-                            alt={flavourAppName('Tiny Bubbles')}
-                            className="w-7 h-7 rounded-md"
-                        />
+                    {isParentFlavour ? (
+                        /* The parent flavour's identity: the kid bubbles held in
+                           one calm ring, "Parent" as a quiet tag — not logo.png
+                           with text appended (ParentIdentityMark.tsx). */
+                        <ParentIdentityMark collapsed={isCollapsed} />
+                    ) : (
+                        <>
+                            {!isCollapsed && (
+                                <img
+                                    src="/logo.png"
+                                    alt={flavourAppName('Tiny Bubbles')}
+                                    className="w-7 h-7 rounded-md"
+                                />
+                            )}
+                            {!isCollapsed && <h1 className="text-base font-semibold tracking-tight">{flavourAppName(t('app.name'))}</h1>}
+                        </>
                     )}
-                    {!isCollapsed && <h1 className="text-base font-semibold tracking-tight">{flavourAppName(t('app.name'))}</h1>}
                     <button
                         onClick={toggleSidebar}
                         className={cn(
@@ -768,6 +778,11 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                         {navSections.map((section) => {
                             const isSectionCollapsed = !isCollapsed && collapsedSections.has(section.key);
                             const sectionId = `sidebar-section-${section.key}`;
+                            // Parent flavour: the FAMILY section is why this app
+                            // exists — it gets the Evening Tide accent (teal
+                            // header, softly ringed card) so it reads as home,
+                            // not as one more nav group.
+                            const isFamilySection = section.key === 'family';
                             return (
                             <div key={section.key} className="space-y-1">
                                 {!isCollapsed && (
@@ -776,7 +791,12 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         onClick={() => toggleSection(section.key)}
                                         aria-expanded={!isSectionCollapsed}
                                         aria-controls={sectionId}
-                                        className="group w-full flex h-7 items-center gap-1 rounded-md px-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.16em] transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer"
+                                        className={cn(
+                                            "group w-full flex h-7 items-center gap-1 rounded-md px-2.5 text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 cursor-pointer",
+                                            isFamilySection
+                                                ? "text-primary hover:text-primary"
+                                                : "text-muted-foreground hover:text-foreground",
+                                        )}
                                     >
                                         <ChevronDown
                                             className={cn(
@@ -787,7 +807,14 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         <span>{section.label}</span>
                                     </button>
                                 )}
-                                <div id={sectionId} className={cn("space-y-1", isSectionCollapsed && "hidden")}>
+                                <div
+                                    id={sectionId}
+                                    className={cn(
+                                        "space-y-1",
+                                        isSectionCollapsed && "hidden",
+                                        isFamilySection && "rounded-xl bg-primary/[0.05] p-1 ring-1 ring-primary/15",
+                                    )}
+                                >
                                 {section.items.map((item) => {
                                     const itemLabel = item.labelKey ? tFallback(t, item.labelKey, item.fallbackLabel ?? item.id) : (item.fallbackLabel ?? item.id);
                                     const isActiveItem = currentView === item.id;
@@ -823,7 +850,7 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                         className={cn(
                                             "w-full flex items-center rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
                                             itemWeightClass,
-                                            isActiveItem ? "bg-primary/5 text-primary" : inactiveItemClass,
+                                            isActiveItem ? cn("text-primary", isFamilySection ? "bg-primary/10" : "bg-primary/5") : inactiveItemClass,
                                             isCollapsed ? "h-10 justify-center px-2" : "h-9 justify-between px-2.5",
                                             // Last so they win the merge: the drop target has to read as
                                             // available even on the active item's own tinted background.

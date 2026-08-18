@@ -150,6 +150,159 @@
     --badge-info-fg: 220 13% 88%;
   }
 
+  /*
+   * Tiny Bubbles Parent — "Evening Tide" (grown-up sibling of the kid app's
+   * Sunlit Rockpool). Same water, later light: the kid app is the pool at
+   * midday, bright cream with drifting bubbles; the parent app is the pool at
+   * dusk seen from the shore — deeper teal, quieter sand, and the sunny spark
+   * warmed into a lantern amber that is lit only where the parent must act.
+   *
+   * Scoped to the parent build via data-flavour so the default flavour keeps
+   * the stock palette, and guarded so an explicit theme pick (sepia, nord, …)
+   * still wins: :root.theme-* beats html[data-flavour] on specificity, and the
+   * dark block opts out whenever a theme-* class is present.
+   */
+  html[data-flavour='parent'] {
+    /* dusk sand — quieter and greyer than the kid app's midday cream */
+    --background: 38 24% 93%;
+    /* deep-sea ink, softened */
+    --foreground: 203 26% 23%;
+
+    --card: 40 33% 98%;
+    --card-foreground: 203 26% 23%;
+
+    --popover: 40 33% 98%;
+    --popover-foreground: 203 26% 23%;
+
+    /* deep marine teal — the kid's rockpool teal, settled */
+    --primary: 186 45% 26%;
+    --primary-foreground: 44 45% 96%;
+
+    --secondary: 188 20% 90%;
+    --secondary-foreground: 203 26% 23%;
+
+    --muted: 40 20% 89%;
+    --muted-foreground: 205 12% 40%;
+
+    --accent: 190 22% 89%;
+    --accent-foreground: 203 26% 23%;
+
+    /* ember rather than coral — a tired parent gets information, not alarm */
+    --destructive: 6 52% 44%;
+    --destructive-foreground: 44 45% 96%;
+    /* deep kelp */
+    --success: 157 32% 30%;
+    --success-foreground: 44 45% 96%;
+    /* lantern amber — the "you need to act" voice */
+    --warning: 33 78% 35%;
+    --warning-foreground: 44 45% 96%;
+    --focus-star: 42 90% 50%;
+    --focus-star-outline: 36 82% 36%;
+    /* dusk sea blue */
+    --info: 200 42% 36%;
+    --info-foreground: 44 45% 96%;
+
+    --border: 38 16% 80%;
+    --input: 38 16% 80%;
+    --ring: 186 45% 28%;
+
+    --status-inbox: 200 42% 36%;
+    --status-next: 157 32% 30%;
+    --status-waiting: 33 70% 34%;
+    --status-someday: 268 32% 48%;
+    --status-reference: 200 38% 34%;
+    --status-done: 205 10% 42%;
+    --status-archived: 200 42% 36%;
+
+    --badge-project-bg: 200 30% 92%;
+    --badge-project-fg: 203 30% 28%;
+    --badge-context-bg: 268 25% 93%;
+    --badge-context-fg: 268 25% 35%;
+    --badge-tag-bg: 40 15% 90%;
+    --badge-tag-fg: 205 12% 35%;
+    --badge-priority-bg: 33 60% 90%;
+    --badge-priority-fg: 30 70% 28%;
+    --badge-estimate-bg: 157 30% 90%;
+    --badge-estimate-fg: 157 30% 25%;
+    --badge-age-bg: 42 40% 92%;
+    --badge-age-fg: 30 30% 32%;
+    --badge-info-bg: 200 25% 92%;
+    --badge-info-fg: 205 15% 32%;
+  }
+
+  html[data-flavour='parent'].dark:not(:where(.theme-eink,.theme-nord,.theme-sepia,.theme-catppuccin-macchiato,.theme-dracula)) {
+    /* the pool at night, seen from the porch — deeper than the kid's dark */
+    --background: 205 25% 11%;
+    --foreground: 42 18% 86%;
+
+    --card: 203 20% 15%;
+    --card-foreground: 42 18% 86%;
+
+    --popover: 203 20% 14%;
+    --popover-foreground: 42 18% 86%;
+
+    --primary: 184 38% 55%;
+    --primary-foreground: 200 30% 11%;
+
+    --secondary: 203 16% 21%;
+    --secondary-foreground: 42 15% 84%;
+
+    --muted: 203 15% 21%;
+    --muted-foreground: 40 10% 64%;
+
+    --accent: 200 16% 23%;
+    --accent-foreground: 42 15% 86%;
+
+    --destructive: 5 55% 62%;
+    --destructive-foreground: 0 50% 10%;
+    --success: 157 32% 52%;
+    --success-foreground: 157 40% 10%;
+    --warning: 38 70% 58%;
+    --warning-foreground: 40 50% 10%;
+    --focus-star: 45 90% 62%;
+    --focus-star-outline: 40 85% 45%;
+    --info: 200 50% 62%;
+    --info-foreground: 200 40% 10%;
+
+    --border: 204 13% 26%;
+    --input: 204 13% 26%;
+    --ring: 184 38% 50%;
+
+    --status-inbox: 200 50% 64%;
+    --status-next: 157 32% 50%;
+    --status-waiting: 38 65% 56%;
+    --status-someday: 268 35% 68%;
+    --status-reference: 200 45% 60%;
+    --status-done: 205 10% 60%;
+    --status-archived: 200 50% 64%;
+
+    --badge-project-bg: 203 18% 23%;
+    --badge-project-fg: 200 30% 86%;
+    --badge-context-bg: 268 18% 25%;
+    --badge-context-fg: 268 30% 84%;
+    --badge-tag-bg: 204 12% 23%;
+    --badge-tag-fg: 200 10% 83%;
+    --badge-priority-bg: 30 35% 25%;
+    --badge-priority-fg: 35 75% 78%;
+    --badge-estimate-bg: 155 22% 23%;
+    --badge-estimate-fg: 150 35% 80%;
+    --badge-age-bg: 35 22% 23%;
+    --badge-age-fg: 38 65% 78%;
+    --badge-info-bg: 204 13% 23%;
+    --badge-info-fg: 200 15% 84%;
+  }
+
+  /*
+   * Ember is reserved for broken plumbing, never for the child's behaviour.
+   * The stock task row paints an overdue due date text-destructive; inside
+   * the Family dashboard that lateness is the lantern's job, so it becomes
+   * warning amber. Scoped to task rows so the sync strip's genuine error
+   * state keeps its ember.
+   */
+  html[data-flavour='parent'] .family-dashboard [data-task-id] .text-destructive {
+    color: hsl(var(--warning));
+  }
+
   :root.theme-eink {
     color-scheme: light;
     --background: 0 0% 100%;
