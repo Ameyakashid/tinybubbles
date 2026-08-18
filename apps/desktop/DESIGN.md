@@ -116,6 +116,26 @@ open them. Limitation: on narrow viewports the sidebar collapses to a `<select>`
 built from the same nav list, so the three hidden pages need a wide window (search
 is desktop-only) — acceptable for an adult task, recorded here.
 
+## Task quick-action menu (kid-scale pass)
+
+The six surviving actions (Focus star, Rename, Due Date, Duplicate, Turn into a list,
+Delete) keep their behaviour; only their scale and finish changed to fit a child's
+hand inside the Rockpool tokens.
+
+- **Rows are 48px tap targets**: `px-4 py-3 text-base` on every menuitem, up from
+  the adult `px-3 py-2 text-sm`.
+- **Icons grew to 20px** (`h-5 w-5`) and sit in a slightly wider `gap-3` row.
+- **Menu surface is wider and rounder**: `w-72` (288px) and `rounded-xl`, with
+  `p-2` internal padding and `my-2` separators so the list can breathe.
+- **Soft press feedback**: `active:scale-[0.98]` on rows, stilled implicitly by the
+  global `prefers-reduced-motion` reset.
+- **Delete is the warm-coral exception**: it gets a destructive hover wash
+  (`hover:bg-destructive/10 hover:text-destructive`) so a child can see which
+  action is dangerous before tapping.
+- **The due-date panel matches**: `rounded-xl`, `p-4`, 48px inputs (`px-4 py-3
+  text-base`), and `size="lg"` Save/Cancel buttons, so the panel feels like the
+  same menu system.
+
 ## Known state
 
 - The desktop suite is green (1995/1995 as of the review-hide pass). The former

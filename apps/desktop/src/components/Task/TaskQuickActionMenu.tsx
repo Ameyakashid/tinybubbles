@@ -33,7 +33,7 @@ import { DateField } from '../ui/DateField';
 
 const VIEWPORT_MARGIN_PX = 8;
 const PANEL_GAP_PX = 8;
-const MENU_WIDTH_PX = 224;
+const MENU_WIDTH_PX = 288;
 
 type QuickPanelId = 'startTime' | 'dueDate' | 'reviewAt' | 'area' | 'contexts' | null;
 
@@ -587,6 +587,7 @@ export function TaskQuickActionMenu({
         onClick,
         showChevron = false,
         disabled = false,
+        destructive = false,
         title,
     }: {
         key?: string;
@@ -597,6 +598,7 @@ export function TaskQuickActionMenu({
         onClick: () => void;
         showChevron?: boolean;
         disabled?: boolean;
+        destructive?: boolean;
         title?: string;
     }) => (
         <button
@@ -610,23 +612,27 @@ export function TaskQuickActionMenu({
             title={title}
             onClick={onClick}
             className={cn(
-                // Plain focus: styles, not focus-visible: — keyboard traversal
-                // moves focus programmatically, and WebKit does not always mark
-                // that focus-visible, which left the focused item unhighlighted.
-                'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors focus:outline-none focus:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40',
+                // Kid-scale row: 48px touch target, larger type and icon, soft
+                // press feedback. Plain focus: styles, not focus-visible: —
+                // keyboard traversal moves focus programmatically, and WebKit
+                // does not always mark that focus-visible.
+                'flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-base transition-colors focus:outline-none focus:bg-muted focus-visible:ring-2 focus-visible:ring-primary/40 active:scale-[0.98]',
                 disabled
                     ? 'cursor-not-allowed text-muted-foreground/50'
                     : active
                         ? 'bg-muted text-foreground'
-                        : 'text-foreground hover:bg-muted',
+                        : destructive
+                            ? 'text-foreground hover:bg-destructive/10 hover:text-destructive'
+                            : 'text-foreground hover:bg-muted',
             )}
         >
             <span className={cn(
-                'flex h-4 w-4 shrink-0 items-center justify-center',
-                disabled ? 'text-muted-foreground/50' : 'text-muted-foreground',
+                'flex h-5 w-5 shrink-0 items-center justify-center',
+                disabled && 'text-muted-foreground/50',
+                !disabled && !destructive && 'text-muted-foreground',
             )}>{icon}</span>
             <span className="flex-1 truncate">{label}</span>
-            {showChevron ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : null}
+            {showChevron ? <ChevronRight className="h-5 w-5 text-muted-foreground" /> : null}
         </button>
     );
 
@@ -637,7 +643,7 @@ export function TaskQuickActionMenu({
                     role="menu"
                     aria-label={moreOptionsLabel}
                     tabIndex={-1}
-                    className="fixed z-50 w-56 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-xl focus:outline-none"
+                    className="fixed z-50 w-72 rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-xl focus:outline-none"
                     style={{ top: menuPosition.top, left: menuPosition.left }}
                     onContextMenu={(event) => event.preventDefault()}
                 >
@@ -645,7 +651,7 @@ export function TaskQuickActionMenu({
                     icon: (
                         <FocusStarIcon
                             className={cn(
-                                'h-4 w-4',
+                                'h-5 w-5',
                                 focusAction.isFocused && 'text-warning',
                             )}
                             filled={focusAction.isFocused}
@@ -660,9 +666,9 @@ export function TaskQuickActionMenu({
                         onClose();
                     },
                 })}
-                {!readOnly && focusAction ? <div className="my-1 h-px bg-border/70" role="separator" /> : null}
+                {!readOnly && focusAction ? <div className="my-2 h-px bg-border/70" role="separator" /> : null}
                 {!readOnly && onRename && renderMenuAction({
-                    icon: <Pencil className="h-4 w-4" />,
+                    icon: <Pencil className="h-5 w-5" />,
                     label: renameLabel,
                     onClick: () => {
                         onRename();
@@ -679,15 +685,15 @@ export function TaskQuickActionMenu({
                     for the due-date entry, which remains. */}
                 {!readOnly && renderMenuAction({
                     ref: dueButtonRef,
-                    icon: <Calendar className="h-4 w-4" />,
+                    icon: <Calendar className="h-5 w-5" />,
                     label: `${dueLabel}…`,
                     active: activePanel === 'dueDate',
                     onClick: () => openPanel('dueDate'),
                     showChevron: true,
                 })}
-                {!readOnly ? <div className="my-1 h-px bg-border/70" role="separator" /> : null}
+                {!readOnly ? <div className="my-2 h-px bg-border/70" role="separator" /> : null}
                 {renderMenuAction({
-                    icon: <Copy className="h-4 w-4" />,
+                    icon: <Copy className="h-5 w-5" />,
                     label: duplicateLabel,
                     onClick: () => {
                         onDuplicate();
@@ -695,7 +701,7 @@ export function TaskQuickActionMenu({
                     },
                 })}
                 {!readOnly && onPromoteToProject && renderMenuAction({
-                    icon: <FolderPlus className="h-4 w-4" />,
+                    icon: <FolderPlus className="h-5 w-5" />,
                     label: promoteToProjectLabel,
                     onClick: () => {
                         onPromoteToProject();
@@ -711,8 +717,9 @@ export function TaskQuickActionMenu({
                     },
                 }))}
                 {renderMenuAction({
-                    icon: <Trash2 className="h-4 w-4" />,
+                    icon: <Trash2 className="h-5 w-5" />,
                     label: deleteLabel,
+                    destructive: true,
                     onClick: () => {
                         onDelete();
                         onClose();
@@ -735,17 +742,17 @@ export function TaskQuickActionMenu({
                                     ? areaLabel
                                     : contextsLabel
                     }
-                    className="fixed z-50 w-[min(30rem,calc(100vw-1rem))] rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-xl"
+                    className="fixed z-50 w-[min(30rem,calc(100vw-1rem))] rounded-xl border border-border bg-popover p-4 text-popover-foreground shadow-xl"
                     style={{
                         top: panelPosition?.top ?? menuPosition.top,
-                        left: panelPosition?.left ?? (menuPosition.left + 188),
+                        left: panelPosition?.left ?? (menuPosition.left + 240),
                         visibility: panelPosition ? 'visible' : 'hidden',
                     }}
                     onContextMenu={(event) => event.preventDefault()}
                     onKeyDown={handlePanelKeyDown}
                 >
                     {activePanel === 'startTime' ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <DateField
                                 t={t}
                                 label={startLabel}
@@ -754,7 +761,7 @@ export function TaskQuickActionMenu({
                                 selectedDate={safeParseDate(startDateDraft)}
                                 dateFormatSetting={dateFormatSetting}
                                 nativeDateInputLocale={nativeDateInputLocale}
-                                dateInputClassName="rounded border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                dateInputClassName="rounded border border-border bg-muted/50 px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 timeInput={
                                     <input
                                         type="time"
@@ -763,7 +770,7 @@ export function TaskQuickActionMenu({
                                         value={startTimeDraft}
                                         disabled={!startDateDraft}
                                         onChange={(event) => setStartTimeDraft(event.target.value)}
-                                        className="w-24 shrink-0 rounded border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="w-24 shrink-0 rounded border border-border bg-muted/50 px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                 }
                                 onDateChange={(value) => {
@@ -777,12 +784,12 @@ export function TaskQuickActionMenu({
                                 hasValue={Boolean(startDateDraft || startTimeDraft)}
                             />
                             <div
-                                className="flex items-center justify-end gap-2"
+                                className="flex items-center justify-end gap-3"
                                 onMouseDown={preserveFocusedDatePanelLayout}
                             >
                                 <Button
                                     variant="secondary"
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => {
                                         setStartDateDraft(initialStartDraft.date);
                                         setStartTimeDraft(initialStartDraft.time);
@@ -792,7 +799,7 @@ export function TaskQuickActionMenu({
                                     {cancelLabel}
                                 </Button>
                                 <Button
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => void handleStartDateSave()}
                                     loading={savingPanel === 'startTime'}
                                     disabled={!startDraftChanged}
@@ -802,7 +809,7 @@ export function TaskQuickActionMenu({
                             </div>
                         </div>
                     ) : activePanel === 'dueDate' ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <DateField
                                 t={t}
                                 label={dueLabel}
@@ -811,7 +818,7 @@ export function TaskQuickActionMenu({
                                 selectedDate={safeParseDate(dueDateDraft)}
                                 dateFormatSetting={dateFormatSetting}
                                 nativeDateInputLocale={nativeDateInputLocale}
-                                dateInputClassName="rounded border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                dateInputClassName="rounded border border-border bg-muted/50 px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 timeInput={
                                     <input
                                         type="time"
@@ -820,7 +827,7 @@ export function TaskQuickActionMenu({
                                         value={dueTimeDraft}
                                         disabled={!dueDateDraft}
                                         onChange={(event) => setDueTimeDraft(event.target.value)}
-                                        className="w-24 shrink-0 rounded border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="w-24 shrink-0 rounded border border-border bg-muted/50 px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                 }
                                 onDateChange={(value) => {
@@ -834,12 +841,12 @@ export function TaskQuickActionMenu({
                                 hasValue={Boolean(dueDateDraft || dueTimeDraft)}
                             />
                             <div
-                                className="flex items-center justify-end gap-2"
+                                className="flex items-center justify-end gap-3"
                                 onMouseDown={preserveFocusedDatePanelLayout}
                             >
                                 <Button
                                     variant="secondary"
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => {
                                         setDueDateDraft(initialDueDraft.date);
                                         setDueTimeDraft(initialDueDraft.time);
@@ -849,7 +856,7 @@ export function TaskQuickActionMenu({
                                     {cancelLabel}
                                 </Button>
                                 <Button
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => void handleDueDateSave()}
                                     loading={savingPanel === 'dueDate'}
                                     disabled={!dueDraftChanged}
@@ -859,7 +866,7 @@ export function TaskQuickActionMenu({
                             </div>
                         </div>
                     ) : activePanel === 'reviewAt' ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <DateField
                                 t={t}
                                 label={reviewLabel}
@@ -868,7 +875,7 @@ export function TaskQuickActionMenu({
                                 selectedDate={safeParseDate(reviewDateDraft)}
                                 dateFormatSetting={dateFormatSetting}
                                 nativeDateInputLocale={nativeDateInputLocale}
-                                dateInputClassName="rounded border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                dateInputClassName="rounded border border-border bg-muted/50 px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                                 timeInput={
                                     <input
                                         type="time"
@@ -877,7 +884,7 @@ export function TaskQuickActionMenu({
                                         value={reviewTimeDraft}
                                         disabled={!reviewDateDraft}
                                         onChange={(event) => setReviewTimeDraft(event.target.value)}
-                                        className="w-24 shrink-0 rounded border border-border bg-muted/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="w-24 shrink-0 rounded border border-border bg-muted/50 px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
                                     />
                                 }
                                 onDateChange={(value) => {
@@ -891,12 +898,12 @@ export function TaskQuickActionMenu({
                                 hasValue={Boolean(reviewDateDraft || reviewTimeDraft)}
                             />
                             <div
-                                className="flex items-center justify-end gap-2"
+                                className="flex items-center justify-end gap-3"
                                 onMouseDown={preserveFocusedDatePanelLayout}
                             >
                                 <Button
                                     variant="secondary"
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => {
                                         setReviewDateDraft(initialReviewDraft.date);
                                         setReviewTimeDraft(initialReviewDraft.time);
@@ -906,7 +913,7 @@ export function TaskQuickActionMenu({
                                     {cancelLabel}
                                 </Button>
                                 <Button
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => void handleReviewDateSave()}
                                     loading={savingPanel === 'reviewAt'}
                                     disabled={!reviewDraftChanged}
@@ -916,9 +923,9 @@ export function TaskQuickActionMenu({
                             </div>
                         </div>
                     ) : activePanel === 'area' ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div className="space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground">{areaLabel}</label>
+                                <label className="text-sm font-medium text-muted-foreground">{areaLabel}</label>
                                 <AreaSelector
                                     areas={areas}
                                     value={areaDraft}
@@ -932,10 +939,10 @@ export function TaskQuickActionMenu({
                                     className="w-full"
                                 />
                             </div>
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-3">
                                 <Button
                                     variant="secondary"
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => {
                                         setAreaDraft(initialAreaDraft);
                                         setActivePanel(null);
@@ -944,7 +951,7 @@ export function TaskQuickActionMenu({
                                     {cancelLabel}
                                 </Button>
                                 <Button
-                                    size="sm"
+                                    size="lg"
                                     onClick={handleAreaSave}
                                     loading={savingPanel === 'area'}
                                     disabled={!areaDraftChanged}
@@ -954,7 +961,7 @@ export function TaskQuickActionMenu({
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <ContextsField
                                 t={t}
                                 value={contextsDraft}
@@ -962,10 +969,10 @@ export function TaskQuickActionMenu({
                                 suggestions={contextSuggestions}
                                 onChange={setContextsDraft}
                             />
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex items-center justify-end gap-3">
                                 <Button
                                     variant="secondary"
-                                    size="sm"
+                                    size="lg"
                                     onClick={() => {
                                         setContextsDraft(initialContextsDraft);
                                         setActivePanel(null);
@@ -974,7 +981,7 @@ export function TaskQuickActionMenu({
                                     {cancelLabel}
                                 </Button>
                                 <Button
-                                    size="sm"
+                                    size="lg"
                                     onClick={handleContextsSave}
                                     loading={savingPanel === 'contexts'}
                                     disabled={!contextsDraftChanged}
