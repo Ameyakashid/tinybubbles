@@ -14,24 +14,24 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { shallow, useTaskStore, TaskPriority, TimeEstimate, applyFilter, buildAdvancedFilterCriteriaChips, compareProjectsByOrder, removeAdvancedFilterCriteriaChip, formatFocusTaskLimitText,
-    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, isDueForReview, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@tinybubbles/core';
+    getFocusStarBlockedText, formatTimeEstimateLabel, generateUUID, getUsedTaskTokens, getFocusSequentialFirstTaskIds, getProjectDeadlineBoosts, getProjectDeadlineBoostLabel, getTaskMetadataFilterVisibility, markSavedFilterDeleted, normalizeFocusTaskLimit, safeParseDate, safeParseDueDate, SAVED_FILTER_NO_PROJECT_ID, shouldShowTaskForStart, sortFocusNextActions, sortTasksByFocusOrder, sortTasksBySavedPreference, translateWithFallback, tFallback } from '@tinybubbles/core';
 import type { MultiValueFilterMatchMode, ProjectDeadlineBoost, SavedFilter, SortField, Task, TaskEnergyLevel } from '@tinybubbles/core';
 import { useTaskFilterSelections } from '@tinybubbles/core/task-filter-selections';
 import { useLanguage } from '../../contexts/language-context';
 import { displayLabel } from '../../lib/display-labels';
 import { cn } from '../../lib/utils';
 import { useUiStore } from '../../store/ui-store';
-import { AlertCircle, Clock, ArrowRight, Folder, CheckCircle2, X } from 'lucide-react';
+import { AlertCircle, Clock, ArrowRight, CheckCircle2, X } from 'lucide-react';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePerformanceMonitor } from '../../hooks/usePerformanceMonitor';
 import { checkBudget } from '../../config/performanceBudgets';
-import { isTaskVisibleInArea, projectMatchesAreaFilterSelection } from '@tinybubbles/core';
+import { isTaskVisibleInArea } from '@tinybubbles/core';
 import { useAreaVisibility } from '../../hooks/useVisibleTaskContext';
 import { usePersistedViewState } from '../../hooks/usePersistedViewState';
 import { PomodoroPanel } from './PomodoroPanel';
 import { AgendaFiltersPanel, type AgendaActiveFilterChip, type AgendaProjectFilterOption } from './agenda/AgendaFiltersPanel';
 import { AgendaHeader } from './agenda/AgendaHeader';
-import { AgendaCollapsibleSection, AgendaProjectSection } from './agenda/AgendaSections';
+import { AgendaCollapsibleSection } from './agenda/AgendaSections';
 import { SortableFocusRow } from './agenda/SortableFocusRow';
 import { StoreTaskItem } from './list/StoreTaskItem';
 import { GroupedTaskSectionHeader } from './list/GroupedTaskSections';
@@ -48,7 +48,6 @@ import {
     type NextGroupBy,
 } from './list/next-grouping';
 import { PromptModal } from '../PromptModal';
-import { dispatchNavigateEvent } from '../../lib/navigation-events';
 import { FocusStarIcon } from '../FocusStarIcon';
 import { useFutureStartRevealTick, useLocalDayKey } from '../../hooks/useLocalDayKey';
 
@@ -264,10 +263,9 @@ export function AgendaView() {
     const { t, language } = useLanguage();
     const { requestConfirmation, confirmModal } = useConfirmDialog();
     const localDayKey = useLocalDayKey();
-    const { showListDetails, nextGroupBy, setProjectView, showToast } = useUiStore((state) => ({
+    const { showListDetails, nextGroupBy, showToast } = useUiStore((state) => ({
         showListDetails: state.listOptions.showDetails,
         nextGroupBy: state.listOptions.nextGroupBy,
-        setProjectView: state.setProjectView,
         showToast: state.showToast,
     }));
     const [saveFilterPromptOpen, setSaveFilterPromptOpen] = useState(false);
@@ -521,44 +519,16 @@ export function AgendaView() {
         + (activeSavedFilterId && filterSelections.activeCount === 0 && effectiveFocusSortBy === DEFAULT_FOCUS_SORT_BY ? 1 : 0);
     const saveFilterDefaultName = getSavedFilterDefaultName(activeFilterChips, resolveText('savedFilters.defaultName', 'Focus filter'));
 
-    const { filteredActiveTasks, reviewDueCandidates } = useMemo(() => {
+    // The review-due task and project pipelines that fed the hidden "Review
+    // Due" / "Projects to review" sections are gone with them — presentation
+    // only; core still tracks reviewAt and the (hidden but routable) Review
+    // view still surfaces it.
+    const filteredActiveTasks = useMemo(() => {
         void localDayKey;
         const now = new Date();
-        const filtered = applyFilter(activeTasks, effectiveFilterCriteria, { projects, now, tokenMatchMode: 'all' })
+        return applyFilter(activeTasks, effectiveFilterCriteria, { projects, now, tokenMatchMode: 'all' })
             .filter((task) => matchesSearchQuery(task.title));
-        const reviewDueBase = baseActiveTasks
-            .filter((task) => {
-                if (!shouldShowTaskForStart(task, { now, granularity: 'time' })) return false;
-                if (!isDueForReview(task.reviewAt, now)) return false;
-                if (!matchesSearchQuery(task.title)) return false;
-                return true;
-            });
-        const reviewDue = applyFilter(reviewDueBase, effectiveFilterCriteria, { projects, now, tokenMatchMode: 'all' });
-        return { filteredActiveTasks: filtered, reviewDueCandidates: reviewDue };
-    }, [activeTasks, baseActiveTasks, effectiveFilterCriteria, localDayKey, matchesSearchQuery, projects]);
-
-    const reviewDueProjects = useMemo(() => {
-        void localDayKey;
-        const now = new Date();
-        return projects
-            .filter((project) => {
-                if (project.deletedAt) return false;
-                if (project.status === 'archived') return false;
-                if (!projectMatchesAreaFilterSelection(project, resolvedAreaFilter, areaById)) return false;
-                if (!matchesSearchQuery(project.title)) return false;
-                return isDueForReview(project.reviewAt, now);
-            })
-            .sort((a, b) => {
-                const aReview = safeParseDate(a.reviewAt)?.getTime() ?? Number.POSITIVE_INFINITY;
-                const bReview = safeParseDate(b.reviewAt)?.getTime() ?? Number.POSITIVE_INFINITY;
-                if (aReview !== bReview) return aReview - bReview;
-                return a.title.localeCompare(b.title);
-            });
-    }, [projects, localDayKey, matchesSearchQuery, resolvedAreaFilter, areaById]);
-    const handleOpenReviewProject = useCallback((projectId: string) => {
-        setProjectView({ selectedProjectId: projectId });
-        dispatchNavigateEvent('projects');
-    }, [setProjectView]);
+    }, [activeTasks, effectiveFilterCriteria, localDayKey, matchesSearchQuery, projects]);
     const showFiltersPanel = filtersOpen;
     const shouldRenderFiltersPanel = filtersOpen
         || hasTaskFilters
@@ -710,7 +680,6 @@ export function AgendaView() {
         const projectDeadlineBoosts = effectiveFocusSortBy === DEFAULT_FOCUS_SORT_BY
             ? getProjectDeadlineBoosts(nextActions, projects, { now })
             : new Map<string, ProjectDeadlineBoost>();
-        const reviewDue = reviewDueCandidates.filter(t => !t.isFocusedToday);
         const scheduleSortTime = (task: Task) => {
             const due = safeParseDueDate(task.dueDate)?.getTime();
             const start = safeParseDate(task.startTime)?.getTime();
@@ -734,16 +703,9 @@ export function AgendaView() {
                 })
                 : sortBySavedPerspective(items)
         );
-        const sortReviewDue = (items: Task[]) => (
-            effectiveFocusSortBy === DEFAULT_FOCUS_SORT_BY
-                ? sortWith(items, (task) => safeParseDate(task.reviewAt)?.getTime() ?? Number.POSITIVE_INFINITY)
-                : sortBySavedPerspective(items)
-        );
-
         return {
             schedule: sortSchedule(schedule),
             nextActions: sortNextActions(nextActions),
-            reviewDue: sortReviewDue(reviewDue),
             projectDeadlineBoosts,
         };
     }, [
@@ -753,7 +715,6 @@ export function AgendaView() {
         localDayKey,
         prioritiesEnabled,
         projects,
-        reviewDueCandidates,
         sequentialProjectIds,
         sequentialWithinSectionProjectIds,
         sortBySavedPerspective,
@@ -790,7 +751,8 @@ export function AgendaView() {
         const visible = [...focusedTasks];
         if (expandedSections.schedule) visible.push(...sections.schedule);
         if (expandedSections.nextActions) visible.push(...visibleNextActions);
-        if (expandedSections.reviewDue) visible.push(...sections.reviewDue);
+        // reviewDue is not rendered in the simplified shell, so it contributes
+        // no keyboard rows either.
         return visible;
     }, [
         expandedSections,
@@ -851,17 +813,16 @@ export function AgendaView() {
         }));
     }, [setPersistedViewState]);
     const nextActionsCount = sections.nextActions.length;
+    // Review sections are hidden in the simplified shell, so they neither keep
+    // the empty state away nor feed the pomodoro candidate list.
     const hasAgendaContent = focusedTasks.length > 0
         || sections.schedule.length > 0
-        || sections.nextActions.length > 0
-        || sections.reviewDue.length > 0
-        || reviewDueProjects.length > 0;
+        || sections.nextActions.length > 0;
     const pomodoroTasks = (() => {
         const ordered = [
             ...focusedTasks,
             ...sections.schedule,
             ...sections.nextActions,
-            ...sections.reviewDue,
         ];
         const byId = new Map<string, Task>();
         ordered.forEach((task) => {
@@ -1177,33 +1138,11 @@ export function AgendaView() {
                             )
                         )}
 
-                        {sections.reviewDue.length > 0 && (
-                            <AgendaCollapsibleSection
-                                title={tFallback(t, 'agenda.reviewDue', 'Review Due')}
-                                icon={Clock}
-                                color="text-status-someday"
-                                count={sections.reviewDue.length}
-                                expanded={expandedSections.reviewDue}
-                                onToggle={() => toggleSection('reviewDue')}
-                                controlsId="agenda-section-reviewDue"
-                            >
-                                <AgendaTaskList
-                                    tasks={sections.reviewDue}
-                                    buildFocusToggle={buildFocusToggle}
-                                    showListDetails={showListDetails}
-                                    highlightTaskId={highlightTaskId}
-                                />
-                            </AgendaCollapsibleSection>
-                        )}
-
-                        <AgendaProjectSection
-                            title={tFallback(t, 'agenda.reviewDueProjects', 'Projects to review')}
-                            icon={Folder}
-                            onProjectPress={handleOpenReviewProject}
-                            projects={reviewDueProjects}
-                            color="text-status-reference"
-                            t={t}
-                        />
+                        {/* The "Review Due" and "Projects to review" sections are
+                            hidden in the simplified shell — the weekly-review ritual
+                            is an adult surface, and the Review view itself is already
+                            hidden-but-routable. Presentation only: core still tracks
+                            reviewAt and ReviewView still renders it. See DESIGN.md. */}
                     </div>
             </>
 

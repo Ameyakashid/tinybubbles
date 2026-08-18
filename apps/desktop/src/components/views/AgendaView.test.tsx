@@ -767,7 +767,7 @@ describe('AgendaView', () => {
         expect(projectFirst.dueDate).toBeUndefined();
     });
 
-    it('keeps waiting tasks with review dates out of Today', () => {
+    it('shows no review sections on Focus in the simplified shell', () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date(2026, 1, 28, 12, 0, 0, 0));
         const now = new Date();
@@ -796,14 +796,17 @@ describe('AgendaView', () => {
             highlightTaskId: null,
         });
 
-        const { getAllByText, getByRole, queryByRole } = renderAgenda();
+        const { queryByRole, queryByText } = renderAgenda();
 
+        // The simplified shell renders no review sections at all, so the
+        // waiting task appears nowhere on Focus — and in particular it must
+        // still not leak into Today.
         expect(queryByRole('heading', { name: /today/i })).not.toBeInTheDocument();
-        expect(getByRole('heading', { name: /review due/i })).toBeInTheDocument();
-        expect(getAllByText('Waiting review task')).toHaveLength(1);
+        expect(queryByRole('heading', { name: /review due/i })).not.toBeInTheDocument();
+        expect(queryByText('Waiting review task')).not.toBeInTheDocument();
     });
 
-    it('opens a project due for review from Focus', () => {
+    it('does not surface review-due projects on Focus in the simplified shell', () => {
         const now = new Date();
         const reviewProject: Project = {
             id: 'review-project',
@@ -831,12 +834,13 @@ describe('AgendaView', () => {
         });
 
         try {
-            const { getByRole } = renderAgenda();
+            const { queryByRole, queryByText } = renderAgenda();
 
-            fireEvent.click(getByRole('button', { name: /open project to revisit/i }));
-
-            expect(useUiStore.getState().projectView.selectedProjectId).toBe('review-project');
-            expect(onNavigate).toHaveReturnedWith({ view: 'projects' });
+            // "Projects to review" is hidden in the simplified shell; the
+            // review-due project neither renders nor navigates from Focus.
+            expect(queryByRole('button', { name: /open project to revisit/i })).not.toBeInTheDocument();
+            expect(queryByText(/projects to review/i)).not.toBeInTheDocument();
+            expect(onNavigate).not.toHaveBeenCalled();
         } finally {
             window.removeEventListener(TINYBUBBLES_NAVIGATE_EVENT, onNavigate as EventListener);
         }
@@ -1794,13 +1798,15 @@ describe('AgendaView', () => {
 
         expect(nextSectionButton).toHaveAttribute('aria-expanded', 'true');
         expect(container.querySelector('[data-task-id="next-action-task"]')).toBeTruthy();
-        expect(container.querySelector('[data-task-id="waiting-review-task"]')).toBeTruthy();
+        // Review sections are hidden in the simplified shell, so the
+        // review-due waiting task renders nowhere on Focus.
+        expect(container.querySelector('[data-task-id="waiting-review-task"]')).toBeNull();
 
         fireEvent.click(nextSectionButton);
 
         expect(getByRole('button', { name: /^to do\s*\(/i })).toHaveAttribute('aria-expanded', 'false');
         expect(container.querySelector('[data-task-id="next-action-task"]')).toBeNull();
-        expect(container.querySelector('[data-task-id="waiting-review-task"]')).toBeTruthy();
+        expect(container.querySelector('[data-task-id="waiting-review-task"]')).toBeNull();
     });
 
     it('persists collapsed Focus sections after leaving and returning to the view', () => {

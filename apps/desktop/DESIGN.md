@@ -90,14 +90,24 @@ token/AI chrome hidden (the autocomplete popup kept — it is the only path to i
 Create Project). Projects: tag filter hidden; search/sort/layout/select/show-completed/
 add-section hidden from the workspace toolbar; big tappable list rows.
 
+Focus (decomposition pass 2): the "Review Due" and "Projects to review" sections are
+gone from the Focus screen — the weekly-review ritual is an adult surface and the
+Review view is already hidden-but-routable, so review-due items surface there, not on
+the child's first screen. Presentation only: `reviewAt` is untouched in core and the
+view-local review pipelines were removed from `AgendaView.tsx` alone.
+
 ## Known state
 
-- Red tests are deliberate surface fallout, inventoried per pass in the session
-  reports; a separate test-update pass owns them. Current count was 27 failed /
-  1968 passed before this identity pass; this pass's label/wording additions may add a
-  few more (AgendaView section-title assertions are the likely candidates).
+- The desktop suite is green (1995/1995 as of the review-hide pass). The former
+  policy of leaving simplification fallout red is over: per the owner's recorded
+  decision, tests are updated to assert the simplified shell in the same pass that
+  changes the surface.
+- Two of the three "pre-existing baseline reds" (tauri-invoke ratchet) were
+  Windows-host portability bugs in the tests themselves (backslash vs forward-slash
+  paths), and the third (Ctrl+Alt+M) asserted the platform-default shortcut, which is
+  'disabled' on Windows. All three are fixed, not suppressed.
 - Dev-only, pre-existing: three console exceptions on dev-server load (idle prefetch
   of BoardView/ObsidianView/ReviewView). Production clean.
-- Pre-existing baseline reds: 2 tauri-invoke ratchet + 1 keybinding (Ctrl+Alt+M).
 - Follow-ups: bundled Nunito; per-locale display overrides; an owner decision on the
-  sidebar footer (area filter, sync status) and Settings trimming.
+  sidebar footer (area filter, sync status) and on demoting Settings to
+  footer-icon-only (8a).
