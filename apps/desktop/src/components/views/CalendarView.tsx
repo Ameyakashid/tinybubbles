@@ -282,7 +282,7 @@ export function CalendarView() {
             <div className={cn("space-y-6", LIST_END_GAP)} data-list-end>
             <header className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
-                    <h2 className="text-3xl font-bold tracking-tight">{t('nav.calendar')}</h2>
+                    <h2 className="text-3xl font-bold tracking-tight text-foreground">{t('nav.calendar')}</h2>
                     <p className="text-sm text-muted-foreground">
                         {displayLabel(t, language, 'calendar.tasksAndEvents', 'Tasks and external events by date')}
                     </p>
@@ -291,20 +291,20 @@ export function CalendarView() {
                     <button
                         type="button"
                         onClick={handleToday}
-                        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-base font-medium text-foreground hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="inline-flex h-12 items-center gap-2 rounded-full bg-primary px-5 text-base font-semibold text-primary-foreground shadow-sm transition-transform hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40 active:scale-95"
                     >
-                        <CalendarDays className="h-5 w-5 text-primary" aria-hidden="true" />
+                        <CalendarDays className="h-5 w-5" aria-hidden="true" />
                         {resolveText('calendar.today', 'Today')}
                     </button>
                     {/* Simplified shell (see DESIGN.md): the Day/Week/Month/Schedule
                         mode toggles and the week day-count control are hidden — the
                         calendar is a month grid. The modes still work via URL and
                         the controller; this is presentation only. */}
-                    <div className="flex w-full items-center gap-1 rounded-md border border-border bg-card p-1 sm:w-auto">
+                    <div className="flex w-full items-center gap-1 rounded-full border border-border bg-card p-1 shadow-sm sm:w-auto">
                         <button
                             type="button"
                             onClick={handlePrevMonth}
-                            className="inline-flex h-11 w-11 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                             aria-label={resolveText('calendar.prevMonth', 'Previous month')}
                             title={resolveText('calendar.prevMonth', 'Previous month')}
                         >
@@ -314,19 +314,19 @@ export function CalendarView() {
                             <button
                                 type="button"
                                 onClick={toggleMonthPicker}
-                                className="h-11 w-full min-w-0 rounded px-3 text-base font-semibold hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 sm:min-w-[11rem]"
+                                className="h-11 w-full min-w-0 rounded-full px-4 text-base font-semibold hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary/40 sm:min-w-[12rem]"
                                 aria-haspopup="dialog"
                                 aria-expanded={isMonthPickerOpen}
                             >
                                 {currentMonthLabel}
                             </button>
                             {isMonthPickerOpen && (
-                                <div className="absolute right-0 top-10 z-20 w-64 rounded-lg border border-border bg-popover p-3 shadow-lg">
+                                <div className="absolute right-0 top-12 z-20 w-64 rounded-xl border border-border bg-popover p-3 shadow-lg">
                                     <div className="grid grid-cols-2 gap-2">
                                         <label className="space-y-1 text-xs font-medium text-muted-foreground">
                                             {resolveText('calendar.month', 'Month')}
                                             <select
-                                                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                                                 value={getCalendarMonthIndex(currentMonth, calendarSystem)}
                                                 onChange={(event) => handleMonthChange(Number(event.target.value))}
                                                 aria-label={resolveText('calendar.month', 'Month')}
@@ -339,7 +339,7 @@ export function CalendarView() {
                                         <label className="space-y-1 text-xs font-medium text-muted-foreground">
                                             {resolveText('calendar.year', 'Year')}
                                             <select
-                                                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                                                 value={currentYear}
                                                 onChange={(event) => handleYearChange(Number(event.target.value))}
                                                 aria-label={resolveText('calendar.year', 'Year')}
@@ -356,7 +356,7 @@ export function CalendarView() {
                         <button
                             type="button"
                             onClick={handleNextMonth}
-                            className="inline-flex h-11 w-11 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                             aria-label={resolveText('calendar.nextMonth', 'Next month')}
                             title={resolveText('calendar.nextMonth', 'Next month')}
                         >
@@ -412,17 +412,20 @@ export function CalendarView() {
             >
                 <div className="min-w-0 space-y-6">
                 {viewMode === 'month' && (
-                <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden shadow-sm">
-                    {weekdayHeaders.map((day) => (
-                        <div key={day} className="bg-card p-1 text-center text-sm font-medium text-muted-foreground sm:p-2 sm:text-base">
-                            {day}
-                        </div>
-                    ))}
+                <div className="rounded-2xl border border-border/60 bg-secondary/30 p-3 shadow-sm">
+                    <div className="mb-2 grid grid-cols-7 gap-2">
+                        {weekdayHeaders.map((day) => (
+                            <div key={day} className="rounded-xl bg-card py-2 text-center text-sm font-semibold text-muted-foreground shadow-sm">
+                                {day}
+                            </div>
+                        ))}
+                    </div>
 
+                    <div className="grid grid-cols-7 gap-2">
                     {days.map((day, _dayIdx) => {
                         const cellItems = getCalendarItemsForDate(day);
                         // Kid-sized cells: two big chips a child can see and hit,
-                        // then a "+N more" line — the rest live in the day panel.
+                        // then a "+N more" bubble — the rest live in the day panel.
                         const visibleItems = cellItems.slice(0, 2);
                         const overflowCount = Math.max(0, cellItems.length - visibleItems.length);
                         const isSelected = selectedDate && isSameDay(day, selectedDate);
@@ -437,9 +440,9 @@ export function CalendarView() {
                             <div
                                 key={day.toString()}
                                 className={cn(
-                                    "group relative min-h-32 cursor-pointer bg-card p-1 transition-colors hover:bg-accent/50 sm:min-h-[176px] sm:p-2",
-                                    !isSameCalendarMonth(day, currentMonth, calendarSystem) && "bg-muted/50 text-muted-foreground",
-                                    isSelected && "ring-2 ring-primary"
+                                    "group relative flex min-h-[120px] cursor-pointer flex-col rounded-xl bg-card p-2 shadow-sm transition-all hover:bg-accent/60 hover:shadow-md sm:min-h-[180px] sm:p-3",
+                                    !isSameCalendarMonth(day, currentMonth, calendarSystem) && "bg-muted/40 text-muted-foreground",
+                                    isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                                 )}
                                 data-calendar-drop-date={dayKey(day)}
                                 role="button"
@@ -453,21 +456,21 @@ export function CalendarView() {
                             >
                                 <div className="mb-2 flex items-center justify-between gap-2">
                                     <div className="flex min-w-0 items-center gap-1.5">
-                                        <div className="flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium sm:h-8 sm:w-8 sm:text-base" style={todayMarkerStyle}>
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold sm:h-10 sm:w-10 sm:text-base" style={todayMarkerStyle}>
                                             <span className="tabular-nums leading-none">
                                                 {getCalendarDayOfMonth(day, calendarSystem)}
                                             </span>
                                         </div>
                                         {isToday(day) && (
-                                            <span className="hidden rounded-full bg-primary/10 px-1.5 py-0.5 text-xs font-bold uppercase tracking-normal text-primary sm:inline">
+                                            <span className="hidden rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold uppercase tracking-normal text-primary sm:inline">
                                                 {resolveText('calendar.today', 'Today')}
                                             </span>
                                         )}
                                     </div>
-                                    {isSelected && <div className="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />}
+                                    {isSelected && <div className="h-2.5 w-2.5 rounded-full bg-primary" aria-hidden="true" />}
                                 </div>
 
-                                <div className="space-y-1.5">
+                                <div className="flex flex-1 flex-col gap-1.5">
                                     {visibleItems.map((item) => {
                                         const isAllDayScheduled = item.kind === 'scheduled' && !hasTimeComponent(item.task.startTime);
                                         const timeLabel = isAllDayScheduled
@@ -488,7 +491,7 @@ export function CalendarView() {
                                             return (
                                                 <div
                                                     key={item.id}
-                                                    className="flex min-h-11 items-center truncate rounded border-l-[3px] bg-muted/70 px-2.5 text-sm text-muted-foreground"
+                                                    className="flex min-h-10 items-center gap-1.5 truncate rounded-xl border-l-[3px] bg-muted/60 px-2.5 text-sm text-muted-foreground shadow-sm"
                                                     style={{ borderLeftColor: getExternalCalendarColor(item.event.sourceId) }}
                                                     title={item.title}
                                                 >
@@ -505,9 +508,9 @@ export function CalendarView() {
                                             : '';
                                         const content = (
                                             <>
-                                                {timeLabel && <span className="mr-1 shrink-0 text-xs opacity-75">{timeLabel}</span>}
+                                                {timeLabel && <span className="mr-1 shrink-0 rounded-full bg-background/60 px-1.5 py-0.5 text-[11px] font-semibold opacity-90">{timeLabel}</span>}
                                                 <span className={cn('min-w-0 truncate', completed && 'line-through')}>{item.title}</span>
-                                                {projected && <span className="ml-1 shrink-0 text-xs opacity-75">{projectedLabel}</span>}
+                                                {projected && <span className="ml-auto shrink-0 text-xs opacity-75">{projectedLabel}</span>}
                                             </>
                                         );
                                         return (
@@ -519,14 +522,14 @@ export function CalendarView() {
                                                 draggable={!projected && !completed}
                                                 disabled={projected}
                                                 className={cn(
-                                                    "flex min-h-11 w-full items-center rounded px-2.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-primary/40",
+                                                    "flex min-h-10 w-full items-center gap-1.5 rounded-full px-3 text-left text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40",
                                                     projected
                                                         ? "border border-dashed border-primary/50 bg-primary/5 text-primary/80"
                                                         : completed
-                                                        ? "bg-muted/60 text-muted-foreground"
+                                                        ? "bg-muted/70 text-muted-foreground"
                                                         : item.kind === 'scheduled'
-                                                        ? "bg-primary/10 text-primary"
-                                                        : "border-l-[3px] border-destructive/70 bg-background/60 text-foreground",
+                                                        ? "bg-primary/15 text-primary"
+                                                        : "bg-background/80 text-foreground shadow-sm ring-1 ring-border",
                                                     taskMenuRingClass(task.id)
                                                 )}
                                                 title={projected ? `${task.title} (${projectedLabel})` : task.title}
@@ -548,20 +551,24 @@ export function CalendarView() {
                                     {overflowCount > 0 && (
                                         <button
                                             type="button"
-                                            className="flex min-h-11 w-full items-center rounded px-2.5 text-left text-sm font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                            className="mt-auto flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-muted/60 px-3 text-left text-sm font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
                                             onClick={(event) => {
                                                 event.stopPropagation();
                                                 selectCalendarDate(day);
                                             }}
                                             aria-label={`${displayLabel(t, language, 'calendar.openDayView', 'Open day view')}: ${day.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`}
                                         >
-                                            +{overflowCount} {resolveText('calendar.more', 'more')}
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+                                                +{overflowCount}
+                                            </span>
+                                            {resolveText('calendar.more', 'more')}
                                         </button>
                                     )}
                                 </div>
                             </div>
                         );
                     })}
+                    </div>
                 </div>
                 )}
 

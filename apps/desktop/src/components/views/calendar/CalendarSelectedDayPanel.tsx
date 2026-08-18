@@ -91,8 +91,8 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
     if (!selectedDate) return null;
 
     return (
-        <div className="rounded-lg border border-border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-secondary/20 px-4 py-3">
                 <div>
                     <div className="text-lg font-bold">{format(selectedDate, 'PPPP')}</div>
                     <div className="text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                 <div className="flex items-center gap-2">
                     <button
                         type="button"
-                        className="inline-flex h-11 items-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="inline-flex h-11 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/40 active:scale-95"
                         onClick={() => openQuickAddForDate(selectedDate)}
                     >
                         <Plus className="h-4 w-4" aria-hidden="true" />
@@ -110,7 +110,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                     </button>
                     <button
                         type="button"
-                        className="inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
                         onClick={closeSelectedDay}
                         aria-label={t('common.close')}
                         title={t('common.close')}
@@ -131,14 +131,14 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                     return (
                                         <div
                                             key={event.id}
-                                            className="flex min-h-11 items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-base"
+                                            className="flex min-h-11 items-center gap-3 rounded-xl border-l-[3px] bg-muted/50 px-3 py-2 text-base shadow-sm"
                                             style={{ borderLeftColor: getExternalCalendarColor(event.sourceId) }}
                                         >
                                             <span className="min-w-0 flex-1 truncate">{event.title}</span>
                                             {sourceLabel && <span className="truncate text-sm text-muted-foreground">{sourceLabel}</span>}
                                             <button
                                                 type="button"
-                                                className="inline-flex h-11 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                                className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
                                                 onClick={() => void createTaskFromExternalEvent(event)}
                                                 aria-label={`${resolveText('calendar.createTaskFromEvent', 'Create task')}: ${event.title}`}
                                                 title={resolveText('calendar.createTaskFromEvent', 'Create task')}
@@ -158,7 +158,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                         <h3 className="text-sm font-semibold uppercase tracking-normal text-muted-foreground">{t('calendar.events')}</h3>
                         <div className="space-y-1.5">
                             {isExternalLoading && (
-                                <div className="rounded-md bg-muted/40 px-3 py-2 text-base text-muted-foreground">
+                                <div className="rounded-xl bg-muted/40 px-3 py-2 text-base text-muted-foreground">
                                     {resolveText('common.loading', 'Loading...')}
                                 </div>
                             )}
@@ -172,7 +172,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                 return (
                                     <div
                                         key={event.id}
-                                        className="flex min-h-11 items-center gap-3 rounded-md border-l-[3px] bg-muted/50 px-3 py-2 text-base"
+                                        className="flex min-h-11 items-center gap-3 rounded-xl border-l-[3px] bg-muted/50 px-3 py-2 text-base shadow-sm"
                                         style={{ borderLeftColor: getExternalCalendarColor(event.sourceId) }}
                                     >
                                         <span className="w-28 shrink-0 text-sm font-medium text-muted-foreground">{timeLabel}</span>
@@ -180,7 +180,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                         {sourceLabel && <span className="truncate text-sm text-muted-foreground">{sourceLabel}</span>}
                                         <button
                                             type="button"
-                                            className="inline-flex h-11 shrink-0 items-center gap-1 rounded-md bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                            className="inline-flex h-11 shrink-0 items-center gap-1 rounded-full bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 focus:outline-none focus:ring-2 focus:ring-primary/40"
                                             onClick={() => void createTaskFromExternalEvent(event)}
                                             aria-label={`${resolveText('calendar.createTaskFromEvent', 'Create task')}: ${event.title}`}
                                             title={resolveText('calendar.createTaskFromEvent', 'Create task')}
@@ -226,10 +226,10 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                             if (!projected) handleTaskDragStart(event, task.id, kind);
                                         }}
                                         className={cn(
-                                            "group flex items-center gap-3 rounded-md px-4 py-2 text-base transition-colors hover:bg-muted/50",
+                                            "group flex items-center gap-3 rounded-xl px-4 py-2 text-base shadow-sm transition-colors hover:bg-muted/50",
                                             projected
                                                 ? "border border-dashed border-primary/50 bg-primary/5"
-                                                : kind === 'scheduled' ? "bg-primary/5" : "border-l-[3px] border-destructive/70 bg-background/60"
+                                                : kind === 'scheduled' ? "bg-primary/5" : "bg-background/60 ring-1 ring-border"
                                         )}
                                     >
                                         <button
@@ -281,7 +281,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                             <div className="flex shrink-0 items-center gap-1.5">
                                                 <button
                                                     type="button"
-                                                    className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-success/15 text-success hover:bg-success/25"
+                                                    className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-success/15 text-success hover:bg-success/25 active:scale-95"
                                                     onClick={() => markTaskDone(task.id)}
                                                     aria-label={displayLabel(t, language, 'status.done', 'Done')}
                                                     title={displayLabel(t, language, 'status.done', 'Done')}
@@ -291,7 +291,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                                 {kind === 'scheduled' && (
                                                     <button
                                                         type="button"
-                                                        className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-muted text-muted-foreground hover:text-foreground"
+                                                        className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground hover:text-foreground"
                                                         onClick={() => beginEditScheduledTime(task.id)}
                                                         aria-label={t('common.edit')}
                                                         title={t('common.edit')}
@@ -302,7 +302,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                                 {kind === 'scheduled' && (
                                                     <button
                                                         type="button"
-                                                        className="h-11 rounded-md bg-muted px-3 text-sm text-muted-foreground hover:text-foreground"
+                                                        className="h-11 rounded-full bg-muted px-3 text-sm text-muted-foreground hover:text-foreground"
                                                         onClick={() => updateTask(task.id, { startTime: undefined, relativeStartOffset: undefined })
                                                             .catch((error) => reportError('Failed to clear scheduled time', error))}
                                                         title={displayLabel(t, language, 'calendar.unschedule', 'Remove from calendar')}
@@ -316,7 +316,7 @@ export function CalendarSelectedDayPanel({ controller }: CalendarSelectedDayPane
                                 );
                             })}
                             {selectedTaskRows.length === 0 && (
-                                <div className="rounded-md bg-muted/30 px-3 py-3 text-base text-muted-foreground">
+                                <div className="rounded-xl bg-muted/30 px-3 py-3 text-base text-muted-foreground">
                                     {t('calendar.noTasks')}
                                 </div>
                             )}

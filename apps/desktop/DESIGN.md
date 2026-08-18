@@ -204,6 +204,41 @@ The theme engine is untouched. A device that already stores another preset still
 and the parent flavour keeps the full list.
 
 
+## Month calendar: Rockpool paint pass
+
+The month grid was functionally plain — a bordered table of day cells wearing
+default card surfaces. It is the surface a kid looks at most often after Focus,
+so it was restyled to read as part of the Rockpool.
+
+What changed in `CalendarView.tsx` (presentation only; the controller and
+month-only pin are untouched):
+
+- **The grid now floats as one rounded pool.** A `rounded-2xl` container with a
+  subtle `bg-secondary/30` wash holds the whole month; cells are separate
+  rounded cards with a soft shadow instead of 1px divider gutters.
+- **Weekday headers are friendly pills.** Each label sits in its own rounded
+  card with a shadow, so the week reads as a row of stones across the top.
+- **Today is impossible to miss.** The day number lives in a bold primary circle
+  with primary-foreground text, paired with a small "TODAY" badge. The test that
+  asserts the explicit primary tokens still passes.
+- **Days with tasks show bubble chips.** Task blocks are now rounded-full pills
+  with a slight shadow; scheduled tasks use a primary wash, other tasks use a
+  soft surfaced pill, completed tasks fade to muted, and projected recurrences
+  keep their dashed primary border. External events keep their calendar colour
+  as a left border on a rounded card.
+- **Overflow is a bubble too.** "+N more" is rendered as a count badge inside a
+  rounded pill, not a plain text row.
+- **Selected day pops.** A `ring-2 ring-primary ring-offset-2` outline gives the
+  active cell a clear bubble edge; the selected-day panel below was restyled to
+  match (`rounded-2xl`, rounded-full action buttons, rounded-xl rows).
+- **Header controls are rounder and tappier.** The Today button is a primary
+  rounded pill; the month/year picker is a rounded pill group; the add/close
+  buttons in the selected-day panel are rounded-full.
+
+The `CalendarSelectedDayPanel.tsx` companion file was restyled with the same
+rounded, bubbly language so the panel feels like the same system. No controller
+logic, data attributes, or test contracts were changed.
+
 ## Adding a task: two buttons, not four
 
 The Add Task dialog offered **Import .txt**, **Cancel**, **Save & edit** and **Add**. A child
