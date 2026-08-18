@@ -196,6 +196,18 @@ describe('KeybindingProvider (vim)', () => {
     });
 
     it('triggers quick add with Ctrl+Alt+M', () => {
+        // The platform default for the global shortcut is 'disabled' on
+        // Windows (getDefaultGlobalQuickAddShortcut), and jsdom reports the
+        // host OS in its user agent — so without pinning the setting, this
+        // test exercises the platform default instead of the binding and
+        // fails on Windows hosts. Pin the shortcut; the binding is the thing
+        // under test.
+        useTaskStore.setState((state) => ({
+            settings: {
+                ...state.settings,
+                globalQuickAddShortcut: 'Control+Alt+M',
+            },
+        }));
         const quickAddListener = vi.fn();
         window.addEventListener('tinybubbles:quick-add', quickAddListener);
 
@@ -211,6 +223,12 @@ describe('KeybindingProvider (vim)', () => {
 
         expect(quickAddListener).toHaveBeenCalledTimes(1);
         window.removeEventListener('tinybubbles:quick-add', quickAddListener);
+        useTaskStore.setState((state) => ({
+            settings: {
+                ...state.settings,
+                globalQuickAddShortcut: undefined,
+            },
+        }));
     });
 
     it.each(['vim', 'emacs'] as const)('a focuses the scope add input instead of the global quick add in %s style (#978)', (style) => {

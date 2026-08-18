@@ -134,10 +134,13 @@ function collectSourcePaths(): string[] {
 // still blown vitest's 5s default on loaded CI runners, so both tests below
 // share one walk.
 let coreImporters: Set<string> | null = null;
+// relative() emits the host separator, but SEAM_FILE and EXCLUDED_FILES are
+// written with forward slashes — normalize, or the ratchet false-positives on
+// every file (its own seam included) when run on Windows.
 const filesImportingCore = (): Set<string> => (coreImporters ??= new Set(
     collectSourcePaths()
         .filter((path) => readFileSync(path, 'utf8').includes(CORE_MODULE_SPECIFIER))
-        .map((path) => relative(DESKTOP_SRC, path)),
+        .map((path) => relative(DESKTOP_SRC, path).replace(/\\/g, '/')),
 ));
 
 describe('tauri invoke seam ratchet', () => {

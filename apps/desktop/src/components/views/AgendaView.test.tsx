@@ -397,7 +397,7 @@ describe('AgendaView', () => {
 
         const { getByRole, getByText, queryByText } = renderAgenda();
 
-        expect(getByRole('heading', { name: /next actions/i })).toBeInTheDocument();
+        expect(getByRole('heading', { name: /to do/i })).toBeInTheDocument();
         expect(getByText('Available next')).toBeInTheDocument();
         expect(queryByText('Inbox before')).not.toBeInTheDocument();
     });
@@ -433,7 +433,7 @@ describe('AgendaView', () => {
 
         expect(getByRole('heading', { name: /today/i })).toBeInTheDocument();
         expect(getByText('Start today next task')).toBeInTheDocument();
-        expect(queryByRole('heading', { name: /next actions/i })).not.toBeInTheDocument();
+        expect(queryByRole('heading', { name: /to do/i })).not.toBeInTheDocument();
     });
 
     it('always hides future-start next actions without a visibility control', () => {
@@ -672,7 +672,7 @@ describe('AgendaView', () => {
         });
 
         const { container, getByRole } = renderAgenda();
-        expect(getByRole('heading', { name: /next actions/i })).toBeInTheDocument();
+        expect(getByRole('heading', { name: /to do/i })).toBeInTheDocument();
 
         const soonRow = container.querySelector('[data-task-id="soon-task"]');
         const undatedRow = container.querySelector('[data-task-id="undated-task"]');
@@ -1790,7 +1790,7 @@ describe('AgendaView', () => {
         });
 
         const { container, getByRole } = renderAgenda();
-        const nextSectionButton = getByRole('button', { name: /next actions/i });
+        const nextSectionButton = getByRole('button', { name: /^to do\s*\(/i });
 
         expect(nextSectionButton).toHaveAttribute('aria-expanded', 'true');
         expect(container.querySelector('[data-task-id="next-action-task"]')).toBeTruthy();
@@ -1798,7 +1798,7 @@ describe('AgendaView', () => {
 
         fireEvent.click(nextSectionButton);
 
-        expect(getByRole('button', { name: /next actions/i })).toHaveAttribute('aria-expanded', 'false');
+        expect(getByRole('button', { name: /^to do\s*\(/i })).toHaveAttribute('aria-expanded', 'false');
         expect(container.querySelector('[data-task-id="next-action-task"]')).toBeNull();
         expect(container.querySelector('[data-task-id="waiting-review-task"]')).toBeTruthy();
     });
@@ -1841,7 +1841,7 @@ describe('AgendaView', () => {
 
         const firstRender = renderAgenda();
         const todayButton = firstRender.getByRole('button', { name: /^Today\s*\(1\)$/i });
-        const nextActionsButton = firstRender.getByRole('button', { name: /^Next Actions\s*\(1\)$/i });
+        const nextActionsButton = firstRender.getByRole('button', { name: /^To do\s*\(1\)$/i });
 
         fireEvent.click(todayButton);
         fireEvent.click(nextActionsButton);
@@ -1852,7 +1852,7 @@ describe('AgendaView', () => {
 
         const secondRender = renderAgenda();
         expect(secondRender.getByRole('button', { name: /^Today\s*\(1\)$/i })).toHaveAttribute('aria-expanded', 'false');
-        expect(secondRender.getByRole('button', { name: /^Next Actions\s*\(1\)$/i })).toHaveAttribute('aria-expanded', 'false');
+        expect(secondRender.getByRole('button', { name: /^To do\s*\(1\)$/i })).toHaveAttribute('aria-expanded', 'false');
     });
 
     it('exposes filter panel state from the fresh-install header toggle', () => {

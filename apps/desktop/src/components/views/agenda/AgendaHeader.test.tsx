@@ -59,6 +59,9 @@ describe('AgendaHeader', () => {
         button.click();
         expect(onToggleFilters).toHaveBeenCalledOnce();
         expect(queryByText('Group')).not.toBeInTheDocument();
-        expect(queryByText('3 to do')).toBeInTheDocument();
+        // displayLabel maps agenda.nextActions to "To do"; the count line
+        // lowercases it visually with CSS, so the text content keeps the
+        // capital T.
+        expect(queryByText('3 To do')).toBeInTheDocument();
     });
 });
