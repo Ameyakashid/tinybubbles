@@ -129,6 +129,14 @@ purge machinery is untouched and the parent flavour keeps the full view.
 `TrashView.test.tsx` pins the rescue-only contract: no destructive or bulk control
 renders, dd is unbound, every visible button is a Restore.
 
+Done (celebration surface): the completed list drops its whole adult toolbar —
+Filters, Select, Sort, Group, Show details, Density — and its search bar, via the
+same `hideControls` arrangement Inbox has carried since its own pass. A persisted
+done sort/grouping still orders the rows (the ui-store options outlive their
+toolbar), global search still covers completed tasks, and the parent app keeps the
+full toolbar. Built functionally plain on purpose: design attention for this page
+goes to Kimi next.
+
 Settings (decomposition pass 2): the nav keeps General, GTD, Manage, Notifications,
 Sync, Data and About — the pages an adult needs on the kid device (GTD holds the
 task-editor-layout escape hatch; Sync connects to the parent app). Integrations, AI

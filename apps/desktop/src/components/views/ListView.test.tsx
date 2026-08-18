@@ -192,9 +192,11 @@ describe('ListView', () => {
     expect(queryByRole('button', { name: 'Add Task' })).not.toBeInTheDocument();
   });
 
-  it('renders local search input in done view', () => {
+  // Done hides its search bar in the simplified shell, like Inbox; global
+  // search still covers completed tasks.
+  it('renders no local search input in done view', () => {
     const html = renderStaticListView('done', 'Done');
-    expect(html).toContain('data-view-filter-input');
+    expect(html).not.toContain('data-view-filter-input');
   });
 
   it('keeps a legacy completed sort in Done without leaking it after navigation', () => {
@@ -228,26 +230,51 @@ describe('ListView', () => {
       ],
       lastDataChangeAt: 2,
     });
+    // Done renders no Sort control in the simplified shell, but the legacy
+    // completion-date ordering still applies to the rows themselves.
     const done = renderListView('done', 'Done');
-    expect(done.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Completion date');
+    expect(done.queryByRole('combobox', { name: 'Sort' })).not.toBeInTheDocument();
     expect(done.container.textContent?.indexOf('Newer'))
       .toBeLessThan(done.container.textContent?.indexOf('Older') ?? -1);
   });
 
-  it('persists a separate Done sort without changing the synced list preference', () => {
+  // The whole controls row is hidden in Done (simplified shell): the list of
+  // finished things is a celebration surface, not a dashboard. A persisted
+  // doneSortBy still orders the rows — the option outlives its toolbar.
+  it('hides the Done controls row but honours a persisted Done sort', () => {
+    useUiStore.setState((state) => ({
+      ...state,
+      listOptions: { ...state.listOptions, doneSortBy: 'completed' },
+    }));
     useTaskStore.setState({
       settings: { taskSortBy: 'title' },
-      _allTasks: [makeTask('done', { status: 'done' })],
+      _allTasks: [
+        makeTask('done-old', {
+          title: 'Older',
+          status: 'done',
+          completedAt: new Date(2026, 6, 26, 12).toISOString(),
+        }),
+        makeTask('done-new', {
+          title: 'Newer',
+          status: 'done',
+          completedAt: new Date(2026, 6, 27, 12).toISOString(),
+        }),
+      ],
       lastDataChangeAt: 1,
     });
 
     const done = renderListView('done', 'Done');
-    selectToolbarOption('Sort', 'Completion date', done);
-
-    expect(useUiStore.getState().listOptions.doneSortBy).toBe('completed');
-    expect(useTaskStore.getState().settings.taskSortBy).toBe('title');
+    for (const name of ['Sort', 'Group']) {
+      expect(done.queryByRole('combobox', { name })).not.toBeInTheDocument();
+    }
+    for (const name of ['Filters', 'Select']) {
+      expect(done.queryByRole('button', { name })).not.toBeInTheDocument();
+    }
+    expect(done.container.textContent?.indexOf('Newer'))
+      .toBeLessThan(done.container.textContent?.indexOf('Older') ?? -1);
     done.unmount();
 
+    // The synced preference and the next view's toolbar are untouched.
     useTaskStore.setState({
       _allTasks: [makeTask('next', { status: 'next' })],
       lastDataChangeAt: 2,
@@ -1163,7 +1190,6 @@ describe('ListView', () => {
   });
 
   it.each([
-    ['done', 'Completed'],
     ['waiting', 'Waiting'],
     ['someday', 'Someday'],
   ] as const)('offers a Filters toggle in the %s toolbar', (statusFilter, title) => {
@@ -1180,55 +1206,27 @@ describe('ListView', () => {
   it.each([
     ['reference', 'Reference'],
     ['inbox', 'Inbox'],
+    ['done', 'Completed'],
   ] as const)('does not offer a Filters toggle in the %s toolbar', (statusFilter, title) => {
     const { queryByRole } = renderListView(statusFilter, title);
 
     expect(queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
   });
 
-  it('toggles the completed-list filter panel from the toolbar button', async () => {
+  // The completed-list filter panel went with the Done toolbar (simplified
+  // shell). The shared filter criteria still narrow the list underneath —
+  // same arrangement as Inbox, which has kept this shape since its own pass —
+  // and the parent app keeps the full toolbar.
+  it('renders no filter panel entry point in the completed list', () => {
     useTaskStore.setState({
       _allTasks: [makeTask('1', { title: 'Filed task', status: 'done', contexts: ['@work'] })],
       lastDataChangeAt: 1,
     });
 
-    const { getByRole, queryByText } = renderListView('done', 'Completed');
+    const { queryByRole, queryByText } = renderListView('done', 'Completed');
 
-    expect(queryByText('Contexts & tags')).not.toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Filters' }));
-    await waitFor(() => {
-      expect(queryByText('Contexts & tags')).toBeInTheDocument();
-    });
-
-    fireEvent.click(getByRole('button', { name: 'Filters' }));
-    await waitFor(() => {
-      expect(queryByText('Contexts & tags')).not.toBeInTheDocument();
-    });
-  });
-
-  it('narrows the completed list when a context chip is selected in the panel', async () => {
-    useTaskStore.setState({
-      _allTasks: [
-        makeTask('1', { title: 'Work done task', status: 'done', contexts: ['@work'] }),
-        makeTask('2', { title: 'Home done task', status: 'done', contexts: ['@home'] }),
-      ],
-      lastDataChangeAt: 1,
-    });
-
-    const { getByRole, queryByText } = renderListView('done', 'Completed');
-
-    expect(queryByText('Work done task')).toBeInTheDocument();
-    expect(queryByText('Home done task')).toBeInTheDocument();
-
-    fireEvent.click(getByRole('button', { name: 'Filters' }));
-    const panel = document.getElementById('list-filters-panel');
-    expect(panel).not.toBeNull();
-    fireEvent.click(within(panel!).getByRole('button', { name: /@work/ }));
-
-    await waitFor(() => {
-      expect(queryByText('Work done task')).toBeInTheDocument();
-      expect(queryByText('Home done task')).not.toBeInTheDocument();
-    });
+    expect(queryByText('Filed task')).toBeInTheDocument();
+    expect(queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
+    expect(document.getElementById('list-filters-panel')).toBeNull();
   });
 });

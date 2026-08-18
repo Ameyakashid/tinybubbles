@@ -211,7 +211,9 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
     const undoNotificationsEnabled = settings?.undoNotificationsEnabled !== false;
     const showQuickDone = statusFilter !== 'done' && statusFilter !== 'archived';
     const readOnly = statusFilter === 'done';
-    const showViewFilterInput = statusFilter !== 'inbox';
+    // Inbox and Done hide their search bar in the simplified shell along
+    // with the controls row below; global search (Ctrl+K) still covers them.
+    const showViewFilterInput = statusFilter !== 'inbox' && statusFilter !== 'done';
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
     const listFilterableTasks = useMemo(() => {
         const allowDeferredProjectTasks = statusFilter === 'done' || statusFilter === 'archived';
@@ -944,7 +946,14 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                             });
                         }}
                         t={t}
-                        hideControls={statusFilter === 'inbox'}
+                        // Simplified shell (see DESIGN.md): Inbox and Done hide
+                        // the whole controls row (Filters / Select / Sort / Group /
+                        // details / density). Done is the celebration surface — a
+                        // child sees the list of finished things, not a dashboard.
+                        // Capability intact: the props stay wired, the done sort and
+                        // grouping options persist in the ui-store, and the parent
+                        // app keeps the full toolbar.
+                        hideControls={statusFilter === 'inbox' || statusFilter === 'done'}
                     />
 
                     {isBatchDeleting && (
