@@ -518,6 +518,24 @@ export function TaskInput({
         scheduleSelectionRestore({ start: caret, end: caret });
     };
 
+    // True when accepting the option would merely rewrite the token the user
+    // has already typed in full. The popup for an argument-bearing command
+    // echoes the argument back (query "due:tomorrow" yields the single option
+    // "/due:tomorrow"), and the argument grammar runs to the end of the input,
+    // so the trigger never closes on its own — without this check, plain Enter
+    // is captured by that no-op rewrite forever and can never reach the
+    // consumer's submit handler. Consumers with onAcceptSuggestion are exempt:
+    // there, accepting a finished command applies it as metadata (or closes
+    // the popup), which is a real action and already terminates the cycle.
+    const isSelfEchoOption = (option: Option | undefined): boolean => {
+        if (onAcceptSuggestion) return false;
+        if (!option || option.kind !== 'command' || !option.requiresArgument) return false;
+        const active = resolveActiveTrigger();
+        if (!active || active.trigger.type !== 'command') return false;
+        const currentToken = active.text.slice(active.trigger.start, active.trigger.end).trimEnd();
+        return currentToken === `/${option.command}:${option.value}`;
+    };
+
     const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = async (event) => {
         const lowerKey = event.key.toLowerCase();
         if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && lowerKey === 'z') {
@@ -551,7 +569,11 @@ export function TaskInput({
             }
             // Only plain Enter picks a suggestion; modified Enter falls through
             // so consumer shortcuts (Ctrl+Enter save & edit) win over the popup.
-            if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+            // Enter on a suggestion that is a no-op echo of the typed token
+            // also falls through, so a finished "/due:tomorrow" submits instead
+            // of being silently swallowed by the popup.
+            if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+                && !isSelfEchoOption(options[selectedIndex])) {
                 event.preventDefault();
                 event.stopPropagation();
                 await applyOption(options[selectedIndex]);
