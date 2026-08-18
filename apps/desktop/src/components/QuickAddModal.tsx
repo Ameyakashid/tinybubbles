@@ -113,7 +113,8 @@ function getImageExtension(file: File): string {
 }
 
 const IS_MAC_PLATFORM = typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
-const SAVE_AND_EDIT_SHORTCUT_HINT = IS_MAC_PLATFORM ? '⌘Enter' : 'Ctrl+Enter';
+// SAVE_AND_EDIT_SHORTCUT_HINT was the tooltip on the hidden "Save & edit" button.
+// The shortcut itself is still wired (Ctrl/Cmd+Enter, below) — only its label is gone.
 const SAVE_SHORTCUT_HINT = IS_MAC_PLATFORM ? 'Enter · ⇧Enter' : 'Enter · Shift+Enter';
 
 function mergeQuickAddAttachments(...groups: Array<Attachment[] | undefined>): Attachment[] | undefined {
@@ -1156,13 +1157,13 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                                     void handleTextFileImport(event);
                                 }}
                             />
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="px-3 py-1.5 rounded-md text-sm border border-border bg-background hover:bg-muted/60"
-                            >
-                                {tFallback(t, 'quickAdd.bulkImportTextFile', 'Import .txt')}
-                            </button>
+                            {/* Kid shell: no "Import .txt".
+                                Bulk-importing a text file of tasks is a grown-up job, and it
+                                is not gone from the family — the parent app is the full
+                                Mindwtr pointed at this same child's sync token, and it keeps
+                                the button. So the capability moved to the device that should
+                                have it rather than disappearing. The hidden file input stays
+                                mounted: handleTextFileImport and the drop path still work. */}
                             <button
                                 type="button"
                                 onClick={handleClose}
@@ -1170,22 +1171,11 @@ export function QuickAddModal({ standaloneWindow = false }: QuickAddModalProps) 
                             >
                                 {t('common.cancel')}
                             </button>
-                            {!standaloneWindow && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        void saveTask({ openAfterSave: true });
-                                    }}
-                                    title={SAVE_AND_EDIT_SHORTCUT_HINT}
-                                    disabled={saveDisabled}
-                                    className={cn(
-                                        'px-3 py-1.5 rounded-md text-sm border border-border bg-background hover:bg-muted/60',
-                                        saveDisabled && 'opacity-50 cursor-not-allowed hover:bg-background',
-                                    )}
-                                >
-                                    {t('quickAdd.saveAndEdit')}
-                                </button>
-                            )}
+                            {/* Kid shell: no "Save & edit".
+                                Two buttons that both save, differing only in where you land,
+                                is a choice a child should not have to parse. Nothing is lost:
+                                add the task, then tap it to open it. The keyboard shortcut is
+                                untouched for anyone who knows it. */}
                             <button
                                 type="submit"
                                 title={SAVE_SHORTCUT_HINT}

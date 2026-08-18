@@ -202,3 +202,26 @@ anyone having to choose, since it follows the room.
 
 The theme engine is untouched. A device that already stores another preset still renders it,
 and the parent flavour keeps the full list.
+
+
+## Adding a task: two buttons, not four
+
+The Add Task dialog offered **Import .txt**, **Cancel**, **Save & edit** and **Add**. A child
+adding "feed the cat" met four choices, two of which are grown-up tools. It now offers Cancel
+and Add.
+
+Both removals were checked for reachability first, because hiding something load-bearing is
+the mistake this project has made most often.
+
+**Import .txt** — bulk-importing a text file of tasks. Settings → Data imports CSV and backup
+formats but *not* plain text, so this really was the only path on the child's device. It is
+not lost to the family, though: the parent app is the full Mindwtr pointed at the same
+child's sync token, and it keeps the button. The capability moved to the device that should
+have had it. The hidden file input stays mounted, so `handleTextFileImport` and the drop path
+still work.
+
+**Save & edit** — saves, then opens the task. Two buttons that both save, differing only in
+where you land, is a distinction a child should not have to parse. Add the task, then tap it.
+**`Ctrl`/`⌘ + Enter` still does save-and-open**, untouched — only the button and its tooltip
+are gone. The test now asserts both halves: the button is absent, and the shortcut still
+performs the whole action.

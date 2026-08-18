@@ -352,7 +352,10 @@ describe('QuickAddModal', () => {
         }));
     });
 
-    it('opens the created project task when save and edit is requested', async () => {
+    // Kid shell: the "Save & edit" button is hidden, but saving-and-opening is not gone —
+    // Ctrl/Cmd+Enter still does it. Assert both halves: the button is absent (so it cannot
+    // creep back in unnoticed) and the shortcut still performs the whole action.
+    it('has no Save & edit button, but Ctrl+Enter still saves and opens the task', async () => {
         const addTask = vi.fn(async () => ({ success: true, id: 'task-created' }));
         const navigateListener = vi.fn();
         act(() => {
@@ -375,7 +378,9 @@ describe('QuickAddModal', () => {
             await Promise.resolve();
         });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Save & edit' }));
+        expect(screen.queryByRole('button', { name: 'Save & edit' })).not.toBeInTheDocument();
+
+        fireEvent.keyDown(screen.getByPlaceholderText('Add Task'), { key: 'Enter', ctrlKey: true });
 
         await waitFor(() => {
             expect(addTask).toHaveBeenCalledWith('Draft launch brief', expect.objectContaining({
