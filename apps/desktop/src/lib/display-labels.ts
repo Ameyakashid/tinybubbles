@@ -38,6 +38,7 @@ const DISPLAY_LABEL_OVERRIDES: Record<string, string> = {
     'calendar.tasksAndEvents': 'See what is coming up',
     'search.scopeHint': 'Find anything',
     'inbox.projectHint': 'If something needs lots of steps, you can turn it into a list while you tidy up.',
+    'task.createProjectFromTask': 'Turn into a list',
 };
 
 /** The translated label for `key`, unless the shell overrides it with plainer words. */

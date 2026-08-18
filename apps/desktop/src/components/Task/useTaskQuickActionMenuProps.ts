@@ -219,6 +219,7 @@ export function useTaskQuickActionMenuProps(
     return {
         task,
         t,
+        language,
         dateFormatSetting: settings?.dateFormat,
         nativeDateInputLocale,
         contextOptions: popularContextOptions,

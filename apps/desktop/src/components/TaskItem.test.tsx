@@ -1044,11 +1044,15 @@ describe('TaskItem', () => {
         });
 
         expect(getByRole('menu', { name: /more options/i })).toBeInTheDocument();
+        // The simplified shell keeps the child-safe set. The adult entries
+        // (start/review dates, area, contexts, convert to reference) are
+        // hidden; their capabilities live in the task editor and the Tidy up
+        // flow. See DESIGN.md.
         expect(getByRole('menuitem', { name: /due date/i })).toBeInTheDocument();
-        expect(getByRole('menuitem', { name: /review date/i })).toBeInTheDocument();
-        expect(getByRole('menuitem', { name: /area/i })).toBeInTheDocument();
-        expect(getByRole('menuitem', { name: /contexts/i })).toBeInTheDocument();
         expect(getByRole('menuitem', { name: /duplicate/i })).toBeInTheDocument();
+        expect(queryByRole('menuitem', { name: /review date/i })).toBeNull();
+        expect(queryByRole('menuitem', { name: /area/i })).toBeNull();
+        expect(queryByRole('menuitem', { name: /contexts/i })).toBeNull();
         expect(getByText('Delete')).toBeInTheDocument();
 
         act(() => {
@@ -1447,169 +1451,13 @@ describe('TaskItem', () => {
         });
     });
 
-    it('updates review date from the task quick actions menu', async () => {
-        const quickReviewTask: Task = {
-            ...mockTask,
-            id: 'quick-review-task',
-        };
-        act(() => {
-            useTaskStore.setState((state) => ({
-                ...state,
-                tasks: [quickReviewTask],
-                _allTasks: [quickReviewTask],
-                projects: [],
-                _allProjects: [],
-            }));
-        });
+    // The review/area/contexts quick-menu integration tests are gone with
+    // their entries (simplified shell). The due-date test above still covers
+    // the panel -> store update path the menu shares across panels.
 
-        const { container, getByLabelText, getByRole } = render(
-            <LanguageProvider>
-                <TaskItem task={quickReviewTask} />
-            </LanguageProvider>
-        );
 
-        const row = container.querySelector('[data-task-id="quick-review-task"]');
-        expect(row).toBeTruthy();
-        fireEvent.contextMenu(row!);
-        fireEvent.click(getByRole('menuitem', { name: /review date/i }));
-        fireEvent.change(getByLabelText('Review Date', { selector: 'input' }), { target: { value: '2026-05-03' } });
-        fireEvent.click(getByRole('button', { name: 'Save' }));
 
-        await waitFor(() => {
-            const updatedTask = useTaskStore.getState()._allTasks.find((task) => task.id === 'quick-review-task');
-            expect(updatedTask?.reviewAt).toBe('2026-05-03');
-        });
-    });
 
-    it('updates area from the task quick actions menu', async () => {
-        const quickAreaTask: Task = {
-            ...mockTask,
-            id: 'quick-area-task',
-        };
-        const workArea: Area = {
-            id: 'area-work',
-            name: 'Work',
-            color: '#3b82f6',
-            order: 0,
-            createdAt: '2026-05-01T00:00:00.000Z',
-            updatedAt: '2026-05-01T00:00:00.000Z',
-        };
-        act(() => {
-            useTaskStore.setState((state) => ({
-                ...state,
-                tasks: [quickAreaTask],
-                _allTasks: [quickAreaTask],
-                projects: [],
-                _allProjects: [],
-                areas: [workArea],
-                _allAreas: [workArea],
-            }));
-        });
-
-        const { container, getByRole } = render(
-            <LanguageProvider>
-                <TaskItem task={quickAreaTask} />
-            </LanguageProvider>
-        );
-
-        const row = container.querySelector('[data-task-id="quick-area-task"]');
-        expect(row).toBeTruthy();
-        fireEvent.contextMenu(row!);
-        fireEvent.click(getByRole('menuitem', { name: /area/i }));
-        const areaDialog = getByRole('dialog', { name: 'Area' });
-        fireEvent.click(within(areaDialog).getByRole('button', { name: 'No Area' }));
-        const areaListbox = getByRole('listbox', { name: 'No Area' });
-        fireEvent.click(within(areaListbox).getByRole('option', { name: 'Work' }));
-        fireEvent.click(within(areaDialog).getByRole('button', { name: 'Save' }));
-
-        await waitFor(() => {
-            const updatedTask = useTaskStore.getState()._allTasks.find((task) => task.id === 'quick-area-task');
-            expect(updatedTask?.areaId).toBe('area-work');
-        });
-    });
-
-    it('updates contexts from the task quick actions menu', async () => {
-        const quickContextTask: Task = {
-            ...mockTask,
-            id: 'quick-context-task',
-        };
-        act(() => {
-            useTaskStore.setState((state) => ({
-                ...state,
-                tasks: [quickContextTask],
-                _allTasks: [quickContextTask],
-                projects: [],
-                _allProjects: [],
-            }));
-        });
-
-        const { container, getByLabelText, getByRole } = render(
-            <LanguageProvider>
-                <TaskItem task={quickContextTask} />
-            </LanguageProvider>
-        );
-
-        const row = container.querySelector('[data-task-id="quick-context-task"]');
-        expect(row).toBeTruthy();
-        fireEvent.contextMenu(row!);
-        fireEvent.click(getByRole('menuitem', { name: /contexts/i }));
-        fireEvent.change(getByLabelText('Contexts', { selector: 'input' }), { target: { value: '@office, @errands' } });
-        fireEvent.click(getByRole('button', { name: 'Save' }));
-
-        await waitFor(() => {
-            const updatedTask = useTaskStore.getState()._allTasks.find((task) => task.id === 'quick-context-task');
-            expect(updatedTask?.contexts).toEqual(['@office', '@errands']);
-        });
-    });
-
-    it('offers full context autocomplete from the task quick actions menu', async () => {
-        const quickContextTask: Task = {
-            ...mockTask,
-            id: 'quick-context-autocomplete-task',
-        };
-        const contextSourceTasks: Task[] = [
-            ['context-alpha', '@alpha', '2026-02-08T00:00:00.000Z'],
-            ['context-beta', '@beta', '2026-02-07T00:00:00.000Z'],
-            ['context-delta', '@delta', '2026-02-06T00:00:00.000Z'],
-            ['context-gamma', '@gamma', '2026-02-05T00:00:00.000Z'],
-            ['context-office', '@office', '2026-02-04T00:00:00.000Z'],
-            ['context-home', '@home', '2026-02-03T00:00:00.000Z'],
-        ].map(([id, context, updatedAt]) => ({
-            ...mockTask,
-            id,
-            contexts: [context],
-            updatedAt,
-        }));
-        act(() => {
-            useTaskStore.setState((state) => ({
-                ...state,
-                tasks: [quickContextTask, ...contextSourceTasks],
-                _allTasks: [quickContextTask, ...contextSourceTasks],
-                projects: [],
-                _allProjects: [],
-            }));
-        });
-
-        const { container, findByRole, getByLabelText, getByRole } = render(
-            <LanguageProvider>
-                <TaskItem task={quickContextTask} />
-            </LanguageProvider>
-        );
-
-        const row = container.querySelector('[data-task-id="quick-context-autocomplete-task"]');
-        expect(row).toBeTruthy();
-        fireEvent.contextMenu(row!);
-        fireEvent.click(getByRole('menuitem', { name: /contexts/i }));
-        const input = getByLabelText('Contexts', { selector: 'input' }) as HTMLInputElement;
-        fireEvent.focus(input);
-        fireEvent.change(input, { target: { value: '@ho' } });
-
-        expect(await findByRole('option', { name: '@home' })).toBeInTheDocument();
-
-        fireEvent.keyDown(input, { key: 'Enter' });
-
-        expect(input).toHaveValue('@home');
-    });
 
     it('applies inset ring style when selected to avoid clipped borders', () => {
         const { container } = render(

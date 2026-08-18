@@ -96,6 +96,16 @@ Review view is already hidden-but-routable, so review-due items surface there, n
 the child's first screen. Presentation only: `reviewAt` is untouched in core and the
 view-local review pipelines were removed from `AgendaView.tsx` alone.
 
+Task quick-action menu (decomposition pass 2): the row's "More options" /
+right-click menu keeps the child-safe set — Focus star, Rename, Due Date, Duplicate,
+"Turn into a list" (promote-to-project, plain-language label via display-labels) and
+Delete. Hidden: Start Date, Review Date, Mark reviewed, Review in 1 week, Area,
+Contexts, Convert to Reference. Reachability of every hidden capability: start and
+review dates, area and contexts edit through the task editor once re-enabled in
+Settings -> GTD -> Task Editor Layout; filing to Reference happens through the Tidy
+up (inbox processing) flow; row status changes stay in the editor's fixed status
+control. The panel machinery is intact and serves the surviving Due Date entry.
+
 Settings (decomposition pass 2): the nav keeps General, GTD, Manage, Notifications,
 Sync, Data and About — the pages an adult needs on the kid device (GTD holds the
 task-editor-layout escape hatch; Sync connects to the parent app). Integrations, AI

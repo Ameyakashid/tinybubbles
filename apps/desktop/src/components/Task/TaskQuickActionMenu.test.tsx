@@ -89,38 +89,23 @@ const renderClosableMenu = (overrides: Partial<ComponentProps<typeof TaskQuickAc
 };
 
 describe('TaskQuickActionMenu', () => {
-    it('opens one panel at a time and exposes dialog state without pressed state', () => {
+    // The simplified shell keeps a single panel-opening entry (Due Date);
+    // the start/review/area/contexts entries are hidden. See DESIGN.md.
+    it('exposes dialog state on the due date entry without pressed state', () => {
         renderMenu();
 
         expect(screen.getByRole('menu', { name: /more options/i })).toBeInTheDocument();
-        const startButton = screen.getByRole('menuitem', { name: /start date/i });
-        expect(startButton).toHaveAttribute('aria-haspopup', 'dialog');
-        expect(startButton).toHaveAttribute('aria-expanded', 'false');
-        expect(startButton).not.toHaveAttribute('aria-pressed');
-        expect(startButton).toHaveClass('focus-visible:ring-2');
-
-        fireEvent.click(startButton);
-
-        expect(startButton).toHaveAttribute('aria-expanded', 'true');
-        expect(screen.getByRole('dialog', { name: /start date/i }))
-            .toHaveClass('w-[min(30rem,calc(100vw-1rem))]');
-
         const dueButton = screen.getByRole('menuitem', { name: 'Due Date…' });
-        fireEvent.click(dueButton);
-
         expect(dueButton).toHaveAttribute('aria-haspopup', 'dialog');
-        expect(startButton).toHaveAttribute('aria-expanded', 'false');
-        expect(dueButton).toHaveAttribute('aria-expanded', 'true');
+        expect(dueButton).toHaveAttribute('aria-expanded', 'false');
         expect(dueButton).not.toHaveAttribute('aria-pressed');
         expect(dueButton).toHaveClass('focus-visible:ring-2');
-        expect(screen.getByRole('dialog', { name: /due date/i })).toBeInTheDocument();
 
-        const reviewButton = screen.getByRole('menuitem', { name: /review date/i });
-        fireEvent.click(reviewButton);
+        fireEvent.click(dueButton);
 
-        expect(dueButton).toHaveAttribute('aria-expanded', 'false');
-        expect(reviewButton).toHaveAttribute('aria-expanded', 'true');
-        expect(screen.getByRole('dialog', { name: /review date/i })).toBeInTheDocument();
+        expect(dueButton).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByRole('dialog', { name: /due date/i }))
+            .toHaveClass('w-[min(30rem,calc(100vw-1rem))]');
     });
 
     it('uses Escape to close the active panel before closing the menu', () => {
@@ -241,39 +226,52 @@ describe('TaskQuickActionMenu', () => {
         expect(props.onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('saves a start date from the quick action panel', async () => {
-        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
-        const props = renderMenu({ onUpdateTask });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: /start date/i }));
-
-        const dialog = screen.getByRole('dialog', { name: /start date/i });
-        fireEvent.change(within(dialog).getByLabelText('Start Date'), {
-            target: { value: '2026-02-04' },
+    // Adult actions are hidden in the simplified shell — even when the task
+    // carries the data that used to surface them (a due review date, an
+    // area-less task). Their capabilities stay reachable through the task
+    // editor (Settings -> GTD -> Task Editor Layout) and the Tidy up flow.
+    it('hides the adult actions in the simplified shell', () => {
+        renderMenu({
+            task: { ...task, reviewAt: '2000-01-01T00:00:00.000Z' },
+            onRename: vi.fn(),
+            onPromoteToProject: vi.fn(),
         });
-        fireEvent.change(within(dialog).getByLabelText('Start time'), {
-            target: { value: '09:30' },
-        });
-        fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-        await waitFor(() => {
-            expect(onUpdateTask).toHaveBeenCalledWith({ startTime: '2026-02-04T09:30' });
-        });
-        expect(props.onClose).toHaveBeenCalledTimes(1);
+        for (const name of [
+            /start date/i,
+            /review date/i,
+            'Mark reviewed',
+            'Review in 1 week',
+            'Area…',
+            'Contexts…',
+            'Convert to Reference',
+        ]) {
+            expect(screen.queryByRole('menuitem', { name })).not.toBeInTheDocument();
+        }
+
+        // The kept child-safe set, in render order.
+        const items = screen.getAllByRole('menuitem').map((item) => item.textContent);
+        expect(items).toEqual([
+            'Rename task',
+            'Due Date…',
+            'Duplicate',
+            'Turn into a list',
+            'Delete',
+        ]);
     });
 
     it('saves the panel draft when Enter is pressed in a field', async () => {
         const onUpdateTask = vi.fn(async () => ({ success: true as const }));
         const props = renderMenu({ onUpdateTask });
 
-        fireEvent.click(screen.getByRole('menuitem', { name: /start date/i }));
-        const dialog = screen.getByRole('dialog', { name: /start date/i });
-        const input = within(dialog).getByLabelText('Start Date');
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Due Date…' }));
+        const dialog = screen.getByRole('dialog', { name: 'Due Date' });
+        const input = within(dialog).getByLabelText('Due Date');
         fireEvent.change(input, { target: { value: '2026-02-04' } });
         fireEvent.keyDown(input, { key: 'Enter' });
 
         await waitFor(() => {
-            expect(onUpdateTask).toHaveBeenCalledWith({ startTime: '2026-02-04' });
+            expect(onUpdateTask).toHaveBeenCalledWith({ dueDate: '2026-02-04' });
         });
         expect(props.onClose).toHaveBeenCalledTimes(1);
     });
@@ -288,33 +286,6 @@ describe('TaskQuickActionMenu', () => {
 
         expect(onUpdateTask).not.toHaveBeenCalled();
         expect(props.onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it('leaves Enter to the area selector dropdown instead of saving the panel', () => {
-        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
-        const props = renderMenu({
-            areas: [{
-                id: 'area-work',
-                name: 'Work',
-                color: '#2563eb',
-                order: 0,
-                createdAt: now,
-                updatedAt: now,
-            }],
-            onUpdateTask,
-        });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Area…' }));
-        fireEvent.click(screen.getByRole('button', { name: 'No Area' }));
-        const search = screen.getByRole('textbox', { name: 'Search areas' });
-        fireEvent.change(search, { target: { value: 'Wo' } });
-        fireEvent.keyDown(search, { key: 'Enter' });
-
-        // Enter picked the area in the dropdown; the panel stays open for Save.
-        expect(onUpdateTask).not.toHaveBeenCalled();
-        expect(props.onClose).not.toHaveBeenCalled();
-        const panel = screen.getByRole('dialog', { name: 'Area' });
-        expect(within(panel).getByRole('button', { name: 'Work' })).toBeInTheDocument();
     });
 
     it('keeps a mini-calendar date in the draft until Save', async () => {
@@ -367,82 +338,6 @@ describe('TaskQuickActionMenu', () => {
         expect(props.onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('marks a review-due task reviewed from the quick action menu', async () => {
-        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
-        const props = renderMenu({
-            task: { ...task, reviewAt: '2000-01-01T00:00:00.000Z' },
-            onUpdateTask,
-        });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Mark reviewed' }));
-
-        await waitFor(() => {
-            expect(onUpdateTask).toHaveBeenCalledWith({ reviewAt: undefined });
-        });
-        expect(props.onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it('advances a review-due task one week from the quick action menu', async () => {
-        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
-        const props = renderMenu({
-            task: { ...task, reviewAt: '2000-01-01' },
-            onUpdateTask,
-        });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Review in 1 week' }));
-
-        const expected = new Date();
-        expected.setDate(expected.getDate() + 7);
-        const expectedDate = `${expected.getFullYear()}-${String(expected.getMonth() + 1).padStart(2, '0')}-${String(expected.getDate()).padStart(2, '0')}`;
-        await waitFor(() => {
-            expect(onUpdateTask).toHaveBeenCalledWith({ reviewAt: expectedDate });
-        });
-        expect(props.onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not show mark reviewed for future review dates', () => {
-        renderMenu({
-            task: { ...task, reviewAt: '2999-01-01T00:00:00.000Z' },
-        });
-
-        expect(screen.queryByRole('menuitem', { name: 'Mark reviewed' })).not.toBeInTheDocument();
-        expect(screen.queryByRole('menuitem', { name: 'Review in 1 week' })).not.toBeInTheDocument();
-        expect(screen.getByRole('menuitem', { name: /review date/i })).toBeInTheDocument();
-    });
-
-    it('keeps the menu open while selecting an area from the selector dropdown', async () => {
-        const onUpdateTask = vi.fn(async () => ({ success: true as const }));
-        const props = renderClosableMenu({
-            areas: [{
-                id: 'area-work',
-                name: 'Work',
-                color: '#2563eb',
-                order: 0,
-                createdAt: now,
-                updatedAt: now,
-            }],
-            onUpdateTask,
-        });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Area…' }));
-        fireEvent.click(screen.getByRole('button', { name: 'No Area' }));
-
-        const option = screen.getByRole('option', { name: 'Work' });
-        fireEvent.mouseDown(option);
-        expect(props.onClose).not.toHaveBeenCalled();
-
-        fireEvent.click(option);
-        const panel = screen.getByRole('dialog', { name: 'Area' });
-        expect(within(panel).getByRole('button', { name: 'Work' })).toBeInTheDocument();
-
-        fireEvent.click(within(panel).getByRole('button', { name: 'Save' }));
-
-        await waitFor(() => {
-            expect(onUpdateTask).toHaveBeenCalledWith({ areaId: 'area-work' });
-        });
-        expect(props.onClose).toHaveBeenCalledTimes(1);
-    });
-
     it('focuses the menu container on open, with no item pre-highlighted', () => {
         renderMenu();
 
@@ -453,19 +348,19 @@ describe('TaskQuickActionMenu', () => {
         renderMenu();
 
         fireEvent.keyDown(window, { key: 'ArrowDown' });
-        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /start date/i }));
-
-        fireEvent.keyDown(window, { key: 'ArrowDown' });
         expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Due Date…' }));
 
+        fireEvent.keyDown(window, { key: 'ArrowDown' });
+        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Duplicate' }));
+
         fireEvent.keyDown(window, { key: 'ArrowUp' });
-        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /start date/i }));
+        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Due Date…' }));
 
         fireEvent.keyDown(window, { key: 'ArrowUp' });
         expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Delete' }));
 
         fireEvent.keyDown(window, { key: 'ArrowDown' });
-        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /start date/i }));
+        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Due Date…' }));
     });
 
     it('highlights the focused item with a plain focus style, not focus-visible only', () => {
@@ -482,22 +377,22 @@ describe('TaskQuickActionMenu', () => {
         expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Delete' }));
 
         fireEvent.keyDown(window, { key: 'Home' });
-        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /start date/i }));
+        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Due Date…' }));
     });
 
     it('opens the focused submenu panel with ArrowRight and closes it with ArrowLeft', () => {
         renderMenu();
 
-        const startButton = screen.getByRole('menuitem', { name: /start date/i });
-        startButton.focus();
+        const dueButton = screen.getByRole('menuitem', { name: 'Due Date…' });
+        dueButton.focus();
         fireEvent.keyDown(window, { key: 'ArrowRight' });
 
-        expect(screen.getByRole('dialog', { name: /start date/i })).toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: 'Due Date' })).toBeInTheDocument();
 
         fireEvent.keyDown(window, { key: 'ArrowLeft' });
 
-        expect(screen.queryByRole('dialog', { name: /start date/i })).not.toBeInTheDocument();
-        expect(document.activeElement).toBe(startButton);
+        expect(screen.queryByRole('dialog', { name: 'Due Date' })).not.toBeInTheDocument();
+        expect(document.activeElement).toBe(dueButton);
     });
 
     it('returns focus to the anchoring item when Escape closes a panel', () => {
@@ -525,52 +420,16 @@ describe('TaskQuickActionMenu', () => {
         });
 
         fireEvent.keyDown(window, { key: 'Home' });
-        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: /start date/i }));
-    });
-
-    it('lets Escape close the area selector dropdown before the panel and menu', () => {
-        const props = renderMenu({
-            areas: [{
-                id: 'area-work',
-                name: 'Work',
-                color: '#2563eb',
-                order: 0,
-                createdAt: now,
-                updatedAt: now,
-            }],
-        });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Area…' }));
-        fireEvent.click(screen.getByRole('button', { name: 'No Area' }));
-        const search = screen.getByRole('textbox', { name: 'Search areas' });
-
-        fireEvent.keyDown(search, { key: 'Escape' });
-        expect(screen.queryByRole('option', { name: 'Work' })).not.toBeInTheDocument();
-        expect(screen.getByRole('dialog', { name: 'Area' })).toBeInTheDocument();
-        expect(props.onClose).not.toHaveBeenCalled();
-
-        fireEvent.keyDown(window, { key: 'Escape' });
-        expect(screen.queryByRole('dialog', { name: 'Area' })).not.toBeInTheDocument();
-        expect(props.onClose).not.toHaveBeenCalled();
-
-        fireEvent.keyDown(window, { key: 'Escape' });
-        expect(props.onClose).toHaveBeenCalledTimes(1);
-    });
-
-    it('keeps secondary task row actions in the quick menu', () => {
-        const onStatusChange = vi.fn();
-        const props = renderMenu({ onStatusChange });
-
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Convert to Reference' }));
-        expect(onStatusChange).toHaveBeenCalledWith('reference');
-        expect(props.onClose).toHaveBeenCalledTimes(1);
+        expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Due Date…' }));
     });
 
     it('runs the promote-to-project action from the quick menu', () => {
         const onPromoteToProject = vi.fn();
         const props = renderMenu({ onPromoteToProject });
 
-        fireEvent.click(screen.getByRole('menuitem', { name: 'Create project from task' }));
+        // The entry wears the shell's plain-language label; the capability is
+        // the same promote-to-project action.
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Turn into a list' }));
 
         expect(onPromoteToProject).toHaveBeenCalledTimes(1);
         expect(props.onClose).toHaveBeenCalledTimes(1);

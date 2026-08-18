@@ -9,19 +9,19 @@ import {
     type RefObject,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { BookOpen, Calendar, CalendarClock, ChevronRight, Copy, FolderPlus, MapPin, Pencil, Tag, Trash2 } from 'lucide-react';
+import { Calendar, ChevronRight, Copy, FolderPlus, Pencil, Trash2 } from 'lucide-react';
 import {
-    getAdvancedReviewDate,
-    isDueForReview,
     safeParseDate,
     tFallback,
     type Area,
+    type Language,
     type StoreActionResult,
     type Task,
     type TaskStatus,
 } from '@tinybubbles/core';
 import { joinDateTime, splitDateTime } from '@tinybubbles/core/date-draft';
 
+import { displayLabel } from '../../lib/display-labels';
 import { reportError } from '../../lib/report-error';
 import { cn } from '../../lib/utils';
 import { FocusStarIcon } from '../FocusStarIcon';
@@ -42,6 +42,7 @@ export interface TaskQuickActionMenuProps {
     x: number;
     y: number;
     t: (key: string) => string;
+    language?: Language;
     dateFormatSetting?: string | null;
     nativeDateInputLocale: string;
     contextOptions: string[];
@@ -129,6 +130,7 @@ export function TaskQuickActionMenu({
     x,
     y,
     t,
+    language = 'en',
     dateFormatSetting,
     nativeDateInputLocale,
     contextOptions,
@@ -141,7 +143,6 @@ export function TaskQuickActionMenu({
     onDuplicate,
     onPromoteToProject,
     onDelete,
-    onStatusChange,
     onCreateArea,
     onUpdateTask,
     extraActions = [],
@@ -180,11 +181,8 @@ export function TaskQuickActionMenu({
     const noAreaLabel = tFallback(t, 'taskEdit.noAreaOption', 'No Area');
     const renameLabel = tFallback(t, 'task.renameTitle', 'Rename task');
     const duplicateLabel = tFallback(t, 'projects.duplicate', 'Duplicate');
-    const promoteToProjectLabel = t('task.createProjectFromTask');
+    const promoteToProjectLabel = displayLabel(t, language, 'task.createProjectFromTask', 'Create project from task');
     const deleteLabel = tFallback(t, 'common.delete', 'Delete');
-    const convertToReferenceLabel = tFallback(t, 'task.convertToReference', 'Convert to Reference');
-    const markReviewedLabel = tFallback(t, 'review.markReviewed', 'Mark reviewed');
-    const advanceReviewLabel = tFallback(t, 'review.advanceWeek', 'Review in 1 week');
     const saveLabel = tFallback(t, 'common.save', 'Save');
     const cancelLabel = tFallback(t, 'common.cancel', 'Cancel');
     const moreOptionsLabel = tFallback(t, 'taskEdit.moreOptions', 'More options');
@@ -192,7 +190,6 @@ export function TaskQuickActionMenu({
     const noMatchesLabel = tFallback(t, 'common.noMatches', 'No matches');
     const createAreaLabel = tFallback(t, 'areas.create', 'Create area');
     const canEditArea = !task.projectId;
-    const canMarkReviewed = isDueForReview(task.reviewAt);
     const normalizedInitialContexts = parseTokenInput(initialContextsDraft);
     const normalizedDraftContexts = parseTokenInput(contextsDraft);
     const startDraftChanged = startDateDraft !== initialStartDraft.date || startTimeDraft !== initialStartDraft.time;
@@ -521,36 +518,6 @@ export function TaskQuickActionMenu({
         }
     };
 
-    const handleMarkReviewed = async () => {
-        setSavingPanel('reviewAt');
-        try {
-            const result = await onUpdateTask({ reviewAt: undefined });
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to mark task reviewed');
-            }
-            onClose();
-        } catch (error) {
-            reportError('Failed to mark task reviewed from quick actions', error);
-        } finally {
-            setSavingPanel(null);
-        }
-    };
-
-    const handleAdvanceReview = async () => {
-        setSavingPanel('reviewAt');
-        try {
-            const result = await onUpdateTask({ reviewAt: getAdvancedReviewDate(task.reviewAt) });
-            if (!result.success) {
-                throw new Error(result.error || 'Failed to advance task review date');
-            }
-            onClose();
-        } catch (error) {
-            reportError('Failed to advance task review date from quick actions', error);
-        } finally {
-            setSavingPanel(null);
-        }
-    };
-
     const handleAreaSave = async () => {
         setSavingPanel('area');
         try {
@@ -702,14 +669,14 @@ export function TaskQuickActionMenu({
                         onClose();
                     },
                 })}
-                {!readOnly && renderMenuAction({
-                    ref: startButtonRef,
-                    icon: <Calendar className="h-4 w-4" />,
-                    label: `${startLabel}…`,
-                    active: activePanel === 'startTime',
-                    onClick: () => openPanel('startTime'),
-                    showChevron: true,
-                })}
+                {/* Simplified shell (see DESIGN.md): the Start/Review date,
+                    Mark reviewed, Area, Contexts and Convert to Reference
+                    entries are hidden. Every capability stays reachable on an
+                    adult path: start/review dates, area and contexts through
+                    the task editor once re-enabled in Settings -> GTD -> Task
+                    Editor Layout, and reference filing through the Tidy up
+                    (inbox processing) flow. The panels below are kept intact
+                    for the due-date entry, which remains. */}
                 {!readOnly && renderMenuAction({
                     ref: dueButtonRef,
                     icon: <Calendar className="h-4 w-4" />,
@@ -717,48 +684,6 @@ export function TaskQuickActionMenu({
                     active: activePanel === 'dueDate',
                     onClick: () => openPanel('dueDate'),
                     showChevron: true,
-                })}
-                {!readOnly && renderMenuAction({
-                    ref: reviewButtonRef,
-                    icon: <CalendarClock className="h-4 w-4" />,
-                    label: `${reviewLabel}…`,
-                    active: activePanel === 'reviewAt',
-                    onClick: () => openPanel('reviewAt'),
-                    showChevron: true,
-                })}
-                {!readOnly && canMarkReviewed && renderMenuAction({
-                    icon: <CalendarClock className="h-4 w-4" />,
-                    label: markReviewedLabel,
-                    onClick: () => { void handleMarkReviewed(); },
-                })}
-                {!readOnly && canMarkReviewed && renderMenuAction({
-                    icon: <CalendarClock className="h-4 w-4" />,
-                    label: advanceReviewLabel,
-                    onClick: () => { void handleAdvanceReview(); },
-                })}
-                {!readOnly && canEditArea && renderMenuAction({
-                    ref: areaButtonRef,
-                    icon: <MapPin className="h-4 w-4" />,
-                    label: `${areaLabel}…`,
-                    active: activePanel === 'area',
-                    onClick: () => openPanel('area'),
-                    showChevron: true,
-                })}
-                {!readOnly && renderMenuAction({
-                    ref: contextsButtonRef,
-                    icon: <Tag className="h-4 w-4" />,
-                    label: `${contextsLabel}…`,
-                    active: activePanel === 'contexts',
-                    onClick: () => openPanel('contexts'),
-                    showChevron: true,
-                })}
-                {!readOnly && task.status !== 'reference' && renderMenuAction({
-                    icon: <BookOpen className="h-4 w-4" />,
-                    label: convertToReferenceLabel,
-                    onClick: () => {
-                        onStatusChange('reference');
-                        onClose();
-                    },
                 })}
                 {!readOnly ? <div className="my-1 h-px bg-border/70" role="separator" /> : null}
                 {renderMenuAction({
