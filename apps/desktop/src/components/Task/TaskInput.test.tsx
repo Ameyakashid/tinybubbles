@@ -130,6 +130,53 @@ describe('TaskInput autocomplete', () => {
         });
     });
 
+    it('lets plain Enter through to the consumer once a /due: argument is fully typed', () => {
+        // Regression: the command-argument trigger never closes on its own
+        // (arguments may contain spaces), so the popup used to capture Enter
+        // forever and the composer could only be submitted by mouse.
+        const onKeyDown = vi.fn();
+        const { getByRole } = render(
+            <TaskInput
+                value="Buy milk /due:tomorrow"
+                onChange={vi.fn()}
+                projects={[]}
+                contexts={[]}
+                onKeyDown={onKeyDown}
+            />
+        );
+        const input = getByRole('combobox') as HTMLInputElement;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+        fireEvent.click(input);
+
+        // The popup is open, echoing the finished token back.
+        expect(getByRole('option', { name: '/due:tomorrow' })).toBeInTheDocument();
+
+        const enter = createEvent.keyDown(input, { key: 'Enter' });
+        fireEvent(input, enter);
+
+        expect(enter.defaultPrevented).toBe(false);
+        expect(onKeyDown).toHaveBeenCalled();
+        expect(input.value).toBe('Buy milk /due:tomorrow');
+    });
+
+    it('still accepts a partially typed command with Enter', async () => {
+        const onChange = vi.fn();
+        const { getByRole } = render(
+            <TaskInput value="/du" onChange={onChange} projects={[]} contexts={[]} />
+        );
+        const input = getByRole('combobox') as HTMLInputElement;
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+        fireEvent.click(input);
+
+        fireEvent.keyDown(input, { key: 'Enter' });
+
+        await waitFor(() => {
+            expect(onChange).toHaveBeenCalledWith('/due:');
+        });
+    });
+
     it('removes an explicitly accepted token when the parent applies metadata', async () => {
         const onAcceptSuggestion = vi.fn(() => true);
         const { getByRole } = render(
