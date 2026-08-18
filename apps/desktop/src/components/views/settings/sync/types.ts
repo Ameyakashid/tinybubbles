@@ -46,6 +46,8 @@ export type SettingsSyncLabels = {
     clearLog: string;
     sync: string;
     syncDescription: string;
+    parentSyncFirstRunTitle: string;
+    parentSyncFirstRunBody: string;
     syncBackend: string;
     syncBackendOff: string;
     syncBackendFile: string;

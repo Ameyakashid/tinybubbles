@@ -340,6 +340,8 @@ export const SETTINGS_LABEL_KEYS = [
     'clearLog',
     'sync',
     'syncDescription',
+    'parentSyncFirstRunTitle',
+    'parentSyncFirstRunBody',
     'syncBackend',
     'syncBackendOff',
     'syncBackendFile',
@@ -670,6 +672,10 @@ export const labelKeyOverrides: Partial<Record<keyof SettingsLabels, string>> = 
     taskEditorSectionScheduling: 'taskEdit.scheduling',
     taskEditorSectionOrganization: 'taskEdit.organization',
     taskEditorSectionDetails: 'taskEdit.details',
+    // Parent flavour's Settings → Sync first-run treatment reuses stock
+    // onboarding copy so it stays translated everywhere without new keys.
+    parentSyncFirstRunTitle: 'onboarding.syncTitle',
+    parentSyncFirstRunBody: 'onboarding.syncDesc',
 } as const;
 
 // The `t` prop every settings page reads. One loop, so SettingsView and the
