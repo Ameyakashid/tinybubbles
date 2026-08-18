@@ -120,6 +120,15 @@ Settings -> GTD -> Task Editor Layout; filing to Reference happens through the T
 up (inbox processing) flow; row status changes stay in the editor's fixed status
 control. The panel machinery is intact and serves the surviving Due Date entry.
 
+Deleted (safety pass): the page can only rescue. Clear Trash, bulk Select, per-row
+permanent delete, the dd keybinding and the search bar are gone from `TrashView.tsx`;
+every row carries one big always-visible Restore (no hover-reveal — tablets have no
+hover), and the heading wears the kid title ("Deleted", per-locale via
+display-labels). Permanent deletion is a parent-app capability now — the store's
+purge machinery is untouched and the parent flavour keeps the full view.
+`TrashView.test.tsx` pins the rescue-only contract: no destructive or bulk control
+renders, dd is unbound, every visible button is a Restore.
+
 Settings (decomposition pass 2): the nav keeps General, GTD, Manage, Notifications,
 Sync, Data and About — the pages an adult needs on the kid device (GTD holds the
 task-editor-layout escape hatch; Sync connects to the parent app). Integrations, AI

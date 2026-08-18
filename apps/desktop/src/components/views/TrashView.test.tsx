@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Project, Task } from '@tinybubbles/core';
 import { useTaskStore } from '@tinybubbles/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,15 +85,20 @@ describe('TrashView', () => {
         expect(screen.queryByText('Work deleted project')).not.toBeInTheDocument();
     });
 
-    it('bulk restores selected trashed tasks and projects', async () => {
+    // The simplified shell has no bulk selection: every row carries its own
+    // always-visible Restore (no hover-reveal — tablets have no hover).
+    it('restores a task and a project from their always-visible row buttons', async () => {
         render(
             <LanguageProvider>
                 <TrashView />
             </LanguageProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-        fireEvent.click(screen.getByRole('button', { name: /Select all/i }));
+        expect(screen.queryByRole('button', { name: 'Select' })).not.toBeInTheDocument();
+
+        const [taskRestore] = screen.getAllByRole('button', { name: 'Restore' });
+        expect(taskRestore.className).not.toContain('opacity-0');
+        fireEvent.click(taskRestore);
         fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
         await waitFor(() => {
@@ -170,37 +175,39 @@ describe('TrashView', () => {
             expect(task?.deletedAt).toBe(recentTask.deletedAt);
         });
 
-        it('purges the selected task with dd, after confirmation', async () => {
+        // No destructive action exists on the kid Deleted page, by keyboard
+        // or otherwise: dd opens nothing and purges nothing.
+        it('leaves dd unbound instead of purging', async () => {
             renderWithKeys();
 
             fireEvent.keyDown(window, { key: 'd' });
             fireEvent.keyDown(window, { key: 'd' });
 
-            fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
-
-            await waitFor(() => {
-                expect(useTaskStore.getState()._allTasks.find((task) => task.id === recentTask.id)?.purgedAt).toBeTruthy();
-            });
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            const task = useTaskStore.getState()._allTasks.find((item) => item.id === recentTask.id);
+            expect(task?.purgedAt).toBeUndefined();
+            expect(task?.deletedAt).toBe(recentTask.deletedAt);
         });
     });
 
-    it('bulk purges selected trashed items after confirmation', async () => {
+    // The rescue-only contract of the kid Deleted page: nothing on it can
+    // destroy data. Purging lives in the parent app.
+    it('offers no destructive or bulk controls and no search', () => {
         render(
             <LanguageProvider>
                 <TrashView />
             </LanguageProvider>
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Select' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: `Select ${recentTask.title}` }));
-        fireEvent.click(screen.getByRole('button', { name: 'Delete Permanently' }));
-        fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete Permanently' }));
-
-        await waitFor(() => {
-            const purgedTask = useTaskStore.getState()._allTasks.find((task) => task.id === recentTask.id);
-            expect(purgedTask?.purgedAt).toBeTruthy();
-        });
-        // The unselected project stays in the trash untouched.
-        expect(useTaskStore.getState()._allProjects.find((project) => project.id === olderProject.id)?.purgedAt).toBeUndefined();
+        expect(screen.getByRole('heading', { name: 'Deleted' })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Clear/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Delete Permanently/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Select' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+        // Every visible button is a restore or navigation control.
+        for (const button of screen.getAllByRole('button')) {
+            expect(button.textContent).toMatch(/Restore/);
+        }
     });
 });
