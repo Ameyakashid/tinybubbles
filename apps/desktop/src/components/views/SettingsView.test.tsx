@@ -188,7 +188,9 @@ describe('SettingsView', () => {
     });
 
     it('activates AI loading only while the AI settings page is open', async () => {
-        const { getByRole } = render(
+        // The AI page is hidden from the settings nav in the simplified
+        // shell; settings search / deep links (initialPage) are the way in.
+        const { rerender } = render(
             <LanguageProvider>
                 <KeybindingProvider currentView="settings" onNavigate={() => undefined}>
                     <SettingsView />
@@ -198,15 +200,21 @@ describe('SettingsView', () => {
 
         expect(aiHookTracker.enabled[aiHookTracker.enabled.length - 1]).toBe(false);
 
-        fireEvent.click(getByRole('button', { name: 'ai' }));
+        rerender(
+            <LanguageProvider>
+                <KeybindingProvider currentView="settings" onNavigate={() => undefined}>
+                    <SettingsView initialPage="ai" />
+                </KeybindingProvider>
+            </LanguageProvider>
+        );
 
         await waitFor(() => {
             expect(aiHookTracker.enabled[aiHookTracker.enabled.length - 1]).toBe(true);
         });
     });
 
-    it('keeps integrations state mounted across parent rerenders', async () => {
-        const { getByRole, getByText } = render(
+    it('hides adult-only pages from the settings nav in the simplified shell', () => {
+        const { getByRole, queryByRole } = render(
             <LanguageProvider>
                 <KeybindingProvider currentView="settings" onNavigate={() => undefined}>
                     <SettingsView />
@@ -214,9 +222,27 @@ describe('SettingsView', () => {
             </LanguageProvider>
         );
 
-        await act(async () => {
-            fireEvent.click(getByRole('button', { name: 'integrations' }));
-        });
+        // Kept: the pages an adult needs on the kid device.
+        for (const page of ['main', 'gtd', 'manage', 'notifications', 'sync', 'data', 'about']) {
+            expect(getByRole('button', { name: page })).toBeInTheDocument();
+        }
+        // Hidden from the nav (still reachable via settings search and
+        // initialPage deep links): API keys, integrations, local API.
+        for (const page of ['integrations', 'ai', 'advanced']) {
+            expect(queryByRole('button', { name: page })).not.toBeInTheDocument();
+        }
+    });
+
+    it('keeps integrations state mounted across parent rerenders', async () => {
+        // Integrations is nav-hidden in the simplified shell; open it the way
+        // search / deep links do.
+        const { getByText } = render(
+            <LanguageProvider>
+                <KeybindingProvider currentView="settings" onNavigate={() => undefined}>
+                    <SettingsView initialPage="integrations" />
+                </KeybindingProvider>
+            </LanguageProvider>
+        );
 
         await waitFor(() => {
             expect(getByText('integrations-page')).toBeInTheDocument();

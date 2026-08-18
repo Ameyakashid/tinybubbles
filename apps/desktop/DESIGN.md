@@ -96,6 +96,16 @@ Review view is already hidden-but-routable, so review-due items surface there, n
 the child's first screen. Presentation only: `reviewAt` is untouched in core and the
 view-local review pipelines were removed from `AgendaView.tsx` alone.
 
+Settings (decomposition pass 2): the nav keeps General, GTD, Manage, Notifications,
+Sync, Data and About — the pages an adult needs on the kid device (GTD holds the
+task-editor-layout escape hatch; Sync connects to the parent app). Integrations, AI
+and Advanced are hidden from the nav: API keys, Obsidian vaults and the local
+API/automation surface are adult-only. The pages stay registered — settings search
+still lists their rows and navigates to them, and `initialPage` deep links still
+open them. Limitation: on narrow viewports the sidebar collapses to a `<select>`
+built from the same nav list, so the three hidden pages need a wide window (search
+is desktop-only) — acceptable for an adult task, recorded here.
+
 ## Known state
 
 - The desktop suite is green (1995/1995 as of the review-hide pass). The former

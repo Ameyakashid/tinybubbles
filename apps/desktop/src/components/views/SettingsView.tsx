@@ -14,12 +14,9 @@ import {
   Database,
   Info,
   Layers,
-  Link2,
   ListChecks,
   Monitor,
   RefreshCw,
-  SlidersHorizontal,
-  Sparkles,
   X,
 } from "lucide-react";
 import {
@@ -499,21 +496,12 @@ export function SettingsView({ initialPage, onboardingHintPage, onResumeOnboardi
         icon: Database,
         label: t.data,
       },
-      {
-        id: "integrations",
-        icon: Link2,
-        label: t.integrations,
-      },
-      {
-        id: "ai",
-        icon: Sparkles,
-        label: t.ai,
-      },
-      {
-        id: "advanced",
-        icon: SlidersHorizontal,
-        label: t.advanced,
-      },
+      // Integrations, AI and Advanced are hidden from the nav in the
+      // simplified shell — API keys, Obsidian vaults and local-API/automation
+      // are adult-only surfaces on a kid device. The pages themselves stay
+      // registered and reachable: settings search still lists their rows and
+      // navigates to them (onSelectSearchResult sets any pageId), and
+      // initialPage deep links still open them. See DESIGN.md.
       {
         id: "about",
         icon: Info,
