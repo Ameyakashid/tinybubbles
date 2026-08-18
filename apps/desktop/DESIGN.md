@@ -70,10 +70,24 @@ bubble layer keep feedback (colour/shape) and drop movement.
 
 ## Wording
 
-`src/lib/display-labels.ts` — English-gated display overrides; other locales keep their
-real translations. Current map: To do · Maybe later · Waiting · Deleted · My lists ·
-Later · Tidy up · Get it all out · Find anything · "See what is coming up" · "Pick a
-list to see its tasks" · "e.g. Feed the cat" · and calendar panel wording.
+`src/lib/display-labels.ts` — per-locale kid-register display overrides. English map:
+To do · Maybe later · Waiting · Deleted · My lists · Later · Tidy up · Get it all out ·
+Find anything · "See what is coming up" · "Pick a list to see its tasks" · "e.g. Feed
+the cat" · and calendar panel wording.
+
+Fourteen more locales carry their own tables (de, es, fr, it, nl, pl, pt, ru, sv, tr,
+ja, ko, zh, zh-Hant), written for the register a parent uses with a young child in
+that language rather than translating the English kid-words (fr "Vide ton sac" for the
+mind sweep, ja おかたづけ for tidying, zh 以后再说 for "maybe later"; Japanese is
+kana-first on purpose). A key omitted from a locale's table falls back to the core
+translation for that locale (used where the core word is already child-fine, or where
+grammar blocks a shared label — Russian numeral declension cannot share one word
+between a section title and a "{count} {label}" line, so ru omits `calendar.items`).
+Locales with no table — **ar, cs, fa, hi, vi** — stay entirely on core translations:
+kid register there needs a native check, and a wrong-register guess is worse than the
+adult word. `display-labels.test.ts` pins the contract: every locale key must exist in
+the English table, so typos cannot become silent dead entries. Core translations remain
+byte-untouched.
 
 ---
 
@@ -150,10 +164,10 @@ hand inside the Rockpool tokens.
   of BoardView/ObsidianView/ReviewView). Production clean.
 - Follow-ups: ~~bundled Nunito~~ (done — variable Nunito, latin + latin-ext,
   ships in `public/fonts/` with its OFL licence; the font stack is unchanged, the
-  "Nunito" entry simply resolves everywhere now); per-locale display overrides; an
-  owner decision on the
-  sidebar footer (area filter, sync status) and on demoting Settings to
-  footer-icon-only (8a).
+  "Nunito" entry simply resolves everywhere now); ~~per-locale display overrides~~
+  (done for 14 locales — see Wording; ar/cs/fa/hi/vi still need a native-speaker
+  pass); an owner decision on the
+  sidebar footer (area filter, sync status).
 
 
 ## Calendar: month and nothing else (kid shell)
