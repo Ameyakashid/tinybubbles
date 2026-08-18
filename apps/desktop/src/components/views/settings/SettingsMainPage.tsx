@@ -205,10 +205,20 @@ export function SettingsMainPage({
             {/* Look & Feel */}
             <SettingsSectionHeader>{t.lookAndFeel}</SettingsSectionHeader>
             <SettingsCard>
+                {/* Kid shell: three looks, not eight.
+                    Sunlit Rockpool IS the light and dark themes — the warm sand daytime
+                    pool and the same pool at night. The other five presets (e-ink, Nord,
+                    Catppuccin, Dracula, sepia) override the very tokens that identity is
+                    built from, so picking one does not restyle the kid app so much as
+                    replace it with someone else's colour scheme. System/Light/Dark is the
+                    whole identity, and "System" means it follows the room without anyone
+                    having to choose. The theme engine is untouched: a device that already
+                    stores another preset still renders it, and the parent flavour keeps
+                    the full list. */}
                 <SettingRow padded
                     settingsKey="appearance"
                     title={t.appearance}
-                    description={`${t.system} / ${t.light} / ${t.dark} / ${t.eink} / ${t.nord} / ${t.catppuccinMacchiato} / ${t.dracula} / ${t.sepia}`}
+                    description={`${t.system} / ${t.light} / ${t.dark}`}
                 >
                     <select
                         aria-label={t.appearance}
@@ -219,11 +229,6 @@ export function SettingsMainPage({
                         <option value="system">{t.system}</option>
                         <option value="light">{t.light}</option>
                         <option value="dark">{t.dark}</option>
-                        <option value="eink">{t.eink}</option>
-                        <option value="nord">{t.nord}</option>
-                        <option value="catppuccin-macchiato">{t.catppuccinMacchiato}</option>
-                        <option value="dracula">{t.dracula}</option>
-                        <option value="sepia">{t.sepia}</option>
                     </select>
                 </SettingRow>
                 <SettingRow padded settingsKey="density" title={t.density} description={t.densityDesc}>

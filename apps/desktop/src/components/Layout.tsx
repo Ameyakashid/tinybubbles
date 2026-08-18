@@ -865,7 +865,12 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                 onClick={() => onViewChange('settings')}
                                 className={cn(
                                     "group relative w-full rounded-md text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset",
-                                    isCollapsed ? "flex h-10 items-center justify-center px-0" : "h-9 min-w-0 flex-1 px-2",
+                                    // Kid shell: Settings is a quiet corner icon, never a
+                                    // labelled row. A child reading the sidebar should not
+                                    // find an invitation to go configuring things; a grown-up
+                                    // still reaches it in one tap, and the accessible name
+                                    // stays "Settings" for screen readers and for tests.
+                                    isCollapsed ? "flex h-10 items-center justify-center px-0" : "flex h-9 w-9 shrink-0 items-center justify-center px-0",
                                     currentView === 'settings'
                                         ? "bg-primary/5 text-primary"
                                         : "text-muted-foreground hover:bg-accent/70 hover:text-accent-foreground"
@@ -874,9 +879,8 @@ export function Layout({ children, currentView, onViewChange, onOpenSyncSettings
                                 title={t('nav.settings')}
                                 aria-label={isCollapsed ? `${t('nav.settings')}. ${syncTooltip}` : t('nav.settings')}
                             >
-                                <span className="inline-flex min-w-0 items-center gap-2 text-sm font-medium">
+                                <span className="inline-flex min-w-0 items-center justify-center text-sm font-medium">
                                     <Settings className="h-4 w-4 shrink-0" />
-                                    {!isCollapsed && <span>{t('nav.settings')}</span>}
                                 </span>
                                 {isCollapsed && (
                                     <span

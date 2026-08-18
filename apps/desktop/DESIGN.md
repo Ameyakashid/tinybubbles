@@ -175,3 +175,30 @@ Three `CalendarView` tests asserted week and schedule rendering and are now inve
 assert that asking for those modes in the URL still yields the month grid, and that no
 time-of-day drop targets exist. Day-level drag-and-drop still works — a child can drag a task
 onto a day, just not onto an hour.
+
+
+## Two owner questions, answered from the project's own goals
+
+The kid builder raised these and the owner had not answered when the work resumed. Both were
+settled from the goals already recorded rather than left blocking.
+
+### Settings is a corner icon, not a labelled row
+
+A labelled "Settings" row in a child's sidebar is an invitation to go exploring. It is now
+the gear icon alone, in the footer where it already sat. A grown-up still reaches it in one
+tap, and the accessible name stays "Settings", so screen readers and tests are unaffected.
+Nothing moved and nothing became unreachable — the word went away, not the door.
+
+### Three looks, not eight
+
+The picker offered System, Light, Dark, e-ink, Nord, Catppuccin, Dracula and sepia. It now
+offers the first three.
+
+The reason is stronger than simplicity. **Sunlit Rockpool *is* the light and dark themes** —
+the warm sand daytime pool and the same pool at night. The other five presets override the
+very tokens that identity is built from, so choosing one does not restyle the kid app, it
+replaces it with somebody else's colour scheme. "System" covers the common case without
+anyone having to choose, since it follows the room.
+
+The theme engine is untouched. A device that already stores another preset still renders it,
+and the parent flavour keeps the full list.
