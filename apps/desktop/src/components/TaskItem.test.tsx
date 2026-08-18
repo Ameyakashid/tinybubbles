@@ -3,7 +3,7 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TaskItem } from '../components/TaskItem';
-import { Area, Project, Task, configureDateFormatting, safeFormatDate, useTaskStore } from '@tinybubbles/core';
+import { Project, Task, configureDateFormatting, safeFormatDate, useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '../contexts/language-context';
 import { useUiStore } from '../store/ui-store';
 
