@@ -1,4 +1,4 @@
-import { act, createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Area, Project, Task } from '@tinybubbles/core';
 
@@ -219,30 +219,23 @@ describe('CalendarView', () => {
         expect(markerStyle).toContain('color: hsl(var(--primary-foreground));');
     });
 
-    it('keeps week columns aligned beside the scrollbar and the midnight label visible', async () => {
+    // The kid shell renders a month grid and nothing else. The Day/Week/Month/Schedule
+    // toggles are hidden, so any other mode would be a room with no visible door out.
+    // These assert the pin holds against the ways a non-month mode can leak in — a stale
+    // link, a restored session — because that is what would strand a child.
+    it('ignores a week view asked for in the URL and still shows the month grid', async () => {
         window.history.replaceState(null, '', '/?calendarView=week&calendarDate=2026-04-03');
-        const offsetWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(100);
-        const clientWidth = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(88);
 
-        try {
-            renderCalendar();
-            await flushCalendarEffects();
+        renderCalendar();
+        await flushCalendarEffects();
 
-            const headerGrid = screen.getByText('Time').parentElement;
-            const allDayGrid = screen.getByText('All day').parentElement;
-            const timedScroller = document.querySelector('[data-calendar-timed-drop-date]')?.parentElement?.parentElement;
-            const midnightLabel = timedScroller?.firstElementChild?.firstElementChild?.firstElementChild;
-
-            expect(headerGrid).toHaveStyle({ paddingRight: '12px' });
-            expect(allDayGrid).toHaveStyle({ paddingRight: '12px' });
-            expect(midnightLabel).toHaveClass('first:translate-y-0');
-        } finally {
-            offsetWidth.mockRestore();
-            clientWidth.mockRestore();
-        }
+        expect(document.querySelector('[data-calendar-drop-date]')).toBeTruthy();
+        expect(screen.queryByText('Time')).not.toBeInTheDocument();
+        expect(screen.queryByText('All day')).not.toBeInTheDocument();
+        expect(document.querySelector('[data-calendar-timed-drop-date]')).toBeNull();
     });
 
-    it('starts a restored schedule view from today instead of the first day of the month', async () => {
+    it('ignores a schedule view asked for in the URL and still shows the month grid', async () => {
         window.history.replaceState(null, '', '/?calendarView=schedule&calendarMonth=2026-04');
         storeMocks.taskStoreState.tasks = [
             makeTask({
@@ -261,9 +254,11 @@ describe('CalendarView', () => {
         renderCalendar();
         await flushCalendarEffects();
 
-        expect(screen.queryByText('Month start task')).not.toBeInTheDocument();
+        // A month grid shows the whole month, so the 1st is present rather than skipped
+        // the way the schedule view would have skipped it.
+        expect(document.querySelector('[data-calendar-drop-date="2026-04-01"]')).toBeTruthy();
+        expect(screen.getAllByText('Month start task').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Today task').length).toBeGreaterThan(0);
-        expect(window.location.search).toContain('calendarDate=2026-04-03');
     });
 
     it('rejects rolled-over date values in calendar composer parsing', () => {
@@ -986,7 +981,7 @@ describe('CalendarView', () => {
         });
     });
 
-    it('schedules a task when dropped on a timed calendar slot', async () => {
+    it('offers no timed drop slots, because dropping onto a time is a week and day affordance', async () => {
         window.history.replaceState(null, '', '/?calendarView=week&calendarDate=2026-04-03');
         storeMocks.taskStoreState.tasks = [
             makeTask({
@@ -998,36 +993,10 @@ describe('CalendarView', () => {
         renderCalendar();
         await flushCalendarEffects();
 
-        const dropTarget = document.querySelector('[data-calendar-timed-drop-date="2026-04-03"]') as HTMLElement;
-        expect(dropTarget).toBeTruthy();
-        Object.defineProperty(dropTarget, 'getBoundingClientRect', {
-            value: () => ({
-                bottom: 24 * 56,
-                height: 24 * 56,
-                left: 0,
-                right: 320,
-                top: 0,
-                width: 320,
-                x: 0,
-                y: 0,
-                toJSON: () => ({}),
-            }),
-        });
-
-        const dataTransfer = createTaskDragDataTransfer('timed-drop-task');
-        await act(async () => {
-            const dragOverEvent = createEvent.dragOver(dropTarget, { dataTransfer });
-            Object.defineProperty(dragOverEvent, 'clientY', { value: 9 * 56 });
-            fireEvent(dropTarget, dragOverEvent);
-            const dropEvent = createEvent.drop(dropTarget, { dataTransfer });
-            Object.defineProperty(dropEvent, 'clientY', { value: 9 * 56 });
-            fireEvent(dropTarget, dropEvent);
-            await Promise.resolve();
-        });
-
-        expect(storeMocks.taskStoreState.updateTask).toHaveBeenCalledWith('timed-drop-task', {
-            startTime: new Date(2026, 3, 3, 9, 0).toISOString(),
-        });
+        // Day-level drop targets remain: a child can still drag a task onto a day.
+        expect(document.querySelector('[data-calendar-drop-date]')).toBeTruthy();
+        // Time-of-day targets do not, and cannot be reached by asking for week in the URL.
+        expect(document.querySelector('[data-calendar-timed-drop-date]')).toBeNull();
     });
 
     it('moves an existing calendar task by dragging it to another day', async () => {

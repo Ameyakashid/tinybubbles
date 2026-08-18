@@ -619,22 +619,10 @@ export function useDesktopCalendarController() {
                     consume();
                     nav.handleToday();
                     break;
-                case 'd':
-                    consume();
-                    nav.handleViewModeChange('day');
-                    break;
-                case 'w':
-                    consume();
-                    nav.handleViewModeChange('week');
-                    break;
-                case 'm':
-                    consume();
-                    nav.handleViewModeChange('month');
-                    break;
-                case 'a':
-                    consume();
-                    nav.handleViewModeChange('schedule');
-                    break;
+                // Kid shell: the d/w/m/a mode shortcuts are gone. With the mode toggles
+                // hidden, pressing 'd' put a child into day view with no visible control
+                // to get back to the month grid — a trap, not a shortcut. The calendar is
+                // month-only here; see use-calendar-month-navigation.ts.
                 case 'ArrowLeft':
                     consume();
                     nav.handlePrevMonth();

@@ -96,11 +96,24 @@ export function CalendarView() {
         updateTask,
         updateTaskDateFromDrop,
         updateTaskStartTimeFromDrop,
-        viewMode,
+        viewMode: controllerViewMode,
         visibleSearchMatchCount,
         weekdayHeaders,
         yearOptions,
     } = controller;
+
+    // Kid shell: the calendar is a month grid and nothing else.
+    //
+    // The Day/Week/Month/Schedule toggles are hidden, so any other mode is a room with
+    // no visible door out — a stale `?calendarView=day` link, a restored session, or a
+    // stray keypress could strand a child there with no way back to the month.
+    // Pinning the rendered mode closes that off at the one place it can leak in.
+    //
+    // The controller keeps all four modes and so does the navigation hook: this is a
+    // presentation decision for the kid flavour, not a removal. The parent flavour, and
+    // every test covering day/week/schedule arithmetic, are untouched.
+    const viewMode = 'month' as typeof controllerViewMode;
+    void controllerViewMode;
     // One registration covers the whole view: the grid, the planning panel and
     // the selected-day panel all render inside it, so document order already
     // flattens them in the order the user sees.

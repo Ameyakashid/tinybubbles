@@ -151,3 +151,27 @@ hand inside the Rockpool tokens.
 - Follow-ups: bundled Nunito; per-locale display overrides; an owner decision on the
   sidebar footer (area filter, sync status) and on demoting Settings to
   footer-icon-only (8a).
+
+
+## Calendar: month and nothing else (kid shell)
+
+The Day/Week/Month/Schedule toggles were hidden in an earlier pass, but the modes behind
+them stayed selectable — through `?calendarView=`, a restored session, or the `d`/`w`/`a`
+keyboard shortcuts. That made every non-month mode a room with no visible door out: a child
+who landed in day view had nothing on screen to get back to the month with.
+
+Two changes close it:
+
+- `CalendarView.tsx` pins the rendered mode to `month`, so nothing that sets `viewMode` can
+  produce a stranded screen.
+- The `d`/`w`/`m`/`a` shortcuts are removed from `useDesktopCalendarController.ts`. They were
+  the only way to trigger the trap deliberately.
+
+**Nothing was deleted.** The controller and `use-calendar-month-navigation.ts` keep all four
+modes, and every test covering day/week/schedule arithmetic still runs and passes. This is a
+presentation decision for the kid flavour; the parent flavour is untouched.
+
+Three `CalendarView` tests asserted week and schedule rendering and are now inverted: they
+assert that asking for those modes in the URL still yields the month grid, and that no
+time-of-day drop targets exist. Day-level drag-and-drop still works — a child can drag a task
+onto a day, just not onto an hour.
