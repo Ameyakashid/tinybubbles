@@ -148,7 +148,10 @@ hand inside the Rockpool tokens.
   'disabled' on Windows. All three are fixed, not suppressed.
 - Dev-only, pre-existing: three console exceptions on dev-server load (idle prefetch
   of BoardView/ObsidianView/ReviewView). Production clean.
-- Follow-ups: bundled Nunito; per-locale display overrides; an owner decision on the
+- Follow-ups: ~~bundled Nunito~~ (done — variable Nunito, latin + latin-ext,
+  ships in `public/fonts/` with its OFL licence; the font stack is unchanged, the
+  "Nunito" entry simply resolves everywhere now); per-locale display overrides; an
+  owner decision on the
   sidebar footer (area filter, sync status) and on demoting Settings to
   footer-icon-only (8a).
 

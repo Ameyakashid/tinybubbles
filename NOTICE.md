@@ -92,3 +92,10 @@ under their own respective licences, which are unaffected by this fork. See the 
 
 The `patches/` directory contains modifications to third-party packages carried over from
 upstream; those patches remain under the licence of the package they patch.
+
+### Bundled fonts
+
+- **Nunito** (`apps/desktop/public/fonts/nunito-*.woff2`) — copyright 2014 The Nunito
+  Project Authors (https://github.com/googlefonts/nunito), licensed under the SIL Open
+  Font License 1.1. The full licence text ships alongside the font files at
+  `apps/desktop/public/fonts/OFL.txt`.
