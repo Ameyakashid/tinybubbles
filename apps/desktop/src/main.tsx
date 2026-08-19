@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import { QuickAddWindowApp } from './QuickAddWindowApp.tsx';
+import { KidFaceApp } from './kidface/KidFaceApp.tsx';
+import { isNextFaceLocation } from './kidface/face-location.ts';
 import './index.css';
 
 import { consoleLogger, setLogger, setStorageAdapter } from '@tinybubbles/core';
@@ -220,7 +222,9 @@ async function bootstrap() {
         });
     }
 
-    const RootApp = isQuickAddWindow ? QuickAddWindowApp : App;
+    // ?face=next selects the rebuilt kid face on the same origin (and thus the
+    // same stored data and sync token) as the stock shell. See kidface/.
+    const RootApp = isQuickAddWindow ? QuickAddWindowApp : isNextFaceLocation() ? KidFaceApp : App;
 
     ReactDOM.createRoot(document.getElementById('root')!).render(
         <React.StrictMode>

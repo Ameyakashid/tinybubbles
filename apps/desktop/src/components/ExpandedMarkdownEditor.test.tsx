@@ -14,8 +14,8 @@ const baseProps = {
     initialMode: 'edit' as const,
     selection: { start: 0, end: 0 } as const,
     canUndo: false,
-    onUndo: () => undefined as const,
-    onApplyAction: () => undefined as const,
+    onUndo: () => undefined,
+    onApplyAction: () => undefined,
     onSelectionChange: vi.fn(),
 };
 
