@@ -3,6 +3,7 @@ import { Sparkles, RotateCcw } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { AddBubble } from './AddBubble';
 import { TaskBubbleRow } from './TaskBubbleRow';
+import { OpenTaskView } from './OpenTaskView';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,7 @@ export function TodayView() {
     const addTask = useTaskStore((state) => state.addTask);
     const updateTask = useTaskStore((state) => state.updateTask);
     const [justCompletedIds, setJustCompletedIds] = useState<Set<string>>(new Set());
+    const [openTaskId, setOpenTaskId] = useState<string | null>(null);
 
     const { openTasks, doneToday } = useMemo(() => {
         const now = new Date();
@@ -59,6 +61,11 @@ export function TodayView() {
         done.sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
         return { openTasks: open, doneToday: done };
     }, [tasks]);
+
+    const selectedTask = useMemo(
+        () => tasks.find((task) => task.id === openTaskId) ?? null,
+        [tasks, openTaskId],
+    );
 
     const handleAdd = async (title: string) => {
         await addTask(title, { status: 'next' });
@@ -83,6 +90,15 @@ export function TodayView() {
                 });
             }, 1500);
         }
+    };
+
+    const handleToggleChecklistItem = async (taskId: string, itemId: string) => {
+        const task = tasks.find((candidate) => candidate.id === taskId);
+        if (!task?.checklist) return;
+        const nextChecklist = task.checklist.map((item) =>
+            item.id === itemId ? { ...item, isCompleted: !item.isCompleted } : item
+        );
+        await updateTask(taskId, { checklist: nextChecklist });
     };
 
     const now = new Date();
@@ -122,7 +138,11 @@ export function TodayView() {
                                 className={cn('kidface-slide-up', justCompletedIds.has(task.id) && 'opacity-60')}
                                 style={{ animationDelay: `${index * 40}ms` }}
                             >
-                                <TaskBubbleRow task={task} onToggle={handleToggle} />
+                                <TaskBubbleRow
+                                    task={task}
+                                    onToggle={handleToggle}
+                                    onOpen={(openedTask) => setOpenTaskId(openedTask.id)}
+                                />
                             </li>
                         ))}
                     </ul>
@@ -153,6 +173,15 @@ export function TodayView() {
                         ))}
                     </ul>
                 </section>
+            )}
+
+            {selectedTask && (
+                <OpenTaskView
+                    task={selectedTask}
+                    onClose={() => setOpenTaskId(null)}
+                    onToggleTask={handleToggle}
+                    onToggleChecklistItem={handleToggleChecklistItem}
+                />
             )}
         </div>
     );

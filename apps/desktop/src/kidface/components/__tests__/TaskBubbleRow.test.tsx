@@ -1,0 +1,72 @@
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import type { Task } from '@tinybubbles/core';
+
+import { LanguageProvider } from '@/contexts/language-context';
+import { TaskBubbleRow } from '../TaskBubbleRow';
+
+const baseTask: Task = {
+    id: 'task-1',
+    title: 'Brush teeth',
+    status: 'next',
+    tags: [],
+    contexts: [],
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+};
+
+const renderRow = (props: {
+    task?: Task;
+    onToggle?: (task: Task) => void;
+    onOpen?: (task: Task) => void;
+}) => render(
+    <LanguageProvider>
+        <TaskBubbleRow
+            task={props.task ?? baseTask}
+            onToggle={props.onToggle ?? vi.fn()}
+            onOpen={props.onOpen ?? vi.fn()}
+        />
+    </LanguageProvider>
+);
+
+describe('TaskBubbleRow', () => {
+    it('opens the task when the title area is clicked', () => {
+        const onOpen = vi.fn();
+        renderRow({ onOpen });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Open Brush teeth' }));
+
+        expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }));
+    });
+
+    it('completes the task when the checkbox is clicked without opening', () => {
+        const onToggle = vi.fn();
+        const onOpen = vi.fn();
+        renderRow({ onToggle, onOpen });
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+
+        expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }));
+        expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('shows checklist progress when the task has checklist items', () => {
+        const task: Task = {
+            ...baseTask,
+            checklist: [
+                { id: 'item-1', title: 'Get toothbrush', isCompleted: true },
+                { id: 'item-2', title: 'Put toothpaste on', isCompleted: false },
+            ],
+        };
+        renderRow({ task });
+
+        expect(screen.getByText('1 / 2')).toBeInTheDocument();
+    });
+
+    it('shows the focus star when the task is focused today', () => {
+        const task: Task = { ...baseTask, isFocusedToday: true };
+        renderRow({ task });
+
+        expect(screen.getByLabelText('Focused today')).toBeInTheDocument();
+    });
+});

@@ -1,4 +1,4 @@
-import { Star } from 'lucide-react';
+import { Star, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import type { Task } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils';
 interface TaskBubbleRowProps {
     task: Task;
     onToggle: (task: Task) => void | Promise<void>;
+    onOpen: (task: Task) => void;
 }
 
-export function TaskBubbleRow({ task, onToggle }: TaskBubbleRowProps) {
+export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     const [isPopping, setIsPopping] = useState(false);
 
     const handleToggle = () => {
@@ -30,7 +31,12 @@ export function TaskBubbleRow({ task, onToggle }: TaskBubbleRowProps) {
                 onChange={handleToggle}
                 label={`Mark ${task.title} as done`}
             />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <button
+                type="button"
+                onClick={() => onOpen(task)}
+                className="flex min-w-0 flex-1 flex-col text-left"
+                aria-label={`Open ${task.title}`}
+            >
                 <span className="truncate text-lg font-semibold leading-snug text-foreground">
                     {task.title}
                 </span>
@@ -41,13 +47,19 @@ export function TaskBubbleRow({ task, onToggle }: TaskBubbleRowProps) {
                         {task.checklist.length}
                     </span>
                 )}
-            </div>
-            {task.isFocusedToday && (
-                <Star
-                    className="size-6 shrink-0 fill-focus-star text-focus-star"
-                    aria-label="Focused today"
+            </button>
+            <div className="flex shrink-0 items-center gap-2">
+                {task.isFocusedToday && (
+                    <Star
+                        className="size-6 shrink-0 fill-focus-star text-focus-star"
+                        aria-label="Focused today"
+                    />
+                )}
+                <ChevronRight
+                    className="size-6 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
                 />
-            )}
+            </div>
         </div>
     );
 }
