@@ -39,7 +39,12 @@ const DEFAULT_LIST_OPTIONS: ListOptions = {
     showDetails: false,
     nextGroupBy: 'none',
     referenceGroupBy: 'area',
-    doneGroupBy: 'none',
+    // Kid-shell default (see DESIGN.md): the Done page answers "what did I
+    // finish today?" with its shape — Today / Yesterday / date headers — so
+    // completion-date grouping is on where nothing was ever chosen. A stored
+    // doneGroupBy (including an explicit 'none') is respected as-is; Done has
+    // no toolbar in this shell, so this default is the shape a child sees.
+    doneGroupBy: 'completedDate',
     archivedGroupBy: 'none',
     focusTop3Only: false,
 };

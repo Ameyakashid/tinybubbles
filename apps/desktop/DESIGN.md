@@ -135,7 +135,12 @@ same `hideControls` arrangement Inbox has carried since its own pass. A persiste
 done sort/grouping still orders the rows (the ui-store options outlive their
 toolbar), global search still covers completed tasks, and the parent app keeps the
 full toolbar. Built functionally plain on purpose: design attention for this page
-goes to Kimi next.
+went to Kimi next (the celebration paint pass). Follow-up accepted from Kimi's
+recommendation: the kid-shell default for Done grouping is now completion date —
+Today / Yesterday / date headers — set in ui-store's DEFAULT_LIST_OPTIONS. A
+stored doneGroupBy (including an explicit 'none') is respected; the default
+applies where nothing was ever chosen. Archive keeps its own 'none' default and
+the parent flavour is untouched.
 
 Settings (decomposition pass 2): the nav keeps General, GTD, Manage, Notifications,
 Sync, Data and About — the pages an adult needs on the kid device (GTD holds the

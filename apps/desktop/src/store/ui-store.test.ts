@@ -53,8 +53,9 @@ describe('useUiStore list options', () => {
             nextGroupBy: 'project',
             referenceGroupBy: 'context',
             // Written by a build that predates the Done and Archive axes:
-            // defaulted, not undefined.
-            doneGroupBy: 'none',
+            // defaulted, not undefined — and Done's kid-shell default is
+            // completion-date grouping (see DESIGN.md).
+            doneGroupBy: 'completedDate',
             archivedGroupBy: 'none',
             focusTop3Only: true,
         });
