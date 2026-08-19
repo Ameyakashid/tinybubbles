@@ -1,0 +1,72 @@
+/* Kid-face scoped motion.
+ * These keyframes are only used inside src/kidface/ components and are imported
+ * only by the new face, so the stock shell at / is unaffected.
+ */
+
+@keyframes kidface-drift {
+    0%, 100% {
+        transform: translateY(0) translateX(0);
+    }
+    33% {
+        transform: translateY(-12px) translateX(8px);
+    }
+    66% {
+        transform: translateY(8px) translateX(-6px);
+    }
+}
+
+@keyframes kidface-pop {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(0.85);
+    }
+    70% {
+        transform: scale(1.12);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes kidface-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.kidface-drift {
+    animation: kidface-drift 18s ease-in-out infinite;
+}
+
+.kidface-drift-slow {
+    animation: kidface-drift 24s ease-in-out infinite reverse;
+}
+
+.kidface-drift-medium {
+    animation: kidface-drift 20s ease-in-out infinite;
+}
+
+.kidface-pop {
+    animation: kidface-pop 0.25s ease-out;
+}
+
+.kidface-slide-up {
+    animation: kidface-slide-up 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .kidface-drift,
+    .kidface-drift-slow,
+    .kidface-drift-medium,
+    .kidface-pop,
+    .kidface-slide-up {
+        animation: none;
+    }
+}
