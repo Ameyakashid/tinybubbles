@@ -54,7 +54,7 @@ const EN_OVERRIDES: Record<string, string> = {
     'mindSweep.title': 'Get it all out',
     'calendar.tasksAndEvents': 'See what is coming up',
     'search.scopeHint': 'Find anything',
-    'inbox.projectHint': 'If something needs lots of steps, you can turn it into a list while you tidy up.',
+    'inbox.projectHint': 'If something needs lots of steps, you can turn it into a list.',
     'task.createProjectFromTask': 'Turn into a list',
     // Used where the shell counts them ("2 tasks · 1 lists" on Deleted):
     // lowercase, because it follows a number, not a heading. Locales whose
@@ -89,7 +89,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Alles rauslassen',
         'calendar.tasksAndEvents': 'Schau, was ansteht',
         'search.scopeHint': 'Finde alles',
-        'inbox.projectHint': 'Wenn etwas viele Schritte braucht, kannst du beim Aufräumen eine Liste daraus machen.',
+        'inbox.projectHint': 'Wenn etwas viele Schritte braucht, kannst du eine Liste daraus machen.',
         'task.createProjectFromTask': 'In eine Liste verwandeln',
     },
     es: {
@@ -115,7 +115,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Suéltalo todo',
         'calendar.tasksAndEvents': 'Mira lo que viene',
         'search.scopeHint': 'Encuentra lo que sea',
-        'inbox.projectHint': 'Si algo necesita muchos pasos, puedes convertirlo en una lista mientras ordenas.',
+        'inbox.projectHint': 'Si algo necesita muchos pasos, puedes convertirlo en una lista.',
         'task.createProjectFromTask': 'Convertir en lista',
     },
     fr: {
@@ -140,7 +140,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Vide ton sac',
         'calendar.tasksAndEvents': 'Regarde ce qui arrive',
         'search.scopeHint': 'Trouve ce que tu cherches',
-        'inbox.projectHint': "Si quelque chose demande beaucoup d'étapes, tu peux en faire une liste pendant que tu ranges.",
+        'inbox.projectHint': "Si quelque chose demande beaucoup d'étapes, tu peux en faire une liste.",
         'task.createProjectFromTask': 'Transformer en liste',
     },
     it: {
@@ -165,7 +165,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Tira fuori tutto',
         'calendar.tasksAndEvents': 'Guarda cosa arriva',
         'search.scopeHint': 'Trova quello che vuoi',
-        'inbox.projectHint': 'Se una cosa ha bisogno di tanti passaggi, puoi trasformarla in una lista mentre metti in ordine.',
+        'inbox.projectHint': 'Se una cosa ha bisogno di tanti passaggi, puoi trasformarla in una lista.',
         'task.createProjectFromTask': 'Trasforma in lista',
     },
     nl: {
@@ -190,7 +190,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Gooi het eruit',
         'calendar.tasksAndEvents': 'Kijk wat eraan komt',
         'search.scopeHint': 'Vind alles',
-        'inbox.projectHint': 'Als iets veel stappen nodig heeft, kun je er tijdens het opruimen een lijstje van maken.',
+        'inbox.projectHint': 'Als iets veel stappen nodig heeft, kun je er een lijstje van maken.',
         'task.createProjectFromTask': 'Maak er een lijstje van',
     },
     pl: {
@@ -215,7 +215,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Wyrzuć wszystko z głowy',
         'calendar.tasksAndEvents': 'Zobacz, co się szykuje',
         'search.scopeHint': 'Znajdź, co chcesz',
-        'inbox.projectHint': 'Jeśli coś wymaga wielu kroków, możesz zrobić z tego listę podczas sprzątania.',
+        'inbox.projectHint': 'Jeśli coś wymaga wielu kroków, możesz zrobić z tego listę.',
         'task.createProjectFromTask': 'Zamień na listę',
     },
     pt: {
@@ -241,7 +241,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Bota tudo pra fora',
         'calendar.tasksAndEvents': 'Veja o que vem por aí',
         'search.scopeHint': 'Encontre qualquer coisa',
-        'inbox.projectHint': 'Se algo precisa de muitos passos, você pode transformar em uma lista enquanto arruma.',
+        'inbox.projectHint': 'Se algo precisa de muitos passos, você pode transformar em uma lista.',
         'task.createProjectFromTask': 'Transformar em lista',
     },
     ru: {
@@ -265,7 +265,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Выложи всё из головы',
         'calendar.tasksAndEvents': 'Посмотри, что впереди',
         'search.scopeHint': 'Найди что угодно',
-        'inbox.projectHint': 'Если для чего-то нужно много шагов, можно превратить это в список, пока наводишь порядок.',
+        'inbox.projectHint': 'Если для чего-то нужно много шагов, можно превратить это в список.',
         'task.createProjectFromTask': 'Превратить в список',
     },
     sv: {
@@ -291,7 +291,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'Få ut allt',
         'calendar.tasksAndEvents': 'Se vad som är på gång',
         'search.scopeHint': 'Hitta vad som helst',
-        'inbox.projectHint': 'Om något behöver många steg kan du göra en lista av det medan du städar.',
+        'inbox.projectHint': 'Om något behöver många steg kan du göra en lista av det.',
         'task.createProjectFromTask': 'Gör om till en lista',
     },
     tr: {
@@ -317,7 +317,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'İçini dök',
         'calendar.tasksAndEvents': 'Bak neler geliyor',
         'search.scopeHint': 'İstediğini bul',
-        'inbox.projectHint': 'Bir şey çok adım gerektiriyorsa, toparlarken onu bir listeye dönüştürebilirsin.',
+        'inbox.projectHint': 'Bir şey çok adım gerektiriyorsa, onu bir listeye dönüştürebilirsin.',
         'task.createProjectFromTask': 'Listeye dönüştür',
     },
     ja: {
@@ -344,7 +344,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': 'ぜんぶ出しちゃおう',
         'calendar.tasksAndEvents': 'これからのよていを見よう',
         'search.scopeHint': 'なんでもさがせるよ',
-        'inbox.projectHint': 'たくさんのステップがいるときは、おかたづけしながらリストにできるよ。',
+        'inbox.projectHint': 'たくさんのステップがいるときは、リストにできるよ。',
         'task.createProjectFromTask': 'リストにする',
     },
     ko: {
@@ -370,7 +370,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': '다 꺼내 놓기',
         'calendar.tasksAndEvents': '앞으로 뭐 있는지 보기',
         'search.scopeHint': '뭐든지 찾기',
-        'inbox.projectHint': '단계가 많이 필요한 일은 정리하면서 목록으로 만들 수 있어요.',
+        'inbox.projectHint': '단계가 많이 필요한 일은 목록으로 만들 수 있어요.',
         'task.createProjectFromTask': '목록으로 만들기',
     },
     zh: {
@@ -396,7 +396,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': '全都倒出来',
         'calendar.tasksAndEvents': '看看接下来有什么',
         'search.scopeHint': '什么都能找到',
-        'inbox.projectHint': '如果一件事要很多步，你可以在收拾的时候把它变成一个清单。',
+        'inbox.projectHint': '如果一件事要很多步，你可以把它变成一个清单。',
         'task.createProjectFromTask': '变成清单',
     },
     'zh-Hant': {
@@ -422,7 +422,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'mindSweep.title': '全都倒出來',
         'calendar.tasksAndEvents': '看看接下來有什麼',
         'search.scopeHint': '什麼都能找到',
-        'inbox.projectHint': '如果一件事要很多步，你可以在收拾的時候把它變成一個清單。',
+        'inbox.projectHint': '如果一件事要很多步，你可以把它變成一個清單。',
         'task.createProjectFromTask': '變成清單',
     },
 };

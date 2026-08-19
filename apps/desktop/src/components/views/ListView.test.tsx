@@ -1213,6 +1213,22 @@ describe('ListView', () => {
     expect(queryByRole('button', { name: 'Filters' })).not.toBeInTheDocument();
   });
 
+  // The clarify ritual is a parent-device job (simplified shell): the kid
+  // Inbox renders no "Tidy up" wizard entry, while the capture surface
+  // ("Get it all out") stays. InboxProcessor keeps the full contract and its
+  // own tests; ListView is where the kid shell opts out.
+  it('renders no clarify entry in the inbox but keeps the mind sweep', () => {
+    useTaskStore.setState({
+      _allTasks: [makeTask('inbox-1', { title: 'Unsorted thing', status: 'inbox' })],
+      lastDataChangeAt: 1,
+    });
+
+    const { queryByRole, getByRole } = renderListView('inbox', 'Inbox');
+
+    expect(queryByRole('button', { name: /^Tidy up \(\d+\)$/i })).not.toBeInTheDocument();
+    expect(getByRole('button', { name: /Get it all out/i })).toBeInTheDocument();
+  });
+
   // The completed-list filter panel went with the Done toolbar (simplified
   // shell). The shared filter criteria still narrow the list underneath —
   // same arrangement as Inbox, which has kept this shape since its own pass —

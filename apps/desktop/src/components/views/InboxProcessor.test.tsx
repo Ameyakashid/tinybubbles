@@ -102,6 +102,7 @@ type RenderInboxProcessorOptions = {
     areas?: Area[];
     allContexts?: string[];
     allTags?: string[];
+    hideProcessEntry?: boolean;
 };
 
 const isRenderInboxProcessorOptions = (
@@ -115,6 +116,7 @@ const isRenderInboxProcessorOptions = (
         || 'areas' in options
         || 'allContexts' in options
         || 'allTags' in options
+        || 'hideProcessEntry' in options
     )
 );
 
@@ -149,6 +151,7 @@ const renderInboxProcessor = (options?: AppData['settings'] | RenderInboxProcess
                 allTags={renderOptions.allTags ?? []}
                 isProcessing={isProcessing}
                 setIsProcessing={setIsProcessing}
+                hideProcessEntry={renderOptions.hideProcessEntry}
             />
             </LanguageProvider>
         );
@@ -174,6 +177,17 @@ describe('InboxProcessor', () => {
     // everywhere else. Querying the rendered "Tidy up (<count>)" text is a
     // stronger check than the old key-based query: it would catch that label
     // silently breaking or reverting to the raw key.
+
+    // The kid shell hides the clarify entry outright (ListView passes
+    // hideProcessEntry): clarifying the inbox is a parent-device job. The
+    // capture surface stays. Every flow test below keeps the full contract —
+    // the machinery is intact and the parent flavour renders the entry.
+    it('renders no clarify entry but keeps the mind sweep when the shell hides processing', () => {
+        const { queryByRole, getByRole } = renderInboxProcessor({ hideProcessEntry: true });
+
+        expect(queryByRole('button', { name: /^Tidy up \(\d+\)$/i })).not.toBeInTheDocument();
+        expect(getByRole('button', { name: /Get it all out/i })).toBeInTheDocument();
+    });
 
     it('shows an error toast when project conversion fails', async () => {
         useUiStore.setState({ toasts: [] });

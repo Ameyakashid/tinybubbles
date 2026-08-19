@@ -31,6 +31,11 @@ type InboxProcessorProps = {
     isProcessing: boolean;
     setIsProcessing: (value: boolean) => void;
     onOpenMindSweep?: () => void;
+    // The kid shell hides the clarify entry point (same opt-out pattern as
+    // ListHeader's hideControls): clarifying the inbox is a parent's job on
+    // the parent device. The processing machinery, its controller and its
+    // tests keep the full contract; the capture surface (mind sweep) stays.
+    hideProcessEntry?: boolean;
 };
 
 export function InboxProcessor({
@@ -49,6 +54,7 @@ export function InboxProcessor({
     isProcessing,
     setIsProcessing,
     onOpenMindSweep,
+    hideProcessEntry = false,
 }: InboxProcessorProps) {
     const { language } = useLanguage();
     // Points at the step new users miss: the capture that needs several actions
@@ -105,13 +111,15 @@ export function InboxProcessor({
 
             {showStartButton && (
                 <div className="flex flex-wrap items-stretch gap-2">
-                    <button
-                        onClick={startProcessing}
-                        className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap bg-primary px-4 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90 rounded-lg"
-                    >
-                        <Play className="w-4 h-4" />
-                        {displayLabel(t, language, 'process.btn', 'Process Inbox')} ({inboxCount})
-                    </button>
+                    {!hideProcessEntry && (
+                        <button
+                            onClick={startProcessing}
+                            className="flex flex-1 items-center justify-center gap-2 whitespace-nowrap bg-primary px-4 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90 rounded-lg"
+                        >
+                            <Play className="w-4 h-4" />
+                            {displayLabel(t, language, 'process.btn', 'Process Inbox')} ({inboxCount})
+                        </button>
+                    )}
                     {onOpenMindSweep ? (
                         <MindSweepTrigger t={t} onOpen={onOpenMindSweep} variant="secondary" />
                     ) : (

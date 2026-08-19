@@ -1073,6 +1073,10 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                         isProcessing={isProcessing}
                         setIsProcessing={setIsProcessing}
                         onOpenMindSweep={openMindSweep}
+                        // Simplified shell (see DESIGN.md): the GTD clarify
+                        // ritual is a parent-device job. The capture surface
+                        // ("Get it all out") stays; the wizard entry goes.
+                        hideProcessEntry
                     />
 
                     {showViewFilterInput && !isProcessing && (

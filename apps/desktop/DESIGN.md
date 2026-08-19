@@ -148,6 +148,20 @@ customizations (Settings -> GTD -> Task Editor Layout) still win over every one
 of these defaults, and stored adult data (contexts, project, archived status)
 still displays sanely via the has-value visibility rule.
 
+Inbox (decomposition pass 3): the clarify ritual is gone from the child's device.
+The "Tidy up" entry that opened the GTD processing wizard ("Is this actionable?",
+delegate-with-follow-up) no longer renders — ListView opts out via
+InboxProcessor's hideProcessEntry, the same convergence-point pattern as
+ListHeader's hideControls and the calendar's pinned month, so the processing
+machinery, its controller and all its flow tests keep the full contract for the
+parent flavour. The capture surface ("Get it all out") stays. Reachability
+corrections recorded with this cut: filing to Reference — previously noted as
+reachable through the Tidy up flow — is now a parent-device action on this
+shell (stored reference tasks still display; the Reference list stays
+hidden-but-routable), and the make-it-a-list path for a multi-step capture is
+the row's own "Turn into a list" menu entry, which the inbox hint now points
+at (the "while you tidy up" clause left the hint in every covered locale).
+
 Done (celebration surface): the completed list drops its whole adult toolbar —
 Filters, Select, Sort, Group, Show details, Density — and its search bar, via the
 same `hideControls` arrangement Inbox has carried since its own pass. A persisted
