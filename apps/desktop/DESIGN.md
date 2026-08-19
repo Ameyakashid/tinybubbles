@@ -294,3 +294,35 @@ where you land, is a distinction a child should not have to parse. Add the task,
 **`Ctrl`/`⌘ + Enter` still does save-and-open**, untouched — only the button and its tooltip
 are gone. The test now asserts both halves: the button is absent, and the shortcut still
 performs the whole action.
+
+
+## Done page: celebration surface (kid paint pass)
+
+The Done list had borrowed the adult idiom wholesale: struck-through grey titles with a
+date chip, visually identical to the Deleted page one row below it. Finishing something and
+throwing something away no longer look the same.
+
+What changed, all presentation-only and scoped to the shared `readOnly`/completed paths:
+
+- **Done rows lose the strikethrough.** The title stays bold and dark; only archived rows
+  keep the struck-through, muted treatment because Archive is long-term storage, not the
+  trophy case a child shows a parent (`TaskItemDisplay.tsx`).
+- **A filled completion bubble becomes the trophy mark.** Done rows wear a solid kelp
+  circle with a white check where the quick-done control sits on actionable rows. It makes
+  the "bubble = finished" language readable at a glance, with no hover-reveal
+  (`TaskItemDisplay.tsx`).
+- **Collapsed rows show when the task was finished.** The completion date appears as a
+  compact success chip (check icon + date) instead of emphasizing the due date, which is no
+  longer the point. Expanded rows already showed completion metadata; that badge now uses
+  the same success styling (`TaskItemDisplay.tsx`).
+- **`MetadataBadge` grew a `success` variant** so the kelp celebration colour can be reused
+  cleanly without ad-hoc utility overrides (`MetadataBadge.tsx` + `index.css`).
+- **The Done heading and empty state wear the bubble too.** The page header has a small
+  filled check-bubble; the first-run empty state shows a large, friendly one so the moment
+  before anything is finished already feels like the right room (`ListHeader.tsx`,
+  `ListEmptyState.tsx`, `ListView.tsx`).
+
+Structural decisions left for a follow-up pass: grouping by completion date (`Today` /
+`Yesterday` / date headers) works and is available, but switching the default is a
+structural call, not a style one. It is named here as a recommended next step if the design
+wants it.

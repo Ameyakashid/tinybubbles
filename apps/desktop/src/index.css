@@ -732,6 +732,11 @@
     color: hsl(var(--badge-info-fg));
   }
 
+  .metadata-badge--success {
+    background-color: hsl(var(--success) / 0.12);
+    color: hsl(var(--success));
+  }
+
   .metadata-badge--age-fresh {
     background-color: hsl(var(--success) / 0.05);
     color: hsl(var(--success));

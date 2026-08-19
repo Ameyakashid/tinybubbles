@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { CheckSquare, ChevronsUpDown, Filter, List, SlidersHorizontal } from 'lucide-react';
 import { tFallback, type TaskSortBy } from '@tinybubbles/core';
 import { FOCUS_AXES, type TaskListGroupBy } from './next-grouping';
@@ -6,6 +7,7 @@ import { SortBySelect, ToolbarButton } from './list-toolbar';
 
 type ListHeaderProps = {
     title: string;
+    titleIcon?: ReactNode;
     showNextCount: boolean;
     nextCount: number;
     taskCount: number;
@@ -36,6 +38,7 @@ type ListHeaderProps = {
 
 export function ListHeader({
     title,
+    titleIcon,
     showNextCount,
     nextCount,
     taskCount,
@@ -95,7 +98,8 @@ export function ListHeader({
                 any single translated word intact and makes the toolbar yield
                 instead, which it can do because it wraps (#923). */}
             <div className="space-y-1">
-                <h2 className="break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                <h2 className="flex flex-wrap items-center gap-2 break-words text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                    {titleIcon && <span className="inline-flex shrink-0">{titleIcon}</span>}
                     {title}
                     {showNextCount && (
                         <span className="ml-2 align-baseline text-base font-medium text-muted-foreground sm:text-lg">

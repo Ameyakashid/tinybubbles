@@ -1,6 +1,6 @@
 import React, { memo, useState, useMemo, useDeferredValue, useEffect, useRef, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { AlertTriangle, Folder } from 'lucide-react';
+import { AlertTriangle, Check, Folder } from 'lucide-react';
 import { buildProjectOrderMap,
     buildQuickAddParseOptions,
     compareTasksByProjectThenOrder,
@@ -901,6 +901,11 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                 <div className="space-y-6">
                     <ListHeader
                         title={title}
+                        titleIcon={statusFilter === 'done' ? (
+                            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-success text-success-foreground shadow-sm">
+                                <Check className="h-4 w-4" />
+                            </span>
+                        ) : undefined}
                         showNextCount={isNextView}
                         nextCount={nextCount}
                         taskCount={filteredTasks.length}
@@ -1182,6 +1187,11 @@ export const ListView = memo(function ListView({ title, statusFilter }: ListView
                         primaryAction={isInbox && !hasFilters
                             ? <MindSweepTrigger t={t} onOpen={openMindSweep} variant="primary" />
                             : undefined}
+                        icon={statusFilter === 'done' ? (
+                            <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-success/10 text-success">
+                                <Check className="h-8 w-8" />
+                            </div>
+                        ) : undefined}
                         t={t}
                     />
                 ) : (

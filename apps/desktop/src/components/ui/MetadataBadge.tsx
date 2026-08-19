@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-type MetadataVariant = 'project' | 'context' | 'tag' | 'priority' | 'estimate' | 'age' | 'info';
+type MetadataVariant = 'project' | 'context' | 'tag' | 'priority' | 'estimate' | 'age' | 'info' | 'success';
 
 interface MetadataBadgeProps {
     label: string;

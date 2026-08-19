@@ -382,7 +382,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
         if (!completionLabel) return null;
         const badge = (
             <MetadataBadge
-                variant="info"
+                variant="success"
                 icon={Check}
                 label={`${tFallback(t, 'list.done', 'Completed')}: ${completionLabel}`}
             />
@@ -557,9 +557,22 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
     const showPinnedFocusStar = task.isFocusedToday === true
         && task.status === 'next'
         && !focusToggle?.alwaysVisible;
+    const isDoneTask = task.status === 'done';
+    const isArchivedTask = task.status === 'archived';
     const overlayDragHandle = actionsOverlay && !!dragHandle;
     const overlayQuickDone = actionsOverlay && showQuickDoneButton;
-    const inlineLeftControls = !actionsOverlay && (showQuickDoneButton || dragHandle);
+    // Done rows wear the filled completion bubble as a trophy mark; it sits where
+    // the quick-done control lives on actionable rows, so the visual language of
+    // "bubble = finished" reads consistently across the app (DESIGN.md).
+    const completedIndicator = isDoneTask && !actionsOverlay ? (
+        <div
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-success text-success-foreground shadow-sm shrink-0"
+            aria-hidden="true"
+        >
+            <Check className="w-5 h-5" />
+        </div>
+    ) : null;
+    const inlineLeftControls = !actionsOverlay && (showQuickDoneButton || dragHandle || completedIndicator);
     const showActionTags = false;
 
     // The complete control is the app's core loop, so it is a bubble: round,
@@ -625,6 +638,7 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                     >
                         {dragHandle}
                         {showQuickDoneButton && quickDoneButton}
+                        {completedIndicator}
                     </div>
                 )}
                 <div
@@ -695,9 +709,11 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                             className={cn(
                                 "task-item-display__title font-semibold whitespace-normal break-words text-foreground group-hover/content:text-primary transition-colors",
                                 dense ? "text-sm" : "text-base",
-                                // Archived work is finished work, so it reads struck
-                                // through the same way Done does.
-                                isTaskFinished(task) && "line-through text-muted-foreground",
+                                // Done is the celebration surface: finished work stays
+                                // proud and readable. Archive keeps the struck-through,
+                                // muted look because it is long-term storage, not the
+                                // trophy case a child shows a parent.
+                                isArchivedTask && "line-through text-muted-foreground",
                                 actionsOverlay && "pr-20",
                                 (overlayDragHandle || overlayQuickDone) && "pl-12"
                             )}
@@ -714,19 +730,37 @@ export const TaskItemDisplay = memo(function TaskItemDisplay({
                         </div>
                     </button>
                     )}
-                    {!isViewOpen && task.dueDate && (
-                        <div className={cn(
-                            "flex items-center gap-2 text-xs text-muted-foreground",
-                            dense ? "mt-0.5" : "mt-1",
-                            (overlayDragHandle || overlayQuickDone) && "pl-12"
-                        )}>
-                            <MetadataBadge
-                                variant="info"
-                                icon={CalendarIcon}
-                                label={safeFormatDate(task.dueDate, hasTimeComponent(task.dueDate) ? 'Pp' : 'P')}
-                                className={getUrgencyColor(task)}
-                            />
-                        </div>
+                    {!isViewOpen && (
+                        <>
+                            {isDoneTask && completionLabel && (
+                                <div className={cn(
+                                    "flex items-center gap-2 text-xs",
+                                    dense ? "mt-0.5" : "mt-1",
+                                    (overlayDragHandle || overlayQuickDone) && "pl-12"
+                                )}>
+                                    <MetadataBadge
+                                        variant="success"
+                                        icon={Check}
+                                        label={completionLabel}
+                                        ariaLabel={`${tFallback(t, 'list.done', 'Completed')}: ${completionLabel}`}
+                                    />
+                                </div>
+                            )}
+                            {!isDoneTask && task.dueDate && (
+                                <div className={cn(
+                                    "flex items-center gap-2 text-xs text-muted-foreground",
+                                    dense ? "mt-0.5" : "mt-1",
+                                    (overlayDragHandle || overlayQuickDone) && "pl-12"
+                                )}>
+                                    <MetadataBadge
+                                        variant="info"
+                                        icon={CalendarIcon}
+                                        label={safeFormatDate(task.dueDate, hasTimeComponent(task.dueDate) ? 'Pp' : 'P')}
+                                        className={getUrgencyColor(task)}
+                                    />
+                                </div>
+                            )}
+                        </>
                     )}
                     {isViewOpen && (
                         <div onClick={(e) => e.stopPropagation()}>
