@@ -59,6 +59,17 @@ inherits theme classes on `<html>`), `src/lib/utils` (`cn`).
 ## Verification floor for every pass
 
 `bunx tsc --noEmit -p tsconfig.json` (typecheck is part of the floor — a
-recent pass skipped it and shipped red types), `bun run lint`, full
-`bun run test` one-shot, and a live look at `/?face=next` plus a confirmation
-that `/` still renders the stock shell.
+recent pass skipped it and shipped red types), `bun run lint`, and the full
+**desktop package** suite (`bun run test` from `apps/desktop`) one-shot, plus
+a live look at `/?face=next` and a confirmation that `/` still renders the
+stock shell.
+
+The root-level `bun run test` (core, cloud, mobile) is NOT part of the floor:
+the cloud package cannot run on a Windows host by design (it fsyncs
+directories; it runs in Docker), and other cross-package failures on this
+machine are environment baseline. If you see them, report them and move on —
+they belong to infra. The overlay-pin allowlist
+(`src/test/dialog-overlay-pin.test.ts`) will legitimately grow as the kid
+face adds its own surfaces (contract rule 2 forbids reusing the stock Dialog
+module): add your entry with a reason and name it in your report, as the
+open-task pass did.
