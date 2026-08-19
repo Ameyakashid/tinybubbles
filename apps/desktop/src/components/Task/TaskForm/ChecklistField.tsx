@@ -139,7 +139,7 @@ function SortableChecklistRow({
     ) : null;
 
     return (
-        <div ref={setNodeRef} style={style} className="relative flex items-center gap-2 group/item">
+        <div ref={setNodeRef} style={style} className="relative flex items-center gap-2 py-1 group/item">
             {children({ handle, isDragging })}
         </div>
     );
@@ -325,9 +325,9 @@ export function ChecklistField({
     const canReorderChecklist = checklistItems.length > 1;
 
     return (
-        <div className="flex flex-col gap-2 w-full pt-2 border-t border-border/50">
+        <div className="flex flex-col gap-3 w-full pt-2 border-t border-border/50">
             <label className={taskEditorLabelClassName}>{t('taskEdit.checklist')}</label>
-            <div className="space-y-2 pr-3">
+            <div className="space-y-2 pr-1">
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChecklistDragEnd}>
                     <SortableContext items={checklistItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
                         {checklistItems.map((item, index) => (
@@ -353,13 +353,13 @@ export function ChecklistField({
                                                 commitChecklistUpdate(newList);
                                             }}
                                             className={cn(
-                                                'w-4 h-4 border rounded flex items-center justify-center transition-colors',
+                                                'w-5 h-5 shrink-0 border-2 rounded-md flex items-center justify-center transition-colors',
                                                 item.isCompleted
                                                     ? 'bg-primary border-primary text-primary-foreground'
-                                                    : 'border-muted-foreground hover:border-primary'
+                                                    : 'border-muted-foreground/60 bg-card hover:border-primary'
                                             )}
                                         >
-                                            {item.isCompleted && <Check className="w-3 h-3" />}
+                                            {item.isCompleted && <Check className="w-3.5 h-3.5" />}
                                         </button>
                                         <input
                                             type="text"
@@ -476,7 +476,7 @@ export function ChecklistField({
                                                 }
                                             }}
                                             className={cn(
-                                                'flex-1 bg-transparent text-sm focus:outline-none border-b border-transparent focus:border-primary/50 px-1',
+                                                'flex-1 bg-transparent text-base focus:outline-none border-b border-transparent focus:border-primary/50 px-1 py-0.5',
                                                 item.isCompleted && 'text-muted-foreground line-through'
                                             )}
                                             placeholder={t('taskEdit.itemNamePlaceholder')}
@@ -491,9 +491,9 @@ export function ChecklistField({
                                                 commitChecklistUpdate(newList);
                                             }}
                                             aria-label={t('common.delete')}
-                                            className="p-1 text-muted-foreground opacity-0 group-hover/item:opacity-100 group-focus-within/item:opacity-100 focus-visible:opacity-100 hover:text-destructive [@media(hover:none)]:opacity-100"
+                                            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground opacity-0 group-hover/item:opacity-100 group-focus-within/item:opacity-100 focus-visible:opacity-100 hover:bg-destructive/10 hover:text-destructive [@media(hover:none)]:opacity-100"
                                         >
-                                            <Trash2 className="w-3 h-3" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </>
                                 )}
@@ -537,9 +537,11 @@ export function ChecklistField({
                             focusChecklistIndex(nextList.length - 1, event.currentTarget);
                         }
                     }}
-                    className="flex items-center gap-1 text-xs font-medium text-info hover:text-info/80"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
                 >
-                    <Plus className="w-3 h-3" />
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10">
+                        <Plus className="h-3.5 w-3.5" />
+                    </span>
                     {t('taskEdit.addItem')}
                 </button>
                 {(checklistDraft || []).length > 0 && (
@@ -547,7 +549,7 @@ export function ChecklistField({
                         <button
                             type="button"
                             onClick={() => resetTaskChecklist(taskId)}
-                            className="text-xs px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
+                            className="text-xs px-2.5 py-1 rounded-full bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
                         >
                             {t('taskEdit.resetChecklist')}
                         </button>

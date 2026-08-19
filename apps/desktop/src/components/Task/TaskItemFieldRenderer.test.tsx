@@ -1369,7 +1369,9 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
 
         fireEvent.focus(textarea);
 
-        expect(textarea.style.height).toBe('112px');
+        // The kid-shell notes field is a little taller than the adult default
+        // so the first view feels roomier; the autosize contract stays stable.
+        expect(textarea.style.height).toBe('128px');
     });
 
     it('enables native spell checking for inline description edits', () => {
@@ -1377,6 +1379,13 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         const textarea = getByRole('textbox', { name: 'Description' });
 
         expect(textarea).toHaveAttribute('spellcheck', 'true');
+    });
+
+    it('hides the markdown toolbar from the kid-shell description field', () => {
+        const { queryByRole } = render(<DescriptionHarness />);
+
+        expect(queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
     });
 
     it('wraps selected description text when a backtick key press is intercepted', async () => {

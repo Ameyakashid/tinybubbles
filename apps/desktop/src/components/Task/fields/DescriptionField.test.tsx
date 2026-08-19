@@ -68,3 +68,15 @@ describe('DescriptionField audio input', () => {
         expect(onDescriptionAudioInput).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('DescriptionField kid shell', () => {
+    it('hides the full markdown toolbar in the child\'s first view', () => {
+        // The adult markdown toolbar (H1, bold, code, blockquote, etc.) is
+        // removed from the kid-shell task editor. Typed markdown still renders,
+        // and the parent flavour keeps the toolbar.
+        const { queryByRole } = render(<DescriptionField {...baseProps} />);
+
+        expect(queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    });
+});

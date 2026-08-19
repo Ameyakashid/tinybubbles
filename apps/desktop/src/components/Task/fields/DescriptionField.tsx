@@ -4,7 +4,6 @@ import { tFallback, type MarkdownSelection, type MarkdownToolbarActionId, type M
 
 import { cn } from '../../../lib/utils';
 import { ExpandedMarkdownEditor } from '../../ExpandedMarkdownEditor';
-import { MarkdownFormatToolbar } from '../../MarkdownFormatToolbar';
 import { MarkdownReferenceAutocompleteMenu, useMarkdownReferenceAutocomplete } from '../../MarkdownReferenceAutocomplete';
 import { RichMarkdown } from '../../RichMarkdown';
 import { AutosizeTextarea } from '../../ui/AutosizeTextarea';
@@ -97,13 +96,13 @@ export function DescriptionField({
                     {t('taskEdit.descriptionLabel')}
                     <QuickAddTokenBadge t={t} token={QUICK_ADD_FIELD_TOKENS.note} />
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                     <button
                         type="button"
                         onClick={onDescriptionAudioInput}
                         disabled={descriptionAudioState === 'transcribing'}
                         className={cn(
-                            'rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60',
+                            'inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60',
                             descriptionAudioState === 'recording' && 'text-destructive hover:text-destructive'
                         )}
                         aria-label={descriptionAudioLabel}
@@ -120,15 +119,16 @@ export function DescriptionField({
                     <button
                         type="button"
                         onClick={onTogglePreview}
-                        className="text-xs px-2 py-1 rounded bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
+                        className="text-xs px-3 py-1.5 rounded-full bg-muted/50 hover:bg-muted transition-colors text-muted-foreground"
                     >
                         {showDescriptionPreview ? t('markdown.edit') : t('markdown.preview')}
                     </button>
                     <button
                         type="button"
                         onClick={onExpand}
-                        className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         aria-label={t('markdown.expand')}
+                        title={t('markdown.expand')}
                     >
                         <Maximize2 className="h-4 w-4" />
                     </button>
@@ -142,7 +142,7 @@ export function DescriptionField({
                     onClick={handlePreviewClick}
                     onKeyDown={handlePreviewKeyDown}
                     className={cn(
-                        'w-full cursor-text text-left text-sm leading-6 bg-muted/30 border border-border rounded px-3 py-2 transition-[border-color,box-shadow] hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40',
+                        'w-full cursor-text text-left text-base leading-relaxed bg-card border border-border/70 rounded-xl px-4 py-3 shadow-sm transition-[border-color,box-shadow] hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40',
                         isRtl && 'text-right'
                     )}
                     dir={resolvedDirection}
@@ -151,13 +151,11 @@ export function DescriptionField({
                 </div>
             ) : (
                 <div className="relative flex flex-col gap-2">
-                    <MarkdownFormatToolbar
-                        textareaRef={descriptionTextareaRef}
-                        t={t}
-                        canUndo={descriptionUndoDepth > 0}
-                        onUndo={onUndo}
-                        onApplyAction={onApplyAction}
-                    />
+                    {/** The full markdown toolbar (H1, bold, code, blockquote, etc.)
+                      * is hidden in the kid-shell task editor: it is adult chrome in
+                      * the child's first view. Typed markdown still renders, the
+                      * parser is untouched, and the parent flavour keeps the toolbar.
+                      */}
                     <AutosizeTextarea
                         ref={descriptionTextareaRef}
                         aria-label={t('task.aria.description')}
@@ -176,10 +174,10 @@ export function DescriptionField({
                         }}
                         onKeyDown={onKeyDown}
                         onPaste={onPaste}
-                        minHeight={112}
+                        minHeight={128}
                         maxHeight={480}
                         className={cn(
-                            'w-full text-sm leading-6 bg-muted/50 border border-border rounded px-3 py-2 resize-none transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40',
+                            'w-full text-base leading-relaxed bg-card border border-border/70 rounded-xl px-4 py-3 resize-none shadow-sm transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 placeholder:text-muted-foreground/70',
                             isRtl && 'text-right'
                         )}
                         placeholder={t('taskEdit.descriptionPlaceholder')}
@@ -220,6 +218,7 @@ export function DescriptionField({
                 onEditorKeyDown={onKeyDown}
                 onEditorPaste={onPaste}
                 currentTaskId={taskId}
+                showToolbar={false}
             />
         </div>
     );

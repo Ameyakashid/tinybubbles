@@ -393,9 +393,9 @@ export function DateField({
                         aria-haspopup="dialog"
                         aria-expanded={isCalendarOpen}
                         onClick={openCalendar}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                        <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                        <CalendarDays className="h-4 w-4" aria-hidden="true" />
                     </button>
                 </div>
                 {timeInput}

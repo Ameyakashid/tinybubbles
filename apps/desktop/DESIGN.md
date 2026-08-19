@@ -364,3 +364,36 @@ Structural decisions left for a follow-up pass: grouping by completion date (`To
 `Yesterday` / date headers) works and is available, but switching the default is a
 structural call, not a style one. It is named here as a recommended next step if the design
 wants it.
+
+
+## Task editor: kid-scale front area (paint pass)
+
+The editor was already reordered so a child's own fields — notes, checklist, due date —
+lead the open view. The remaining adult chrome on those fields was the markdown toolbar
+(H1, bold, code, blockquote, lists, undo) and the utilitarian finishes inherited from the
+parent form. This pass removes the chrome and restyles the front area to read as part of
+the Rockpool.
+
+What changed, all presentation-only within the component layer:
+
+- **The markdown toolbar is gone from the child's first view.** `DescriptionField.tsx`
+  no longer renders `MarkdownFormatToolbar`; `ExpandedMarkdownEditor` gained an optional
+  `showToolbar` prop and the task editor's expanded notes pass `false`. Typed markdown
+  still renders, the parser and renderer are untouched, and the parent flavour keeps the
+  full toolbar.
+- **Notes field feels like a note card.** Rounded-xl, soft card background with a subtle
+  shadow, more generous padding, and a slightly larger, looser line-height for a child's
+  own writing. The dictate, preview and expand actions are round bubble buttons so they
+  match the rest of the shell (`DescriptionField.tsx`).
+- **Checklist grew friendlier.** Checkboxes are larger with rounded corners; rows have a
+  little more breathing room; the delete action is a round touch target; the add-item
+  button wears a primary bubble icon; the reset button is a soft pill (`ChecklistField.tsx`).
+- **Date inputs share the same soft shape.** The shared date input class now uses the
+  rounded-xl card background, and the calendar trigger is a round bubble button
+  (`TaskItemFieldRenderer.tsx` and `DateField.tsx`).
+
+Reachability: every formatting shortcut that worked in the notes textarea (Ctrl/⌘ + B/I,
+backtick fencing, list continuation on Enter) still works because the keyboard helpers are
+unchanged — only the visible button bar was removed. Tests assert both halves: the toolbar
+buttons are absent, and the expanded editor still supports `showToolbar` for surfaces that
+need it.

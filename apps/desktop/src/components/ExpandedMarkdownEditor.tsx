@@ -28,6 +28,9 @@ type ExpandedMarkdownEditorProps = {
     onEditorKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
     onEditorPaste?: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
     currentTaskId?: string;
+    /** The kid-shell task editor hides the markdown toolbar; the expanded editor
+     *  still works for parent surfaces that want it. Defaults to true. */
+    showToolbar?: boolean;
 };
 
 export function ExpandedMarkdownEditor({
@@ -50,6 +53,7 @@ export function ExpandedMarkdownEditor({
     onEditorKeyDown,
     onEditorPaste,
     currentTaskId,
+    showToolbar = true,
 }: ExpandedMarkdownEditorProps) {
     const [mode, setMode] = useState<'edit' | 'preview'>(initialMode);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -131,13 +135,15 @@ export function ExpandedMarkdownEditor({
             <div className="flex-1 min-h-0 p-4">
                 {mode === 'edit' ? (
                     <div className="flex h-full flex-col gap-3">
-                        <MarkdownFormatToolbar
-                            textareaRef={textareaRef}
-                            t={t}
-                            canUndo={canUndo}
-                            onUndo={onUndo}
-                            onApplyAction={onApplyAction}
-                        />
+                        {showToolbar && (
+                            <MarkdownFormatToolbar
+                                textareaRef={textareaRef}
+                                t={t}
+                                canUndo={canUndo}
+                                onUndo={onUndo}
+                                onApplyAction={onApplyAction}
+                            />
+                        )}
                         <div className="relative flex min-h-0 flex-1 flex-col">
                             <textarea
                                 ref={textareaRef}

@@ -681,8 +681,8 @@ export function TaskItemFieldRenderer({
             restoreScrollSnapshotSoon(scrollSnapshot);
         });
     };
-    const dateInputClassName = 'min-w-0 flex-1 text-xs bg-muted/50 border border-border rounded px-2 py-1 text-foreground';
-    const timeInputClassName = 'w-24 shrink-0 text-xs bg-muted/50 border border-border rounded px-2 py-1 text-foreground';
+    const dateInputClassName = 'min-w-0 flex-1 text-sm bg-card border border-border/70 rounded-xl px-3 py-2 text-foreground shadow-sm';
+    const timeInputClassName = 'w-24 shrink-0 text-sm bg-card border border-border/70 rounded-xl px-3 py-2 text-foreground shadow-sm';
     const dateIssueLabel = getTaskDateCoherenceIssues({
         startTime: editStartTime || undefined,
         dueDate: editDueDate || undefined,
