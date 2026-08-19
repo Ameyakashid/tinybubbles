@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type DragEvent, type FormEvent, type ReactNode } from 'react';
-import { Check, ChevronDown, ChevronRight, HelpCircle, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import {
     filterProjectsBySelectedArea,
     resolveAutoTextDirection,
@@ -141,14 +141,6 @@ export function TaskItemEditor({
     const setEditAreaId = (value: string) => setField('areaId', value);
     const titleDirection = resolveAutoTextDirection(editTitle, language);
     const { resetCopilotDraft } = ai;
-    const taskEditorLayoutHelpLabel = tFallback(t, 'taskEdit.editorLayoutHelpLabel', 'Editor layout help');
-    const taskEditorLayoutHelpText = tFallback(
-        t,
-        'taskEdit.editorLayoutHelpText',
-        'You can customize which fields appear here in Settings -> GTD -> Task Editor Layout.'
-    );
-    const [editorLayoutHelpOpen, setEditorLayoutHelpOpen] = useState(false);
-
     const compareLabels = (left: string, right: string) =>
         left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
     const sortedProjects = [...projects].sort((a, b) => compareLabels(a.title, b.title));
@@ -514,26 +506,10 @@ export function TaskItemEditor({
             </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-1">
-                <div className="relative">
-                    <button
-                        type="button"
-                        aria-label={taskEditorLayoutHelpLabel}
-                        aria-expanded={editorLayoutHelpOpen}
-                        title={taskEditorLayoutHelpLabel}
-                        onClick={() => setEditorLayoutHelpOpen((open) => !open)}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-                    >
-                        <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                    </button>
-                    {editorLayoutHelpOpen && (
-                        <div
-                            role="note"
-                            className="absolute bottom-9 left-0 z-30 w-72 rounded-md border border-border bg-popover px-3 py-2 text-xs leading-5 text-popover-foreground shadow-lg"
-                        >
-                            {taskEditorLayoutHelpText}
-                        </div>
-                    )}
-                </div>
+                {/* The editor-layout help button is hidden in the simplified
+                    shell — it explains an adult Settings surface. The layout
+                    customization itself stays documented in Settings -> GTD.
+                    See DESIGN.md. */}
                 {onDeleteTask && (
                     <button
                         type="button"

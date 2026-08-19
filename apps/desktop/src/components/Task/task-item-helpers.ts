@@ -12,21 +12,27 @@ import {
 } from '@tinybubbles/core';
 import { joinDateTime, splitDateTime } from '@tinybubbles/core/date-draft';
 
+// Kid-shell order (see DESIGN.md): the editor leads with what a child
+// actually touches — notes, checklist, due date — and the classification
+// machinery recedes behind them: the project/area/section row anchors after
+// the child's fields, contexts and status render below it. A saved layout
+// customization (Settings -> GTD -> Task Editor Layout) still wins over all
+// of this, and the parent flavour keeps the adult order in its own checkout.
 export const DEFAULT_TASK_EDITOR_ORDER: TaskEditorFieldId[] = [
-    'status',
+    'description',
+    'checklist',
+    'dueDate',
     'project',
     'area',
-    'contexts',
-    'dueDate',
     'section',
+    'contexts',
+    'status',
     // Dates group together in Scheduling; the recurrence editor follows them.
     'startTime',
     'reviewAt',
     'recurrence',
     'tags',
-    'description',
     'attachments',
-    'checklist',
     'priority',
     'energyLevel',
     'timeEstimate',
@@ -65,10 +71,13 @@ export const DEFAULT_TASK_EDITOR_SECTION_BY_FIELD: Record<TaskEditorFieldId, Tas
     startTime: 'scheduling',
     dueDate: 'basic',
     reviewAt: 'scheduling',
-    description: 'details',
+    // Notes and checklist live in the open basic area in the kid shell —
+    // they are the fields a child actually uses, and a collapsed DETAILS
+    // section is where they used to hide. Saved section assignments win.
+    description: 'basic',
     textDirection: 'details',
     attachments: 'details',
-    checklist: 'details',
+    checklist: 'basic',
 };
 
 export const TASK_EDITOR_SECTIONABLE_FIELDS: TaskEditorFieldId[] = DEFAULT_TASK_EDITOR_ORDER.filter(

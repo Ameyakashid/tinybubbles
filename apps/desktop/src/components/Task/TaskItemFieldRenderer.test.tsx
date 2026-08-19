@@ -904,7 +904,7 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         });
     });
 
-    it('renders status choices as pills and keeps archived available', () => {
+    it('renders status choices as pills, without the adult Archived option', () => {
         const setField = vi.fn();
 
         const { getByRole, queryByRole } = render(
@@ -919,11 +919,24 @@ describe('TaskItemFieldRenderer date clear buttons', () => {
         const selectedStatus = getByRole('button', { name: 'Inbox' });
         expect(selectedStatus).toHaveAttribute('aria-pressed', 'true');
         expect(selectedStatus).toHaveClass('bg-primary', 'text-primary-foreground');
-        expect(getByRole('button', { name: 'Archived' })).toBeInTheDocument();
+        // Archiving is adult filing (simplified shell): the pill only appears
+        // when a stored task already carries the status.
+        expect(queryByRole('button', { name: 'Archived' })).toBeNull();
 
         fireEvent.click(getByRole('button', { name: 'Waiting' }));
 
         expect(setField).toHaveBeenCalledWith('status', 'waiting');
+    });
+
+    it('shows the Archived pill when the stored task already carries it', () => {
+        const { getByRole } = render(
+            <TaskItemFieldRenderer
+                fieldId="status"
+                {...createProps({ draft: { status: 'archived' } })}
+            />
+        );
+
+        expect(getByRole('button', { name: 'Archived' })).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('changes status pill choices with arrow keys', () => {
@@ -1649,6 +1662,9 @@ describe('TaskItemFieldRenderer skip-reminders toggle', () => {
 describe('TaskItemFieldRenderer quick-add token hints (#918)', () => {
     afterEach(cleanup);
 
+    // The simplified shell renders no token-syntax badges — a child is not
+    // handed the quick-add grammar beside every label. The parser still
+    // accepts every token in typed input; only the teaching chrome is gone.
     it.each([
         ['startTime' as const, '/start:'],
         ['dueDate' as const, '/due:'],
@@ -1659,12 +1675,12 @@ describe('TaskItemFieldRenderer quick-add token hints (#918)', () => {
         ['tags' as const, '#tag'],
         ['description' as const, '/note:'],
         ['attachments' as const, '/link:'],
-    ])('shows the %s field quick-add token as a quiet badge', (fieldId, token) => {
-        const { getByTitle } = render(
+    ])('shows no %s field quick-add token badge in the simplified shell', (fieldId, token) => {
+        const { queryByTitle } = render(
             <TaskItemFieldRenderer fieldId={fieldId} {...createProps()} />
         );
 
-        expect(getByTitle(`Quick add: ${token}`)).toHaveTextContent(token);
+        expect(queryByTitle(`Quick add: ${token}`)).not.toBeInTheDocument();
     });
 
     it.each(['status' as const, 'priority' as const, 'location' as const])(

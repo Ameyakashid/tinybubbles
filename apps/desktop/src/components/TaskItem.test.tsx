@@ -1482,10 +1482,13 @@ describe('TaskItem', () => {
         expect(root?.className).toContain('focus-within:bg-primary/5');
     });
 
-    it('offers no per-row status selector but keeps every status reachable in the default editor', () => {
+    it('offers no per-row status selector but keeps the child statuses reachable in the default editor', () => {
         // The row-level status selector stays hidden in the simplified shell;
-        // editing the task exposes the fixed status control by default.
-        const { queryByLabelText, getAllByRole, queryByRole } = render(
+        // editing the task exposes the fixed status control by default. The
+        // roster is the child set — archiving is adult filing and its pill
+        // appears only on a task that already carries the status; the parent
+        // app keeps the full roster.
+        const { queryByLabelText, getAllByRole, getByRole, queryByRole } = render(
             <LanguageProvider>
                 <TaskItem task={mockTask} />
             </LanguageProvider>
@@ -1493,24 +1496,35 @@ describe('TaskItem', () => {
         expect(queryByLabelText(/task status/i)).toBeNull();
 
         fireEvent.click(getAllByRole('button', { name: /edit/i })[0]);
-        expect(queryByRole('button', { name: 'Archived' })).toBeInTheDocument();
+        // Scoped to the status group: the editor's completion bubble also
+        // answers to "Done".
+        const statusGroup = within(getByRole('group', { name: /status/i }));
+        for (const name of ['Inbox', 'To do', 'Waiting', 'Maybe later', 'Done']) {
+            expect(statusGroup.getByRole('button', { name })).toBeInTheDocument();
+        }
+        expect(queryByRole('button', { name: 'Archived' })).toBeNull();
     });
 
-    it('reveals archived as a status pill in the editor once a saved layout un-hides status', () => {
+    it('keeps the Archived pill off the editor even when a saved layout un-hides status', () => {
+        // Un-hiding status is the adult escape hatch for the *field*; the
+        // Archived option is trimmed at the roster, not the layout, so the
+        // escape hatch does not resurrect it. A stored archived task still
+        // shows its pill (TaskItemFieldRenderer pins that case).
         act(() => {
             useTaskStore.setState({
                 settings: { gtd: { taskEditor: { hidden: [] } } },
             });
         });
 
-        const { getAllByRole, getByRole } = render(
+        const { getAllByRole, getByRole, queryByRole } = render(
             <LanguageProvider>
                 <TaskItem task={mockTask} />
             </LanguageProvider>
         );
 
         fireEvent.click(getAllByRole('button', { name: /edit/i })[0]);
-        expect(getByRole('button', { name: 'Archived' })).toBeInTheDocument();
+        expect(getByRole('group', { name: /task status|status/i })).toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Archived' })).toBeNull();
     });
 
     it('captures who a task is waiting for through the editor once status changes to waiting', async () => {

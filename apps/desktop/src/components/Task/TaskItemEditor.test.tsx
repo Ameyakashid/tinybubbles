@@ -231,16 +231,12 @@ describe('TaskItemEditor', () => {
         );
     });
 
-    it('shows task editor layout help in an inline popover', () => {
-        const { getByRole, getByText, queryByText } = render(<TaskItemEditor {...baseProps} />);
+    it('shows no editor-layout help button in the simplified shell', () => {
+        // The popover explained an adult Settings surface; the layout
+        // customization itself stays documented in Settings -> GTD.
+        const { queryByRole } = render(<TaskItemEditor {...baseProps} />);
 
-        fireEvent.click(getByRole('button', { name: 'Editor layout help' }));
-
-        expect(getByText('You can customize which fields appear here in Settings -> GTD -> Task Editor Layout.')).toBeInTheDocument();
-
-        fireEvent.click(getByRole('button', { name: 'Editor layout help' }));
-
-        expect(queryByText('You can customize which fields appear here in Settings -> GTD -> Task Editor Layout.')).not.toBeInTheDocument();
+        expect(queryByRole('button', { name: 'Editor layout help' })).not.toBeInTheDocument();
     });
 
     it('uses stronger weight for organization field labels without changing label size', () => {

@@ -142,9 +142,12 @@ describe('useTaskItemFieldLayout', () => {
         expect(result.current.organizationFields).toContain('tags');
         expect(result.current.organizationFields).not.toContain('priority');
         expect(result.current.organizationFields).not.toContain('timeEstimate');
-        expect(result.current.detailsFields).toContain('description');
+        // description and checklist live in the open basic area in the kid
+        // shell; checklist is reference-hidden like the other action fields.
+        expect(result.current.basicFields).toContain('description');
+        expect(result.current.basicFields).not.toContain('checklist');
         expect(result.current.detailsFields).toContain('attachments');
-        expect(result.current.detailsFields).not.toContain('checklist');
+        expect(result.current.detailsFields).not.toContain('description');
     });
 
     it('uses the draft status rather than the persisted task status for field visibility', () => {
@@ -163,7 +166,7 @@ describe('useTaskItemFieldLayout', () => {
         expect(result.current.basicFields).toContain('contexts');
         expect(result.current.organizationFields).toContain('priority');
         expect(result.current.organizationFields).toContain('timeEstimate');
-        expect(result.current.detailsFields).toContain('checklist');
+        expect(result.current.basicFields).toContain('checklist');
     });
 
     it('groups the scheduling dates together above the recurrence editor', () => {
@@ -191,29 +194,33 @@ describe('useTaskItemFieldLayout', () => {
 
         expect(result.current.basicFieldsBeforeOrganizers).toEqual(['contexts', 'dueDate']);
         expect(result.current.organizerFields).toEqual(['area', 'project']);
-        expect(result.current.basicFieldsAfterOrganizers).toEqual(['status']);
+        // Fields absent from the saved order append in default order after it
+        // — description and checklist are basic-area fields in the kid shell.
+        expect(result.current.basicFieldsAfterOrganizers).toEqual(['status', 'description', 'checklist']);
     });
 
-    it('keeps status reachable by default and pinned above the organizer row in a saved layout', () => {
+    it('keeps status reachable by default but trailing the child fields', () => {
         // With zero saved customization, status remains fixed in the editor while
-        // the empty-by-default project and area fields stay hidden.
+        // the empty-by-default project and area fields stay hidden. The kid
+        // shell leads with what a child touches — notes, checklist, due date —
+        // and status recedes to the end of the open area.
         const { result } = renderHook(() => useTaskItemFieldLayout(buildParams()));
 
         expect(result.current.basicFields).toContain('status');
         expect(result.current.organizerFields).toEqual([]);
-        expect(result.current.basicFieldsBeforeOrganizers).toEqual(['status', 'contexts', 'dueDate']);
+        expect(result.current.basicFieldsBeforeOrganizers).toEqual(['description', 'checklist', 'dueDate', 'contexts', 'status']);
         expect(result.current.basicFieldsAfterOrganizers).toEqual([]);
 
         // Settings can still re-enable every field (DESIGN.md); once nothing is
-        // hidden, 'status' keeps its historical place above the project/area
-        // organizer row.
+        // hidden, the organizer row anchors after the child's fields and
+        // status renders below it.
         const { result: revealed } = renderHook(() => useTaskItemFieldLayout(buildParams({
             settings: { gtd: { taskEditor: { hidden: [] } } },
         })));
 
-        expect(revealed.current.basicFieldsBeforeOrganizers).toEqual(['status']);
+        expect(revealed.current.basicFieldsBeforeOrganizers).toEqual(['description', 'checklist', 'dueDate']);
         expect(revealed.current.organizerFields).toEqual(['project', 'area']);
-        expect(revealed.current.basicFieldsAfterOrganizers).toEqual(expect.arrayContaining(['contexts', 'dueDate']));
+        expect(revealed.current.basicFieldsAfterOrganizers).toEqual(['contexts', 'status']);
         expect(revealed.current.basicFields).toEqual([
             ...revealed.current.basicFieldsBeforeOrganizers,
             ...revealed.current.basicFieldsAfterOrganizers,

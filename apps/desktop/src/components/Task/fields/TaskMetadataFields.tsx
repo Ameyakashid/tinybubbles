@@ -579,7 +579,10 @@ export function StatusField({
         { value: 'someday', label: displayLabel(t, language, 'status.someday', 'Someday') },
         ...(value === 'reference' ? [{ value: 'reference' as const, label: displayLabel(t, language, 'status.reference', 'Reference') }] : []),
         { value: 'done', label: displayLabel(t, language, 'status.done', 'Done'), onContextMenu: onRequestBackdatedComplete },
-        { value: 'archived', label: displayLabel(t, language, 'status.archived', 'Archived') },
+        // Archiving is adult filing and lives on the parent device in the
+        // simplified shell. Like Reference above, the pill still appears when
+        // a stored task already carries the status, so it displays sanely.
+        ...(value === 'archived' ? [{ value: 'archived' as const, label: displayLabel(t, language, 'status.archived', 'Archived') }] : []),
     ];
 
     return (

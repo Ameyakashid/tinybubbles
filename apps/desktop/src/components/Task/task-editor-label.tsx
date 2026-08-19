@@ -27,19 +27,15 @@ export function quickAddTokenHint(t: (key: string) => string, token: string): st
     );
 }
 
-export function QuickAddTokenBadge({
-    t,
-    token,
-}: {
+export function QuickAddTokenBadge(_props: {
     t: (key: string) => string;
     token: string;
 }) {
-    return (
-        <code
-            title={quickAddTokenHint(t, token)}
-            className="inline-flex rounded border border-current/30 bg-background/20 px-1 py-0.5 font-mono text-[10px] font-normal leading-none text-current opacity-80"
-        >
-            {token}
-        </code>
-    );
+    // Simplified shell (see DESIGN.md): the token-syntax badges taught the
+    // adult quick-add grammar (+Project, @context, /due:) beside every field
+    // label. A child should not be handed a syntax lesson; the parser still
+    // accepts every token in typed input, the token roster and tooltip
+    // machinery above stay for the call sites, and the parent flavour keeps
+    // the badges. Rendering nothing here hides all of them at once.
+    return null;
 }

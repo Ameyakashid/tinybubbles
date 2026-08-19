@@ -133,6 +133,21 @@ speaks the shell's language too — `projects.title` joined the display-label ta
 inflect with the numeral and the core word is no worse there, and zh embeds the
 measure word the count needs.
 
+Task editor (decomposition pass 3): the editor leads with the child's things. The
+open area now runs notes, checklist, due date first (section defaults in
+task-item-helpers.ts moved description/checklist to 'basic', and the default field
+order leads with them); the project/area/section row anchors after them and the
+status pills recede to the end of the open area. The status roster is the child
+set — Inbox, To do, Waiting, Maybe later, Done — with Archived appearing only on a
+task that already carries it (same pattern as Reference), because archiving is
+adult filing and the parent app keeps the full roster. The quick-add token badges
+(+Project, @context, /due:) are gone — a child is not handed a syntax lesson —
+while the parser still accepts every token in typed input. The editor-layout help
+popover went with them (it explained an adult Settings surface). Saved layout
+customizations (Settings -> GTD -> Task Editor Layout) still win over every one
+of these defaults, and stored adult data (contexts, project, archived status)
+still displays sanely via the has-value visibility rule.
+
 Done (celebration surface): the completed list drops its whole adult toolbar —
 Filters, Select, Sort, Group, Show details, Density — and its search bar, via the
 same `hideControls` arrangement Inbox has carried since its own pass. A persisted
