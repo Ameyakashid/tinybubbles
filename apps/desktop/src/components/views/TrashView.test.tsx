@@ -200,6 +200,9 @@ describe('TrashView', () => {
         );
 
         expect(screen.getByRole('heading', { name: 'Deleted' })).toBeInTheDocument();
+        // The count line speaks the shell's language: lists, not Projects.
+        expect(screen.getByText(/1 lists/)).toBeInTheDocument();
+        expect(screen.queryByText(/Projects/)).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Clear/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Delete Permanently/i })).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Select' })).not.toBeInTheDocument();

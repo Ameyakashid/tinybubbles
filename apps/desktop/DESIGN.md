@@ -127,7 +127,11 @@ hover), and the heading wears the kid title ("Deleted", per-locale via
 display-labels). Permanent deletion is a parent-app capability now — the store's
 purge machinery is untouched and the parent flavour keeps the full view.
 `TrashView.test.tsx` pins the rescue-only contract: no destructive or bulk control
-renders, dd is unbound, every visible button is a Restore.
+renders, dd is unbound, every visible button is a Restore. The header count line
+speaks the shell's language too — `projects.title` joined the display-label tables
+("lists", per-locale) for count slots; pl and ru omit it because their nouns
+inflect with the numeral and the core word is no worse there, and zh embeds the
+measure word the count needs.
 
 Done (celebration surface): the completed list drops its whole adult toolbar —
 Filters, Select, Sort, Group, Show details, Density — and its search bar, via the

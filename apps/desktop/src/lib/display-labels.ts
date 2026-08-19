@@ -56,11 +56,18 @@ const EN_OVERRIDES: Record<string, string> = {
     'search.scopeHint': 'Find anything',
     'inbox.projectHint': 'If something needs lots of steps, you can turn it into a list while you tidy up.',
     'task.createProjectFromTask': 'Turn into a list',
+    // Used where the shell counts them ("2 tasks · 1 lists" on Deleted):
+    // lowercase, because it follows a number, not a heading. Locales whose
+    // nouns inflect with the numeral (pl, ru) omit this key — their core word
+    // has the same declension limits in a "{n} {label}" slot, so the fallback
+    // is no worse — and zh embeds the measure word the count needs.
+    'projects.title': 'lists',
 };
 
 const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<string, string>>> = {
     en: EN_OVERRIDES,
     de: {
+        'projects.title': 'Listen',
         'status.next': 'Zu tun',
         'status.someday': 'Vielleicht später',
         'agenda.nextActions': 'Zu tun',
@@ -86,6 +93,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'In eine Liste verwandeln',
     },
     es: {
+        'projects.title': 'listas',
         'status.next': 'Para hacer',
         'status.someday': 'Quizá luego',
         'agenda.nextActions': 'Para hacer',
@@ -111,6 +119,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Convertir en lista',
     },
     fr: {
+        'projects.title': 'listes',
         'status.next': 'À faire',
         'status.someday': 'Peut-être plus tard',
         'agenda.nextActions': 'À faire',
@@ -135,6 +144,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Transformer en liste',
     },
     it: {
+        'projects.title': 'liste',
         'status.next': 'Da fare',
         'status.someday': 'Magari dopo',
         'agenda.nextActions': 'Da fare',
@@ -159,6 +169,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Trasforma in lista',
     },
     nl: {
+        'projects.title': 'lijstjes',
         'status.next': 'Te doen',
         'status.someday': 'Misschien later',
         'agenda.nextActions': 'Te doen',
@@ -208,6 +219,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Zamień na listę',
     },
     pt: {
+        'projects.title': 'listas',
         'status.next': 'Para fazer',
         'status.someday': 'Talvez depois',
         'agenda.nextActions': 'Para fazer',
@@ -257,6 +269,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Превратить в список',
     },
     sv: {
+        'projects.title': 'listor',
         'status.next': 'Att göra',
         'status.someday': 'Kanske senare',
         'agenda.nextActions': 'Att göra',
@@ -282,6 +295,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Gör om till en lista',
     },
     tr: {
+        'projects.title': 'liste',
         'status.next': 'Yapılacak',
         'status.someday': 'Belki sonra',
         'agenda.nextActions': 'Yapılacaklar',
@@ -307,6 +321,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'Listeye dönüştür',
     },
     ja: {
+        'projects.title': 'リスト',
         'status.next': 'やること',
         'status.someday': 'また今度',
         'agenda.nextActions': 'やること',
@@ -333,6 +348,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': 'リストにする',
     },
     ko: {
+        'projects.title': '목록',
         'status.next': '할 일',
         'status.someday': '나중에 하기',
         'agenda.nextActions': '할 일',
@@ -358,6 +374,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': '목록으로 만들기',
     },
     zh: {
+        'projects.title': '个清单',
         'status.next': '要做的事',
         'status.someday': '以后再说',
         'agenda.nextActions': '要做的事',
@@ -383,6 +400,7 @@ const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<strin
         'task.createProjectFromTask': '变成清单',
     },
     'zh-Hant': {
+        'projects.title': '個清單',
         'status.next': '要做的事',
         'status.someday': '以後再說',
         'agenda.nextActions': '要做的事',

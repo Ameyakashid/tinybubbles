@@ -150,7 +150,8 @@ export function TrashView() {
                     {displayLabel(t, language, 'nav.trash', 'Deleted')}
                 </h2>
                 <div className="text-sm text-muted-foreground">
-                    {trashedTasks.length} {t('common.tasks')} · {trashedProjects.length} {t('projects.title')}
+                    {trashedTasks.length} {t('common.tasks')} · {trashedProjects.length}{' '}
+                    {displayLabel(t, language, 'projects.title', 'lists')}
                 </div>
             </header>
 
