@@ -204,7 +204,18 @@ async function bootstrap() {
     }
 
     if (!isQuickAddWindow && !isTauriRuntime() && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+        if (import.meta.env.DEV) {
+            // Never run the service worker against the dev server: its
+            // cache-first asset strategy pins browsers to a stale module
+            // graph (dev module URLs are stable, so cached copies never
+            // miss). Unregister actively so a browser that cached the shell
+            // before this guard existed heals on its next successful load.
+            navigator.serviceWorker.getRegistrations()
+                .then((registrations) => registrations.forEach((registration) => void registration.unregister()))
+                .catch(() => undefined);
+        } else {
+            navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+        }
     }
 
     if (!isTauriRuntime()) {
