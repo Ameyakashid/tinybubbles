@@ -1,0 +1,120 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { Task } from '@tinybubbles/core';
+import { useTaskStore } from '@tinybubbles/core';
+
+import { LanguageProvider } from '@/contexts/language-context';
+import { TodayView } from '../TodayView';
+
+const initialState = useTaskStore.getState();
+
+function buildTask(overrides: Partial<Task> & { id: string; title: string }): Task {
+    const now = new Date();
+    return {
+        status: 'next',
+        tags: [],
+        contexts: [],
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        ...overrides,
+    };
+}
+
+const renderView = (props: { onSeeAllDone?: () => void } = {}) => render(
+    <LanguageProvider>
+        <TodayView onSeeAllDone={props.onSeeAllDone ?? vi.fn()} />
+    </LanguageProvider>,
+);
+
+describe('TodayView', () => {
+    beforeEach(() => {
+        act(() => {
+            useTaskStore.setState(initialState, true);
+        });
+    });
+
+    it('shows open tasks and the done-today section', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Brush teeth' }),
+                    buildTask({ id: 'task-2', title: 'Make bed', status: 'done', completedAt: new Date().toISOString() }),
+                ],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('Brush teeth')).toBeInTheDocument();
+        expect(screen.getByText('Done today')).toBeInTheDocument();
+        expect(screen.getByText('Make bed')).toBeInTheDocument();
+    });
+
+    it('caps done today to the three most recent with a see-all link', () => {
+        const now = new Date();
+        const oneMinuteAgo = new Date(now.getTime() - 60_000);
+        const twoMinutesAgo = new Date(now.getTime() - 120_000);
+        const threeMinutesAgo = new Date(now.getTime() - 180_000);
+        const fourMinutesAgo = new Date(now.getTime() - 240_000);
+
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'One', status: 'done', completedAt: now.toISOString() }),
+                    buildTask({ id: 'task-2', title: 'Two', status: 'done', completedAt: oneMinuteAgo.toISOString() }),
+                    buildTask({ id: 'task-3', title: 'Three', status: 'done', completedAt: twoMinutesAgo.toISOString() }),
+                    buildTask({ id: 'task-4', title: 'Four', status: 'done', completedAt: threeMinutesAgo.toISOString() }),
+                    buildTask({ id: 'task-5', title: 'Five', status: 'done', completedAt: fourMinutesAgo.toISOString() }),
+                ],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('One')).toBeInTheDocument();
+        expect(screen.getByText('Two')).toBeInTheDocument();
+        expect(screen.getByText('Three')).toBeInTheDocument();
+        expect(screen.queryByText('Four')).not.toBeInTheDocument();
+        expect(screen.queryByText('Five')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'See all 5 done' })).toBeInTheDocument();
+    });
+
+    it('calls onSeeAllDone when the see-all button is pressed', () => {
+        const onSeeAllDone = vi.fn();
+        const now = new Date();
+
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'One', status: 'done', completedAt: now.toISOString() }),
+                    buildTask({ id: 'task-2', title: 'Two', status: 'done', completedAt: new Date(now.getTime() - 60_000).toISOString() }),
+                    buildTask({ id: 'task-3', title: 'Three', status: 'done', completedAt: new Date(now.getTime() - 120_000).toISOString() }),
+                    buildTask({ id: 'task-4', title: 'Four', status: 'done', completedAt: new Date(now.getTime() - 180_000).toISOString() }),
+                ],
+            });
+        });
+
+        renderView({ onSeeAllDone });
+
+        fireEvent.click(screen.getByRole('button', { name: 'See all 4 done' }));
+
+        expect(onSeeAllDone).toHaveBeenCalled();
+    });
+
+    it('moves a task into done today when its checkbox is toggled', async () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        renderView();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Done today')).toBeInTheDocument();
+            expect(screen.getByText('Brush teeth')).toBeInTheDocument();
+        });
+    });
+});
