@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { useKidFaceRuntime } from './runtime';
 import { useKidFaceTheme } from './use-kidface-theme';
+import { CelebrationProvider } from './components/CelebrationContext';
 import { KidLayout } from './components/KidLayout';
 import { TodayView } from './components/TodayView';
 import { AddView } from './components/AddView';
@@ -93,28 +94,30 @@ export function KidFaceApp() {
     }
 
     return (
-        <KidLayout lastSyncError={lastSyncError} onRequestSync={requestSync}>
-            <main
-                ref={mainRef}
-                tabIndex={-1}
-                aria-label={roomLabel}
-                className="relative flex flex-1 flex-col overflow-hidden outline-none"
-            >
-                <div
-                    key={activeRoom}
-                    className={cn(
-                        'flex flex-1 flex-col overflow-hidden',
-                        roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
-                    )}
+        <CelebrationProvider>
+            <KidLayout lastSyncError={lastSyncError} onRequestSync={requestSync}>
+                <main
+                    ref={mainRef}
+                    tabIndex={-1}
+                    aria-label={roomLabel}
+                    className="relative flex flex-1 flex-col overflow-hidden outline-none"
                 >
-                    {activeRoom === 'today' && <TodayView onSeeAllDone={() => changeRoom('done')} />}
-                    {activeRoom === 'add' && <AddView />}
-                    {activeRoom === 'done' && <DoneView />}
-                    {activeRoom === 'calendar' && <CalendarView />}
-                    {activeRoom === 'settings' && <SettingsView />}
-                </div>
-                <KidNav activeRoom={activeRoom} onChangeRoom={changeRoom} />
-            </main>
-        </KidLayout>
+                    <div
+                        key={activeRoom}
+                        className={cn(
+                            'flex flex-1 flex-col overflow-hidden',
+                            roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
+                        )}
+                    >
+                        {activeRoom === 'today' && <TodayView onSeeAllDone={() => changeRoom('done')} />}
+                        {activeRoom === 'add' && <AddView />}
+                        {activeRoom === 'done' && <DoneView />}
+                        {activeRoom === 'calendar' && <CalendarView />}
+                        {activeRoom === 'settings' && <SettingsView />}
+                    </div>
+                    <KidNav activeRoom={activeRoom} onChangeRoom={changeRoom} />
+                </main>
+            </KidLayout>
+        </CelebrationProvider>
     );
 }

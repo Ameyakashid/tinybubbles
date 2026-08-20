@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface BubbleCheckboxProps {
@@ -9,23 +10,25 @@ interface BubbleCheckboxProps {
     className?: string;
 }
 
-export function BubbleCheckbox({ checked, onChange, label, celebrating = false, className }: BubbleCheckboxProps) {
-    return (
-        <button
-            type="button"
-            role="checkbox"
-            aria-checked={checked}
-            aria-label={label}
-            onClick={onChange}
-            className={cn(
-                'relative flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50 active:scale-90',
-                checked
-                    ? 'border-success bg-success text-success-foreground'
-                    : 'border-border bg-card text-muted-foreground hover:border-primary/60',
-                celebrating && 'kidface-celebrate',
-                className,
-            )}
-        >
+export const BubbleCheckbox = forwardRef<HTMLButtonElement, BubbleCheckboxProps>(
+    function BubbleCheckbox({ checked, onChange, label, celebrating = false, className }, ref) {
+        return (
+            <button
+                ref={ref}
+                type="button"
+                role="checkbox"
+                aria-checked={checked}
+                aria-label={label}
+                onClick={onChange}
+                className={cn(
+                    'relative flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] transition-colors duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50 active:scale-90',
+                    checked
+                        ? 'border-success bg-success text-success-foreground'
+                        : 'border-border bg-card text-muted-foreground hover:border-primary/60',
+                    celebrating && 'kidface-celebrate',
+                    className,
+                )}
+            >
             {/* Soft glow halo behind the bubble */}
             <span
                 className={cn(
@@ -74,4 +77,4 @@ export function BubbleCheckbox({ checked, onChange, label, celebrating = false, 
             />
         </button>
     );
-}
+});

@@ -216,6 +216,31 @@
     }
 }
 
+@keyframes kidface-confetti-burst {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(1);
+    }
+    70% {
+        opacity: 0.85;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) translate(var(--confetti-tx), var(--confetti-ty)) rotate(var(--confetti-rotation)) scale(0.3);
+    }
+}
+
+@keyframes kidface-celebration-ring {
+    0% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(3.5);
+    }
+}
+
 @keyframes kidface-bubble-wobble {
     0%, 100% {
         border-radius: 50%;
@@ -323,6 +348,14 @@
 
 .kidface-trophy-shine {
     animation: kidface-trophy-shine 1.6s ease-in-out infinite;
+}
+
+.kidface-confetti {
+    animation: kidface-confetti-burst 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.kidface-celebration-ring {
+    animation: kidface-celebration-ring 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .kidface-bubble-wobble {

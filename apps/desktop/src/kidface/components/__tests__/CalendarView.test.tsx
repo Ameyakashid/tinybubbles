@@ -4,6 +4,7 @@ import type { Task } from '@tinybubbles/core';
 import { useTaskStore } from '@tinybubbles/core';
 
 import { LanguageProvider } from '@/contexts/language-context';
+import { CelebrationProvider } from '../CelebrationContext';
 import { CalendarView } from '../CalendarView';
 
 const initialState = useTaskStore.getState();
@@ -22,7 +23,9 @@ function buildTask(overrides: Partial<Task> & { id: string; title: string }): Ta
 
 const renderView = () => render(
     <LanguageProvider>
-        <CalendarView />
+        <CelebrationProvider>
+            <CalendarView />
+        </CelebrationProvider>
     </LanguageProvider>,
 );
 

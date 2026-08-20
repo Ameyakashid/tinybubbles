@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '@/contexts/language-context';
+import { CelebrationProvider } from '../CelebrationContext';
 import { TaskBubbleRow } from '../TaskBubbleRow';
 
 const baseTask: Task = {
@@ -21,11 +22,13 @@ const renderRow = (props: {
     onOpen?: (task: Task) => void;
 }) => render(
     <LanguageProvider>
-        <TaskBubbleRow
-            task={props.task ?? baseTask}
-            onToggle={props.onToggle ?? vi.fn()}
-            onOpen={props.onOpen ?? vi.fn()}
-        />
+        <CelebrationProvider>
+            <TaskBubbleRow
+                task={props.task ?? baseTask}
+                onToggle={props.onToggle ?? vi.fn()}
+                onOpen={props.onOpen ?? vi.fn()}
+            />
+        </CelebrationProvider>
     </LanguageProvider>
 );
 
@@ -54,6 +57,22 @@ describe('TaskBubbleRow', () => {
         });
         expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }));
         expect(onOpen).not.toHaveBeenCalled();
+        vi.useRealTimers();
+    });
+
+    it('commits the toggle if the row unmounts during the completion burst', () => {
+        vi.useFakeTimers();
+        const onToggle = vi.fn();
+        const { unmount } = renderRow({ onToggle });
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+        expect(onToggle).not.toHaveBeenCalled();
+
+        act(() => {
+            unmount();
+        });
+
+        expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }));
         vi.useRealTimers();
     });
 

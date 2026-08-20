@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '@/contexts/language-context';
+import { CelebrationProvider } from '../CelebrationContext';
 import { OpenTaskView } from '../OpenTaskView';
 
 const baseTask: Task = {
@@ -22,12 +23,14 @@ const renderView = (props: {
     onToggleChecklistItem?: (taskId: string, itemId: string) => void;
 }) => render(
     <LanguageProvider>
-        <OpenTaskView
-            task={props.task ?? baseTask}
-            onClose={props.onClose ?? vi.fn()}
-            onToggleTask={props.onToggleTask ?? vi.fn()}
-            onToggleChecklistItem={props.onToggleChecklistItem ?? vi.fn()}
-        />
+        <CelebrationProvider>
+            <OpenTaskView
+                task={props.task ?? baseTask}
+                onClose={props.onClose ?? vi.fn()}
+                onToggleTask={props.onToggleTask ?? vi.fn()}
+                onToggleChecklistItem={props.onToggleChecklistItem ?? vi.fn()}
+            />
+        </CelebrationProvider>
     </LanguageProvider>
 );
 

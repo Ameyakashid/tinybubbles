@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEven
 import { ArrowLeft, Star, Check } from 'lucide-react';
 import { useTaskStore, type Task, generateUUID } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
+import { useCelebration } from './CelebrationContext';
 import { Dialog, DialogBody, DialogHeader } from '@/components/ui/Dialog';
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
@@ -20,6 +21,7 @@ function isTaskFinished(task: Task): boolean {
 
 export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistItem }: OpenTaskViewProps) {
     const { t, language } = useLanguage();
+    const celebrate = useCelebration();
 
     const finished = isTaskFinished(task);
     const checklist = task.checklist ?? [];
@@ -40,6 +42,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const markNotDoneLabel = displayLabel(t, language, 'kidface.task.markNotDone', 'Mark {title} as not done').replace('{title}', task.title);
 
     const updateTask = useTaskStore((state) => state.updateTask);
+    const checkboxRef = useRef<HTMLButtonElement>(null);
     const [titleDraft, setTitleDraft] = useState(task.title);
     const [stepDraft, setStepDraft] = useState('');
     const [isCelebrating, setIsCelebrating] = useState(false);
@@ -78,6 +81,15 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
         if (!finished) {
             setIsCelebrating(true);
             celebrateTimeoutRef.current = window.setTimeout(() => setIsCelebrating(false), 500);
+
+            const rect = checkboxRef.current?.getBoundingClientRect();
+            const origin = rect
+                ? {
+                    x: (rect.left + rect.width / 2) / window.innerWidth,
+                    y: (rect.top + rect.height / 2) / window.innerHeight,
+                }
+                : undefined;
+            celebrate(origin);
         }
         void onToggleTask(task);
     };
@@ -113,6 +125,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
             <DialogBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 pb-8 pt-2">
                 <div className="flex items-center gap-5 rounded-2xl bg-card p-5 shadow-sm">
                     <BubbleCheckbox
+                        ref={checkboxRef}
                         checked={finished}
                         onChange={handleToggleCheckbox}
                         label={finished ? markNotDoneLabel : markDoneLabel}

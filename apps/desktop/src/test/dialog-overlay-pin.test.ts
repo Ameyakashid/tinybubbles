@@ -18,6 +18,7 @@ const ALLOWED_OVERLAY_FILES = new Map<string, string>([
     ['components/ui/Dialog.tsx', 'the module itself'],
     ['kidface/components/OpenTaskView.tsx', 'full-screen kid-face task sheet built on the Dialog shell'],
     ['kidface/components/CalendarDaySheet.tsx', 'full-screen kid-face calendar day sheet built on the Dialog shell'],
+    ['kidface/components/CelebrationLayer.tsx', 'non-modal particle burst overlay, pointer-events-none, no scrim or focus trap'],
 ]);
 
 function collectSourceFiles(dir: string): string[] {

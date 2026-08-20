@@ -2,6 +2,7 @@ import { Star, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Task } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
+import { useCelebration } from './CelebrationContext';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
@@ -14,9 +15,20 @@ interface TaskBubbleRowProps {
 
 export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     const { t, language } = useLanguage();
+    const celebrate = useCelebration();
+    const checkboxRef = useRef<HTMLButtonElement>(null);
     const [isPopping, setIsPopping] = useState(false);
     const popTimeoutRef = useRef<number | null>(null);
     const isAnimatingRef = useRef(false);
+    const taskRef = useRef(task);
+    const onToggleRef = useRef(onToggle);
+
+    // Keep refs current so the unmount cleanup can commit the latest task/onToggle
+    // if a completion burst is still pending.
+    useEffect(() => {
+        taskRef.current = task;
+        onToggleRef.current = onToggle;
+    });
 
     const isDone = task.status === 'done' || task.status === 'archived';
 
@@ -32,6 +44,11 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     useEffect(() => () => {
         if (popTimeoutRef.current !== null) {
             window.clearTimeout(popTimeoutRef.current);
+            popTimeoutRef.current = null;
+            // If the row is unmounted during the completion burst, commit the
+            // toggle so the child's tap is not silently dropped.
+            isAnimatingRef.current = false;
+            void onToggleRef.current(taskRef.current);
         }
     }, []);
 
@@ -40,10 +57,22 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
 
         if (!isDone) {
             // Queue the status change so the completion burst has time to play
-            // before the Today filter unmounts the row.
+            // before the Today filter unmounts the row. If unmount happens first,
+            // the cleanup above commits the toggle.
             isAnimatingRef.current = true;
             setIsPopping(true);
+
+            const rect = checkboxRef.current?.getBoundingClientRect();
+            const origin = rect
+                ? {
+                    x: (rect.left + rect.width / 2) / window.innerWidth,
+                    y: (rect.top + rect.height / 2) / window.innerHeight,
+                }
+                : undefined;
+            celebrate(origin);
+
             popTimeoutRef.current = window.setTimeout(() => {
+                popTimeoutRef.current = null;
                 isAnimatingRef.current = false;
                 setIsPopping(false);
                 void onToggle(task);
@@ -61,6 +90,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             )}
         >
             <BubbleCheckbox
+                ref={checkboxRef}
                 checked={isDone || isPopping}
                 onChange={handleToggle}
                 label={isDone ? openLabel : doneLabel}
