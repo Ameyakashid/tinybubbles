@@ -81,10 +81,18 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.calendar.dayTaskCount.other': '{count} things',
     'kidface.calendar.daySheet.empty': 'No plans for this day.',
     'kidface.calendar.daySheet.close': 'Back to calendar',
-    // Today payoff and undo.
+    // Today header and payoff.
+    'kidface.today.header.count.one': '1 thing to do today',
+    'kidface.today.header.count.other': '{count} things to do today',
+    'kidface.today.header.empty': 'Nothing left to do — nice work!',
+    'kidface.today.header.emptyScheduled.one': 'Nothing for today — 1 thing coming up',
+    'kidface.today.header.emptyScheduled.other': 'Nothing for today — {count} things coming up',
     'kidface.today.allDone.title': 'All done!',
     'kidface.today.allDone.message': 'You finished everything for today.',
     'kidface.today.allDone.seeDone': 'See your trophies',
+    'kidface.today.scheduledEmpty.title': 'Nothing for today',
+    'kidface.today.scheduledEmpty.one': '1 thing coming up.',
+    'kidface.today.scheduledEmpty.other': '{count} things coming up.',
     'kidface.undo.toast': 'Done! Tap to undo.',
     'kidface.undo.action': 'Undo',
     // Child editing in the task sheet.

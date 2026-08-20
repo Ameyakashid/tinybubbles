@@ -152,4 +152,22 @@ describe('TodayView', () => {
             expect(screen.getByText('Brush teeth')).toBeInTheDocument();
         });
     });
+
+    it('shows a scheduled empty state when every open task is planned for the future', () => {
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Future plan', startTime: nextWeek.toISOString() }),
+                ],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('Nothing for today')).toBeInTheDocument();
+        expect(screen.getByText('1 thing coming up.')).toBeInTheDocument();
+        expect(screen.queryByText('Future plan')).not.toBeInTheDocument();
+    });
 });

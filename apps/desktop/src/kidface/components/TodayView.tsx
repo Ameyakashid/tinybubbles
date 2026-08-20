@@ -1,23 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, RotateCcw, ChevronRight, Trophy } from 'lucide-react';
+import { Sparkles, RotateCcw, ChevronRight, Trophy, CalendarDays } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { TaskBubbleRow } from './TaskBubbleRow';
 import { OpenTaskView } from './OpenTaskView';
+import { selectTodayTasks } from './today-task-filter';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
 
 const RECENT_DONE_LIMIT = 3;
 const GENTLE_UNDO_MS = 5000;
-
-function isSameDay(a: string, b: Date): boolean {
-    const date = new Date(a);
-    return (
-        date.getFullYear() === b.getFullYear()
-        && date.getMonth() === b.getMonth()
-        && date.getDate() === b.getDate()
-    );
-}
 
 function sortOpenTasks(a: Task, b: Task): number {
     const focusedA = a.isFocusedToday ? 1 : 0;
@@ -53,25 +45,11 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
         return () => window.clearTimeout(id);
     }, [recentlyCompletedId]);
 
-    const { openTasks, doneToday } = useMemo(() => {
-        const now = new Date();
-        const open: Task[] = [];
-        const done: Task[] = [];
-        for (const task of tasks) {
-            if (task.deletedAt) continue;
-            if (task.status === 'done' || task.status === 'archived') {
-                if (task.completedAt && isSameDay(task.completedAt, now)) {
-                    done.push(task);
-                }
-                continue;
-            }
-            if (task.status === 'next' || task.status === 'inbox' || task.status === 'waiting') {
-                open.push(task);
-            }
-        }
-        open.sort(sortOpenTasks);
-        done.sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
-        return { openTasks: open, doneToday: done };
+    const { openTasks, doneToday, upcomingCount } = useMemo(() => {
+        const selection = selectTodayTasks(tasks, new Date());
+        selection.openTasks.sort(sortOpenTasks);
+        selection.doneToday.sort((a, b) => new Date(b.completedAt!).getTime() - new Date(a.completedAt!).getTime());
+        return selection;
     }, [tasks]);
 
     const selectedTask = useMemo(
@@ -118,6 +96,30 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
     const allDoneTitle = displayLabel(t, language, 'kidface.today.allDone.title', 'All done!');
     const allDoneMessage = displayLabel(t, language, 'kidface.today.allDone.message', 'You finished everything for today.');
     const seeDoneLabel = displayLabel(t, language, 'kidface.today.allDone.seeDone', 'See your trophies');
+    const headerCountOne = displayLabel(t, language, 'kidface.today.header.count.one', '1 thing to do today');
+    const headerCountOther = displayLabel(t, language, 'kidface.today.header.count.other', '{count} things to do today');
+    const headerEmpty = displayLabel(t, language, 'kidface.today.header.empty', 'Nothing left to do — nice work!');
+    const headerScheduledOne = displayLabel(t, language, 'kidface.today.header.emptyScheduled.one', 'Nothing for today — 1 thing coming up');
+    const headerScheduledOther = displayLabel(t, language, 'kidface.today.header.emptyScheduled.other', 'Nothing for today — {count} things coming up');
+    const scheduledEmptyTitle = displayLabel(t, language, 'kidface.today.scheduledEmpty.title', 'Nothing for today');
+    const scheduledEmptyOne = displayLabel(t, language, 'kidface.today.scheduledEmpty.one', '1 thing coming up.');
+    const scheduledEmptyOther = displayLabel(t, language, 'kidface.today.scheduledEmpty.other', '{count} things coming up.');
+
+    const headerSubtitle = (() => {
+        if (openTasks.length > 0) {
+            return openTasks.length === 1
+                ? headerCountOne
+                : headerCountOther.replace('{count}', String(openTasks.length));
+        }
+        if (upcomingCount === 0) return headerEmpty;
+        return upcomingCount === 1
+            ? headerScheduledOne
+            : headerScheduledOther.replace('{count}', String(upcomingCount));
+    })();
+
+    const scheduledEmptyMessage = upcomingCount === 1
+        ? scheduledEmptyOne
+        : scheduledEmptyOther.replace('{count}', String(upcomingCount));
 
     const recentlyCompletedTask = recentlyCompletedId
         ? doneToday.find((task) => task.id === recentlyCompletedId) ?? null
@@ -129,11 +131,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                 <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
                     {greetingForHour(now.getHours())}
                 </h1>
-                <p className="text-lg text-muted-foreground">
-                    {openTasks.length === 0
-                        ? 'Nothing left to do — nice work!'
-                        : `${openTasks.length} thing${openTasks.length === 1 ? '' : 's'} to do today`}
-                </p>
+                <p className="text-lg text-muted-foreground">{headerSubtitle}</p>
             </header>
 
             <section className="flex min-h-0 flex-1 flex-col gap-3">
@@ -170,6 +168,16 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                             >
                                 {seeDoneLabel}
                             </button>
+                        </div>
+                    ) : upcomingCount > 0 ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                            <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
+                                <CalendarDays className="size-14 text-primary" />
+                            </div>
+                            <div className="flex max-w-[18rem] flex-col gap-1">
+                                <p className="text-2xl font-extrabold text-foreground">{scheduledEmptyTitle}</p>
+                                <p className="text-lg text-muted-foreground">{scheduledEmptyMessage}</p>
+                            </div>
                         </div>
                     ) : (
                         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
