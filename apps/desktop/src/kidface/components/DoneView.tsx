@@ -170,8 +170,12 @@ export function DoneView() {
 
             {groups.length > 0 && (
                 <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm kidface-slide-up">
-                    <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
-                        <Trophy className="size-7 text-success" strokeWidth={2.5} />
+                    <div className="relative flex size-12 items-center justify-center overflow-hidden rounded-full bg-success/10">
+                        <Trophy className="relative z-10 size-7 text-success" strokeWidth={2.5} />
+                        <span
+                            className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-r from-transparent via-success-foreground/30 to-transparent kidface-trophy-shine"
+                            aria-hidden="true"
+                        />
                     </div>
                     <div className="flex flex-col">
                         <span className="text-lg font-bold text-foreground">{todaySummary}</span>
@@ -184,8 +188,12 @@ export function DoneView() {
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                     <div className="relative flex size-32 items-center justify-center">
                         <div className="absolute inset-0 rounded-full bg-secondary" />
-                        <div className="kidface-float relative flex size-28 items-center justify-center rounded-full bg-secondary">
-                            <Trophy className="size-14 text-primary" />
+                        <div className="kidface-float relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-secondary">
+                            <Trophy className="relative z-10 size-14 text-primary" />
+                            <span
+                                className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-r from-transparent via-primary/30 to-transparent kidface-trophy-shine"
+                                aria-hidden="true"
+                            />
                         </div>
                     </div>
                     <div className="flex max-w-[18rem] flex-col gap-1">
@@ -195,7 +203,7 @@ export function DoneView() {
                 </div>
             ) : (
                 <section className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-2">
-                    {groups.map((group) => (
+                    {groups.map((group, groupIndex) => (
                         <div key={group.key} className="flex flex-col gap-3">
                             <div className="flex items-center justify-between">
                                 <h2 className="text-xl font-bold text-foreground">{groupTitle(group.key)}</h2>
@@ -204,8 +212,11 @@ export function DoneView() {
                                 </span>
                             </div>
                             <ul className="flex flex-col gap-3">
-                                {group.tasks.map((task) => (
-                                    <li key={task.id}>
+                                {group.tasks.map((task, taskIndex) => (
+                                    <li
+                                        key={task.id}
+                                        style={{ animationDelay: `${(groupIndex * 3 + taskIndex) * 40}ms` }}
+                                    >
                                         <DoneBubbleRow
                                             task={task}
                                             onUndo={handleUndo}

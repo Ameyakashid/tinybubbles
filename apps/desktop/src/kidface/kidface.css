@@ -90,6 +90,39 @@
     }
 }
 
+@keyframes kidface-month-enter-right {
+    from {
+        opacity: 0;
+        transform: translateX(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes kidface-month-enter-left {
+    from {
+        opacity: 0;
+        transform: translateX(-24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes kidface-sheet-enter {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.99);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 @keyframes kidface-float {
     0%, 100% {
         transform: translateY(0);
@@ -234,6 +267,18 @@
     animation: kidface-room-enter-left 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.kidface-month-enter-right {
+    animation: kidface-month-enter-right 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.kidface-month-enter-left {
+    animation: kidface-month-enter-left 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.kidface-sheet-enter {
+    animation: kidface-sheet-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .kidface-float {
     animation: kidface-float 3s ease-in-out infinite;
 }
@@ -294,6 +339,9 @@
     .kidface-slide-up,
     .kidface-room-enter-right,
     .kidface-room-enter-left,
+    .kidface-month-enter-right,
+    .kidface-month-enter-left,
+    .kidface-sheet-enter,
     .kidface-float,
     .kidface-bubble-ripple,
     .kidface-bubble-ripple-delayed,

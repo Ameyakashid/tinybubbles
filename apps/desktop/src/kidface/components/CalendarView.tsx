@@ -67,9 +67,20 @@ export function CalendarView() {
     const weekStartSetting = useTaskStore((state) => state.settings.weekStart);
     const weekStart = WEEK_START_MAP[typeof weekStartSetting === 'string' ? weekStartSetting : 'sunday'] ?? 0;
     const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [monthDirection, setMonthDirection] = useState<'left' | 'right'>('right');
     const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
     const today = new Date();
+
+    const handlePrev = () => {
+        setMonthDirection('left');
+        setCurrentMonth((prev) => subMonths(prev, 1));
+    };
+
+    const handleNext = () => {
+        setMonthDirection('right');
+        setCurrentMonth((prev) => addMonths(prev, 1));
+    };
 
     const days = useMemo(() => {
         const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: weekStart });
@@ -109,8 +120,7 @@ export function CalendarView() {
         [days, tasksByDay],
     );
 
-    const handlePrev = () => setCurrentMonth((prev) => subMonths(prev, 1));
-    const handleNext = () => setCurrentMonth((prev) => addMonths(prev, 1));
+
 
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
@@ -148,7 +158,13 @@ export function CalendarView() {
                     ))}
                 </div>
 
-                <div className="grid flex-1 grid-cols-7 gap-1">
+                <div
+                    key={safeFormatDate(currentMonth, 'yyyy-MM') ?? ''}
+                    className={cn(
+                        'grid flex-1 grid-cols-7 gap-1',
+                        monthDirection === 'right' ? 'kidface-month-enter-right' : 'kidface-month-enter-left',
+                    )}
+                >
                     {days.map((day) => {
                         const dayKey = safeFormatDate(day, 'yyyy-MM-dd') ?? '';
                         const dayTasks = tasksByDay.get(dayKey) ?? [];

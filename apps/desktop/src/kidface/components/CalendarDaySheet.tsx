@@ -56,7 +56,7 @@ export function CalendarDaySheet({ date, tasks, onClose }: CalendarDaySheetProps
             label={dateLabel}
             closeOnBackdrop={false}
             overlayClassName="bg-background"
-            panelClassName="fixed inset-0 max-h-none max-w-none rounded-none border-none shadow-none"
+            panelClassName="fixed inset-0 max-h-none max-w-none rounded-none border-none shadow-none kidface-sheet-enter"
         >
             <DialogHeader className="flex h-16 shrink-0 items-center px-3">
                 <button
@@ -80,8 +80,12 @@ export function CalendarDaySheet({ date, tasks, onClose }: CalendarDaySheetProps
                     </div>
                 ) : (
                     <ul className="flex flex-col gap-3">
-                        {sortedTasks.map((task) => (
-                            <li key={task.id} className="kidface-slide-up">
+                        {sortedTasks.map((task, index) => (
+                            <li
+                                key={task.id}
+                                className="kidface-slide-up"
+                                style={{ animationDelay: `${index * 40}ms` }}
+                            >
                                 <TaskBubbleRow
                                     task={task}
                                     onToggle={handleToggle}
