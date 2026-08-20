@@ -126,6 +126,55 @@ describe('CalendarView', () => {
         expect(document.querySelector('[data-calendar-day="2026-04-06"]')?.querySelector('[data-task-dot]')).not.toBeInTheDocument();
     });
 
+    it('announces how many tasks are on a day with plans', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Swim practice', startTime: '2026-04-05' }),
+                    buildTask({ id: 'task-2', title: 'Pack bag', startTime: '2026-04-05' }),
+                ],
+            });
+        });
+
+        renderView();
+
+        const cell = document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement;
+        expect(cell).toHaveAttribute('aria-label', expect.stringContaining('2 things'));
+    });
+
+    it('announces a quiet day when a cell has no tasks', () => {
+        renderView();
+
+        const cell = document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement;
+        expect(cell).toHaveAttribute('aria-label', expect.stringContaining('nothing to do'));
+    });
+
+    it('opens a day plan sheet when a day with tasks is tapped', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Swim practice', startTime: '2026-04-05' }),
+                ],
+            });
+        });
+
+        renderView();
+
+        fireEvent.click(document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement);
+
+        expect(screen.getByRole('dialog', { name: /Sunday, April 5/ })).toBeInTheDocument();
+        expect(screen.getByText('Swim practice')).toBeInTheDocument();
+    });
+
+    it('opens a day plan sheet with an empty state when a quiet day is tapped', () => {
+        renderView();
+
+        fireEvent.click(document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement);
+
+        expect(screen.getByRole('dialog', { name: /Sunday, April 5/ })).toBeInTheDocument();
+        expect(screen.getByText('No plans for this day.')).toBeInTheDocument();
+    });
+
     it('shows a friendly empty state when the month has no dated tasks', () => {
         act(() => {
             useTaskStore.setState({

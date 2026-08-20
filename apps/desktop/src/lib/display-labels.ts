@@ -72,6 +72,25 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.add.success': 'Added! It is on your Today list.',
     'kidface.calendar.title': 'Calendar',
     'kidface.calendar.empty': 'No big plans this month.',
+    // Offline reassurance.
+    'kidface.offline.message': 'Offline — your changes are saved.',
+    'kidface.offline.action': 'Try syncing',
+    // Calendar day a11y + day sheet.
+    'kidface.calendar.dayTaskCount.zero': 'nothing to do',
+    'kidface.calendar.dayTaskCount.one': 'one thing',
+    'kidface.calendar.dayTaskCount.other': '{count} things',
+    'kidface.calendar.daySheet.empty': 'No plans for this day.',
+    'kidface.calendar.daySheet.close': 'Back to calendar',
+    // Today payoff and undo.
+    'kidface.today.allDone.title': 'All done!',
+    'kidface.today.allDone.message': 'You finished everything for today.',
+    'kidface.today.allDone.seeDone': 'See your trophies',
+    'kidface.undo.toast': 'Done! Tap to undo.',
+    'kidface.undo.action': 'Undo',
+    // Child editing in the task sheet.
+    'kidface.task.editTitlePlaceholder': 'What is this called?',
+    'kidface.task.addStepPlaceholder': 'Add a step',
+    'kidface.task.addStepAction': 'Add step',
 };
 
 const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<string, string>>> = {

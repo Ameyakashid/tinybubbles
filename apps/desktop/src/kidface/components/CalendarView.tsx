@@ -18,10 +18,12 @@ import {
     safeParseDate,
     useTaskStore,
     type Task,
+    type Language,
 } from '@tinybubbles/core';
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
+import { CalendarDaySheet } from './CalendarDaySheet';
 
 const WEEK_START_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
     sunday: 0,
@@ -43,12 +45,29 @@ function isOpenTask(task: Task): boolean {
     return !task.deletedAt && task.status !== 'done' && task.status !== 'archived';
 }
 
+function taskCountLabel(t: (key: string) => string, language: Language, count: number): string {
+    let category: Intl.LDMLPluralRule;
+    try {
+        category = count === 0 ? 'zero' : new Intl.PluralRules(language).select(count);
+    } catch {
+        category = count === 0 ? 'zero' : new Intl.PluralRules('en').select(count);
+    }
+    const template = displayLabel(
+        t,
+        language,
+        `kidface.calendar.dayTaskCount.${category}`,
+        count === 0 ? 'nothing to do' : count === 1 ? 'one thing' : '{count} things',
+    );
+    return template.replace('{count}', String(count));
+}
+
 export function CalendarView() {
     const { t, language } = useLanguage();
     const tasks = useTaskStore((state) => state.tasks);
     const weekStartSetting = useTaskStore((state) => state.settings.weekStart);
     const weekStart = WEEK_START_MAP[typeof weekStartSetting === 'string' ? weekStartSetting : 'sunday'] ?? 0;
     const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
     const today = new Date();
 
@@ -132,14 +151,17 @@ export function CalendarView() {
                         const dayTasks = tasksByDay.get(dayKey) ?? [];
                         const inCurrentMonth = isSameMonth(day, currentMonth);
                         const isToday = isSameDay(day, today);
+                        const dateLabel = safeFormatDate(day, 'MMMM d, yyyy') ?? dayKey;
+                        const countLabel = taskCountLabel(t, language, dayTasks.length);
                         return (
                             <button
                                 key={dayKey}
                                 type="button"
                                 data-calendar-day={dayKey}
-                                disabled={!inCurrentMonth}
-                                aria-label={safeFormatDate(day, 'MMMM d, yyyy') ?? undefined}
+                                onClick={() => setSelectedDay(day)}
+                                aria-label={`${dateLabel}, ${countLabel}`}
                                 aria-current={isToday ? 'date' : undefined}
+                                aria-haspopup="dialog"
                                 className={cn(
                                     'flex min-h-16 flex-col items-center justify-start gap-1 rounded-2xl p-2 transition-transform',
                                     inCurrentMonth
@@ -181,6 +203,14 @@ export function CalendarView() {
                     </div>
                 )}
             </section>
+
+            {selectedDay && (
+                <CalendarDaySheet
+                    date={selectedDay}
+                    tasks={tasksByDay.get(safeFormatDate(selectedDay, 'yyyy-MM-dd') ?? '') ?? []}
+                    onClose={() => setSelectedDay(null)}
+                />
+            )}
         </div>
     );
 }

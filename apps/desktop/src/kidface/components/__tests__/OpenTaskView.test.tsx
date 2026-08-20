@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
-import type { Task } from '@tinybubbles/core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useTaskStore, type Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '@/contexts/language-context';
 import { OpenTaskView } from '../OpenTaskView';
@@ -37,7 +37,40 @@ describe('OpenTaskView', () => {
 
         expect(screen.getByRole('dialog', { name: 'Brush teeth' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
-        expect(screen.getByText('Brush teeth')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('Brush teeth')).toBeInTheDocument();
+    });
+
+    it('lets the child fix the task title', async () => {
+        const updateTask = vi.spyOn(useTaskStore.getState(), 'updateTask');
+        renderView({});
+
+        const input = screen.getByLabelText('Task title') as HTMLInputElement;
+        fireEvent.change(input, { target: { value: 'Brush teeth really well' } });
+        fireEvent.blur(input);
+
+        await waitFor(() => {
+            expect(updateTask).toHaveBeenCalledWith('task-1', { title: 'Brush teeth really well' });
+        });
+    });
+
+    it('lets the child add their own checklist step', async () => {
+        const updateTask = vi.spyOn(useTaskStore.getState(), 'updateTask');
+        renderView({});
+
+        const input = screen.getByLabelText('Add a step');
+        fireEvent.change(input, { target: { value: 'Rinse mouth' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+
+        await waitFor(() => {
+            expect(updateTask).toHaveBeenCalledWith(
+                'task-1',
+                expect.objectContaining({
+                    checklist: expect.arrayContaining([
+                        expect.objectContaining({ title: 'Rinse mouth', isCompleted: false }),
+                    ]),
+                }),
+            );
+        });
     });
 
     it('calls onClose when the back button is clicked', () => {
@@ -124,14 +157,15 @@ describe('OpenTaskView', () => {
         renderView({});
 
         const back = screen.getByRole('button', { name: 'Back' });
-        const checkbox = screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' });
+        const last = screen.getByLabelText('Add a step');
 
-        checkbox.focus();
-        fireEvent.keyDown(checkbox, { key: 'Tab' });
-        expect(back).toHaveFocus();
-
+        back.focus();
         fireEvent.keyDown(back, { key: 'Tab', shiftKey: true });
-        expect(checkbox).toHaveFocus();
+        expect(last).toHaveFocus();
+
+        last.focus();
+        fireEvent.keyDown(last, { key: 'Tab' });
+        expect(back).toHaveFocus();
     });
 
     it('restores focus to the opener when the sheet closes', () => {

@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { displayLabel } from '@/lib/display-labels';
+import { useLanguage } from '@/contexts/language-context';
 
 interface KidLayoutProps {
     children: ReactNode;
@@ -7,6 +9,10 @@ interface KidLayoutProps {
 }
 
 export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutProps) {
+    const { t, language } = useLanguage();
+    const offlineMessage = displayLabel(t, language, 'kidface.offline.message', 'Offline — your changes are saved.');
+    const offlineAction = displayLabel(t, language, 'kidface.offline.action', 'Try syncing');
+
     return (
         <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
             <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -19,9 +25,10 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
                 <button
                     type="button"
                     onClick={onRequestSync}
-                    className="relative z-10 w-full bg-warning px-4 py-3 text-center text-base font-medium text-warning-foreground active:scale-[0.99]"
+                    className="relative z-10 flex w-full items-center justify-center gap-2 bg-warning px-4 py-3 text-center text-base font-medium text-warning-foreground active:scale-[0.99]"
                 >
-                    Could not sync. Tap to try again.
+                    <span>{offlineMessage}</span>
+                    <span className="underline">{offlineAction}</span>
                 </button>
             )}
 

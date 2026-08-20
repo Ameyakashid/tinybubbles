@@ -59,6 +59,17 @@
     }
 }
 
+@keyframes kidface-room-enter {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .kidface-drift {
     animation: kidface-drift 18s ease-in-out infinite;
 }
@@ -83,13 +94,18 @@
     animation: kidface-slide-up 0.3s ease-out both;
 }
 
+.kidface-room-enter {
+    animation: kidface-room-enter 0.25s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .kidface-drift,
     .kidface-drift-slow,
     .kidface-drift-medium,
     .kidface-pop,
     .kidface-celebrate,
-    .kidface-slide-up {
+    .kidface-slide-up,
+    .kidface-room-enter {
         animation: none;
     }
 }

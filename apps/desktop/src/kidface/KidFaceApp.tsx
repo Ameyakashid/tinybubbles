@@ -4,7 +4,7 @@
  * See apps/desktop/KID-FACE-CONTRACT.md for the runtime contract.
  * The living surfaces are Today, Add, Done, and Calendar; navigation stays shallow.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { useKidFaceRuntime } from './runtime';
 import { KidLayout } from './components/KidLayout';
@@ -13,11 +13,25 @@ import { AddView } from './components/AddView';
 import { DoneView } from './components/DoneView';
 import { CalendarView } from './components/CalendarView';
 import { KidNav, type KidRoom } from './components/KidNav';
+import { displayLabel } from '@/lib/display-labels';
+import { useLanguage } from '@/contexts/language-context';
 import './kidface.css';
 
 export function KidFaceApp() {
     const { hydrated, loadError, lastSyncError, requestSync } = useKidFaceRuntime();
+    const { t, language } = useLanguage();
     const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
+    const mainRef = useRef<HTMLElement>(null);
+    const previousRoom = useRef<KidRoom | null>(null);
+
+    const roomLabel = displayLabel(t, language, `kidface.nav.${activeRoom}`, activeRoom);
+
+    useEffect(() => {
+        if (previousRoom.current !== null && previousRoom.current !== activeRoom) {
+            mainRef.current?.focus({ preventScroll: true });
+        }
+        previousRoom.current = activeRoom;
+    }, [activeRoom]);
 
     if (!hydrated) {
         return (
@@ -56,13 +70,20 @@ export function KidFaceApp() {
 
     return (
         <KidLayout lastSyncError={lastSyncError} onRequestSync={requestSync}>
-            <div className="flex flex-1 flex-col overflow-hidden">
-                {activeRoom === 'today' && <TodayView onSeeAllDone={() => setActiveRoom('done')} />}
-                {activeRoom === 'add' && <AddView />}
-                {activeRoom === 'done' && <DoneView />}
-                {activeRoom === 'calendar' && <CalendarView />}
+            <main
+                ref={mainRef}
+                tabIndex={-1}
+                aria-label={roomLabel}
+                className="relative flex flex-1 flex-col overflow-hidden outline-none"
+            >
+                <div key={activeRoom} className="kidface-room-enter flex flex-1 flex-col overflow-hidden">
+                    {activeRoom === 'today' && <TodayView onSeeAllDone={() => setActiveRoom('done')} />}
+                    {activeRoom === 'add' && <AddView />}
+                    {activeRoom === 'done' && <DoneView />}
+                    {activeRoom === 'calendar' && <CalendarView />}
+                </div>
                 <KidNav activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
-            </div>
+            </main>
         </KidLayout>
     );
 }

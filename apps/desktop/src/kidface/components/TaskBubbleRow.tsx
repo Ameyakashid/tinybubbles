@@ -1,5 +1,5 @@
 import { Star, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Task } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
 import { cn } from '@/lib/utils';
@@ -12,11 +12,18 @@ interface TaskBubbleRowProps {
 
 export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     const [isPopping, setIsPopping] = useState(false);
+    const popTimeoutRef = useRef<number | null>(null);
+
+    useEffect(() => () => {
+        if (popTimeoutRef.current !== null) {
+            window.clearTimeout(popTimeoutRef.current);
+        }
+    }, []);
 
     const handleToggle = () => {
         setIsPopping(true);
         void onToggle(task);
-        window.setTimeout(() => setIsPopping(false), 250);
+        popTimeoutRef.current = window.setTimeout(() => setIsPopping(false), 250);
     };
 
     return (

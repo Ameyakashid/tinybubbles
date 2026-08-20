@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Sparkles, RotateCcw, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Sparkles, RotateCcw, ChevronRight, Trophy } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { TaskBubbleRow } from './TaskBubbleRow';
 import { OpenTaskView } from './OpenTaskView';
@@ -8,6 +8,7 @@ import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
 
 const RECENT_DONE_LIMIT = 3;
+const GENTLE_UNDO_MS = 5000;
 
 function isSameDay(a: string, b: Date): boolean {
     const date = new Date(a);
@@ -43,7 +44,14 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
     const tasks = useTaskStore((state) => state.tasks);
     const updateTask = useTaskStore((state) => state.updateTask);
     const [justCompletedIds, setJustCompletedIds] = useState<Set<string>>(new Set());
+    const [recentlyCompletedId, setRecentlyCompletedId] = useState<string | null>(null);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!recentlyCompletedId) return undefined;
+        const id = window.setTimeout(() => setRecentlyCompletedId(null), GENTLE_UNDO_MS);
+        return () => window.clearTimeout(id);
+    }, [recentlyCompletedId]);
 
     const { openTasks, doneToday } = useMemo(() => {
         const now = new Date();
@@ -79,9 +87,11 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                 next.delete(task.id);
                 return next;
             });
+            setRecentlyCompletedId((prev) => (prev === task.id ? null : prev));
         } else {
             await updateTask(task.id, { status: 'done', completedAt: new Date().toISOString() });
             setJustCompletedIds((prev) => new Set(prev).add(task.id));
+            setRecentlyCompletedId(task.id);
             window.setTimeout(() => {
                 setJustCompletedIds((prev) => {
                     const next = new Set(prev);
@@ -103,6 +113,15 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
 
     const now = new Date();
     const toDoLabel = displayLabel(t, language, 'agenda.nextActions', 'To do');
+    const undoToast = displayLabel(t, language, 'kidface.undo.toast', 'Done! Tap to undo.');
+    const undoAction = displayLabel(t, language, 'kidface.undo.action', 'Undo');
+    const allDoneTitle = displayLabel(t, language, 'kidface.today.allDone.title', 'All done!');
+    const allDoneMessage = displayLabel(t, language, 'kidface.today.allDone.message', 'You finished everything for today.');
+    const seeDoneLabel = displayLabel(t, language, 'kidface.today.allDone.seeDone', 'See your trophies');
+
+    const recentlyCompletedTask = recentlyCompletedId
+        ? doneToday.find((task) => task.id === recentlyCompletedId) ?? null
+        : null;
 
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
@@ -119,15 +138,49 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
 
             <section className="flex min-h-0 flex-1 flex-col gap-3">
                 <h2 className="text-xl font-bold text-foreground">{toDoLabel}</h2>
-                {openTasks.length === 0 ? (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-                        <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
-                            <Sparkles className="size-14 text-primary" />
-                        </div>
-                        <p className="max-w-[16rem] text-lg text-muted-foreground">
-                            Tap the big + above if something needs doing.
-                        </p>
+                {recentlyCompletedTask && (
+                    <div
+                        className="flex items-center justify-between gap-3 rounded-2xl bg-success/10 p-4 kidface-slide-up"
+                        aria-live="polite"
+                    >
+                        <span className="text-lg font-semibold text-success">{undoToast}</span>
+                        <button
+                            type="button"
+                            onClick={() => void handleToggle(recentlyCompletedTask)}
+                            className="flex min-h-12 items-center rounded-full bg-card px-5 text-base font-bold text-success shadow-sm active:scale-90"
+                        >
+                            {undoAction}
+                        </button>
                     </div>
+                )}
+                {openTasks.length === 0 ? (
+                    doneToday.length > 0 ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                            <div className="flex size-28 items-center justify-center rounded-full bg-success/10">
+                                <Trophy className="size-14 text-success" />
+                            </div>
+                            <div className="flex max-w-[18rem] flex-col gap-1">
+                                <p className="text-2xl font-extrabold text-foreground">{allDoneTitle}</p>
+                                <p className="text-lg text-muted-foreground">{allDoneMessage}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={onSeeAllDone}
+                                className="flex min-h-14 items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
+                            >
+                                {seeDoneLabel}
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+                            <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
+                                <Sparkles className="size-14 text-primary" />
+                            </div>
+                            <p className="max-w-[16rem] text-lg text-muted-foreground">
+                                Tap the big + above if something needs doing.
+                            </p>
+                        </div>
+                    )
                 ) : (
                     <ul className="flex flex-col gap-3 overflow-y-auto pb-2">
                         {openTasks.map((task, index) => (

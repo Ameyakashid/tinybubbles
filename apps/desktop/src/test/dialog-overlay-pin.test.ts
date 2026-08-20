@@ -17,6 +17,7 @@ const SRC_ROOT = existsSync(LOCAL_SRC) ? LOCAL_SRC : join(process.cwd(), 'apps',
 const ALLOWED_OVERLAY_FILES = new Map<string, string>([
     ['components/ui/Dialog.tsx', 'the module itself'],
     ['kidface/components/OpenTaskView.tsx', 'full-screen kid-face task sheet built on the Dialog shell'],
+    ['kidface/components/CalendarDaySheet.tsx', 'full-screen kid-face calendar day sheet built on the Dialog shell'],
 ]);
 
 function collectSourceFiles(dir: string): string[] {

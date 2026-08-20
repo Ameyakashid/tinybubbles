@@ -101,6 +101,41 @@ describe('TodayView', () => {
         expect(onSeeAllDone).toHaveBeenCalled();
     });
 
+    it('shows a gentle undo toast when a task is completed', async () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        renderView();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Done! Tap to undo.')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+        });
+    });
+
+    it('shows an all-done payoff when the last open task is finished', async () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        const onSeeAllDone = vi.fn();
+        renderView({ onSeeAllDone });
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('All done!')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'See your trophies' })).toBeInTheDocument();
+        });
+    });
+
     it('moves a task into done today when its checkbox is toggled', async () => {
         act(() => {
             useTaskStore.setState({

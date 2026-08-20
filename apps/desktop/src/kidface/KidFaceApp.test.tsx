@@ -65,6 +65,21 @@ describe('KidFaceApp', () => {
         expect(requestSync).toHaveBeenCalled();
     });
 
+    it('moves focus to the main content when the room changes', () => {
+        mockedUseKidFaceRuntime.mockReturnValue({
+            hydrated: true,
+            loadError: null,
+            lastSyncError: null,
+            requestSync: vi.fn(),
+        });
+
+        renderApp();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+        expect(screen.getByRole('main', { name: 'Add' })).toHaveFocus();
+    });
+
     it('shows a sync-error banner when the runtime reports a sync failure', () => {
         const requestSync = vi.fn();
         mockedUseKidFaceRuntime.mockReturnValue({
@@ -76,7 +91,7 @@ describe('KidFaceApp', () => {
 
         renderApp();
 
-        fireEvent.click(screen.getByRole('button', { name: /Could not sync/ }));
+        fireEvent.click(screen.getByRole('button', { name: /Offline — your changes are saved/ }));
 
         expect(requestSync).toHaveBeenCalled();
     });
