@@ -173,4 +173,14 @@ describe('TodayView', () => {
         expect(screen.getByText('1 thing coming up.')).toBeInTheDocument();
         expect(screen.queryByText('Future plan')).not.toBeInTheDocument();
     });
+
+    it('shows ambient motion behind empty states', () => {
+        act(() => {
+            useTaskStore.setState({ _allTasks: [] });
+        });
+
+        renderView();
+
+        expect(screen.getByTestId('ambient-field')).toBeInTheDocument();
+    });
 });

@@ -117,6 +117,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
                 {task.isFocusedToday && (
                     <span className="relative flex size-7 items-center justify-center">
                         <span
+                            data-testid="focus-pulse-ring"
                             className="absolute left-1/2 top-1/2 size-7 rounded-full bg-focus-star/30 kidface-pulse-ring-slow"
                             aria-hidden="true"
                         />

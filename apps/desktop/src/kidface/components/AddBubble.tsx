@@ -19,11 +19,15 @@ export function AddBubble({
 }: AddBubbleProps) {
     const [draft, setDraft] = useState('');
     const [isPopping, setIsPopping] = useState(false);
+    const [isShaking, setIsShaking] = useState(false);
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const title = draft.trim();
-        if (!title) return;
+        if (!title) {
+            setIsShaking(true);
+            return;
+        }
         setIsPopping(true);
         void onAdd(title);
         setDraft('');
@@ -37,9 +41,11 @@ export function AddBubble({
                 placeholder={placeholder}
                 autoFocus={autoFocus}
                 aria-label={inputLabel}
+                onAnimationEnd={() => setIsShaking(false)}
                 className={cn(
                     'h-14 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
                     'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50',
+                    isShaking && 'kidface-shake',
                 )}
             />
             <button

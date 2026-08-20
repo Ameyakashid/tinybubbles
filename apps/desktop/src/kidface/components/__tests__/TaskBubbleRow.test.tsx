@@ -96,6 +96,27 @@ describe('TaskBubbleRow', () => {
         expect(screen.getByLabelText('Focused today')).toBeInTheDocument();
     });
 
+    it('shows the pulse ring only when the task is focused today', () => {
+        const { rerender } = renderRow({ task: baseTask });
+
+        expect(screen.queryByTestId('focus-pulse-ring')).not.toBeInTheDocument();
+
+        rerender(
+            <LanguageProvider>
+                <CelebrationProvider>
+                    <TaskBubbleRow
+                        task={{ ...baseTask, isFocusedToday: true }}
+                        onToggle={vi.fn()}
+                        onOpen={vi.fn()}
+                    />
+                </CelebrationProvider>
+            </LanguageProvider>,
+        );
+
+        expect(screen.getByTestId('focus-pulse-ring')).toBeInTheDocument();
+        expect(screen.getByTestId('focus-pulse-ring')).toHaveClass('kidface-pulse-ring-slow');
+    });
+
     it('keeps the open-row touch target at least 88px tall', () => {
         renderRow({});
 
