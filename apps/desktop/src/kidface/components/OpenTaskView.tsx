@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { ArrowLeft, Star, Check } from 'lucide-react';
 import { useTaskStore, type Task, generateUUID } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
@@ -42,6 +42,14 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const updateTask = useTaskStore((state) => state.updateTask);
     const [titleDraft, setTitleDraft] = useState(task.title);
     const [stepDraft, setStepDraft] = useState('');
+    const [isCelebrating, setIsCelebrating] = useState(false);
+    const celebrateTimeoutRef = useRef<number | null>(null);
+
+    useEffect(() => () => {
+        if (celebrateTimeoutRef.current !== null) {
+            window.clearTimeout(celebrateTimeoutRef.current);
+        }
+    }, []);
 
     useEffect(() => {
         setTitleDraft(task.title);
@@ -64,6 +72,14 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
             setTitleDraft(task.title);
             event.currentTarget.blur();
         }
+    };
+
+    const handleToggleCheckbox = () => {
+        if (!finished) {
+            setIsCelebrating(true);
+            celebrateTimeoutRef.current = window.setTimeout(() => setIsCelebrating(false), 500);
+        }
+        void onToggleTask(task);
     };
 
     const handleAddStep = (event: FormEvent<HTMLFormElement>) => {
@@ -98,8 +114,9 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                 <div className="flex items-center gap-5 rounded-2xl bg-card p-5 shadow-sm">
                     <BubbleCheckbox
                         checked={finished}
-                        onChange={() => void onToggleTask(task)}
+                        onChange={handleToggleCheckbox}
                         label={finished ? markNotDoneLabel : markDoneLabel}
+                        celebrating={isCelebrating}
                         className={finished ? 'border-success bg-success text-success-foreground' : undefined}
                     />
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">

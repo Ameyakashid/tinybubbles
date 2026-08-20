@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { Task } from '@tinybubbles/core';
 
 import { LanguageProvider } from '@/contexts/language-context';
@@ -40,14 +40,21 @@ describe('TaskBubbleRow', () => {
     });
 
     it('completes the task when the checkbox is clicked without opening', () => {
+        vi.useFakeTimers();
         const onToggle = vi.fn();
         const onOpen = vi.fn();
         renderRow({ onToggle, onOpen });
 
         fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
 
+        // The toggle is queued so the completion burst can play before the row unmounts.
+        expect(onToggle).not.toHaveBeenCalled();
+        act(() => {
+            vi.advanceTimersByTime(500);
+        });
         expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ id: 'task-1' }));
         expect(onOpen).not.toHaveBeenCalled();
+        vi.useRealTimers();
     });
 
     it('shows checklist progress when the task has checklist items', () => {

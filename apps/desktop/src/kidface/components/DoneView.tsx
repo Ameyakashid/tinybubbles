@@ -87,11 +87,7 @@ function DoneBubbleRow({ task, onUndo, undoLabel }: DoneBubbleRowProps) {
                 className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-success bg-success text-success-foreground"
                 aria-hidden="true"
             >
-                <Trophy className="relative z-10 size-7 kidface-float" strokeWidth={2.5} />
-                <span
-                    className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-r from-transparent via-success-foreground/30 to-transparent kidface-trophy-shine"
-                    aria-hidden="true"
-                />
+                <Trophy className="relative z-10 size-7" strokeWidth={2.5} />
                 <Sparkles
                     className="absolute -right-1 -top-1 z-30 size-4 text-focus-star opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                     aria-hidden="true"

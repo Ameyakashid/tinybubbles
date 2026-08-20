@@ -330,28 +330,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .kidface-drift,
-    .kidface-drift-slow,
-    .kidface-drift-medium,
-    .kidface-drift-very-slow,
-    .kidface-pop,
-    .kidface-celebrate,
-    .kidface-slide-up,
-    .kidface-room-enter-right,
-    .kidface-room-enter-left,
-    .kidface-month-enter-right,
-    .kidface-month-enter-left,
-    .kidface-sheet-enter,
-    .kidface-float,
-    .kidface-bubble-ripple,
-    .kidface-bubble-ripple-delayed,
-    .kidface-sparkle,
-    .kidface-check-bounce,
-    .kidface-glow-pulse,
-    .kidface-joy-bounce,
-    .kidface-nav-icon-bounce,
-    .kidface-trophy-shine,
-    .kidface-bubble-wobble {
-        animation: none;
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
     }
 }

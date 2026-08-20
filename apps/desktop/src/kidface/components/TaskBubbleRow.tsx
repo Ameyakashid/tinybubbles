@@ -16,6 +16,9 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     const { t, language } = useLanguage();
     const [isPopping, setIsPopping] = useState(false);
     const popTimeoutRef = useRef<number | null>(null);
+    const isAnimatingRef = useRef(false);
+
+    const isDone = task.status === 'done' || task.status === 'archived';
 
     const doneLabel = useMemo(
         () => displayLabel(t, language, 'kidface.task.markDone', 'Mark {title} as done').replace('{title}', task.title),
@@ -33,9 +36,21 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     }, []);
 
     const handleToggle = () => {
-        setIsPopping(true);
-        void onToggle(task);
-        popTimeoutRef.current = window.setTimeout(() => setIsPopping(false), 250);
+        if (isAnimatingRef.current) return;
+
+        if (!isDone) {
+            // Queue the status change so the completion burst has time to play
+            // before the Today filter unmounts the row.
+            isAnimatingRef.current = true;
+            setIsPopping(true);
+            popTimeoutRef.current = window.setTimeout(() => {
+                isAnimatingRef.current = false;
+                setIsPopping(false);
+                void onToggle(task);
+            }, 500);
+        } else {
+            void onToggle(task);
+        }
     };
 
     return (
@@ -46,9 +61,9 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             )}
         >
             <BubbleCheckbox
-                checked={false}
+                checked={isDone || isPopping}
                 onChange={handleToggle}
-                label={doneLabel}
+                label={isDone ? openLabel : doneLabel}
                 celebrating={isPopping}
             />
             <button

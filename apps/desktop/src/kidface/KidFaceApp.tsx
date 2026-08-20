@@ -29,7 +29,11 @@ export function KidFaceApp() {
     const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
     const [roomDirection, setRoomDirection] = useState<'left' | 'right'>('right');
     const mainRef = useRef<HTMLElement>(null);
-    const previousRoom = useRef<KidRoom | null>(null);
+    const activeRoomRef = useRef<KidRoom>(activeRoom);
+
+    useEffect(() => {
+        activeRoomRef.current = activeRoom;
+    }, [activeRoom]);
 
     const roomLabel = displayLabel(t, language, `kidface.nav.${activeRoom}`, activeRoom);
     const loadingLabel = displayLabel(t, language, 'kidface.loading', 'Loading…');
@@ -42,14 +46,15 @@ export function KidFaceApp() {
     );
     const loadErrorAction = displayLabel(t, language, 'kidface.loadError.action', 'Try again');
 
+    const changeRoom = (room: KidRoom) => {
+        const currentIndex = ROOM_ORDER.indexOf(activeRoomRef.current);
+        const nextIndex = ROOM_ORDER.indexOf(room);
+        setRoomDirection(nextIndex > currentIndex ? 'right' : 'left');
+        setActiveRoom(room);
+    };
+
     useEffect(() => {
-        if (previousRoom.current !== null && previousRoom.current !== activeRoom) {
-            const previousIndex = ROOM_ORDER.indexOf(previousRoom.current);
-            const nextIndex = ROOM_ORDER.indexOf(activeRoom);
-            setRoomDirection(nextIndex > previousIndex ? 'right' : 'left');
-            mainRef.current?.focus({ preventScroll: true });
-        }
-        previousRoom.current = activeRoom;
+        mainRef.current?.focus({ preventScroll: true });
     }, [activeRoom]);
 
     if (!hydrated) {
@@ -102,13 +107,13 @@ export function KidFaceApp() {
                         roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
                     )}
                 >
-                    {activeRoom === 'today' && <TodayView onSeeAllDone={() => setActiveRoom('done')} />}
+                    {activeRoom === 'today' && <TodayView onSeeAllDone={() => changeRoom('done')} />}
                     {activeRoom === 'add' && <AddView />}
                     {activeRoom === 'done' && <DoneView />}
                     {activeRoom === 'calendar' && <CalendarView />}
                     {activeRoom === 'settings' && <SettingsView />}
                 </div>
-                <KidNav activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
+                <KidNav activeRoom={activeRoom} onChangeRoom={changeRoom} />
             </main>
         </KidLayout>
     );
