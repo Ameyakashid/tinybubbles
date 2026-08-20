@@ -30,10 +30,12 @@ export function AddView() {
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
             <header className="flex flex-col gap-1">
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
                     {title}
+                </p>
+                <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+                    {prompt}
                 </h1>
-                <p className="text-lg text-muted-foreground">{prompt}</p>
             </header>
 
             <section className="flex flex-col gap-4">
@@ -41,7 +43,7 @@ export function AddView() {
 
                 {justAdded && (
                     <div
-                        className="flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-success kidface-slide-up"
+                        className="flex items-center gap-3 rounded-2xl bg-success p-4 text-success-foreground kidface-slide-up"
                         aria-live="polite"
                     >
                         <Sparkles className="size-6" strokeWidth={2.5} aria-hidden="true" />

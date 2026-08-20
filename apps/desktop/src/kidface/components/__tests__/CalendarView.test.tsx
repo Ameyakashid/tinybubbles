@@ -78,7 +78,7 @@ describe('CalendarView', () => {
         expect(screen.getByText('May 2026')).toBeInTheDocument();
     });
 
-    it('shows a dot on a day with a scheduled task', () => {
+    it('shows a count chip on a day with a scheduled task', () => {
         act(() => {
             useTaskStore.setState({
                 _allTasks: [
@@ -91,10 +91,10 @@ describe('CalendarView', () => {
 
         const cell = document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement;
         expect(cell).toBeTruthy();
-        expect(cell.querySelector('[data-task-dot]')).toBeInTheDocument();
+        expect(cell.querySelector('[data-task-count]')).toHaveTextContent('1');
     });
 
-    it('shows a dot on a day with a task due that day', () => {
+    it('shows a count chip on a day with a task due that day', () => {
         act(() => {
             useTaskStore.setState({
                 _allTasks: [
@@ -107,10 +107,10 @@ describe('CalendarView', () => {
 
         const cell = document.querySelector('[data-calendar-day="2026-04-07"]') as HTMLElement;
         expect(cell).toBeTruthy();
-        expect(cell.querySelector('[data-task-dot]')).toBeInTheDocument();
+        expect(cell.querySelector('[data-task-count]')).toHaveTextContent('1');
     });
 
-    it('does not show a dot for deleted or finished tasks', () => {
+    it('does not show a count chip for deleted or finished tasks', () => {
         act(() => {
             useTaskStore.setState({
                 _allTasks: [
@@ -122,8 +122,23 @@ describe('CalendarView', () => {
 
         renderView();
 
-        expect(document.querySelector('[data-calendar-day="2026-04-05"]')?.querySelector('[data-task-dot]')).not.toBeInTheDocument();
-        expect(document.querySelector('[data-calendar-day="2026-04-06"]')?.querySelector('[data-task-dot]')).not.toBeInTheDocument();
+        expect(document.querySelector('[data-calendar-day="2026-04-05"]')?.querySelector('[data-task-count]')).not.toBeInTheDocument();
+        expect(document.querySelector('[data-calendar-day="2026-04-06"]')?.querySelector('[data-task-count]')).not.toBeInTheDocument();
+    });
+
+    it('caps the count chip at 9+ so ten plans do not look like three', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: Array.from({ length: 12 }, (_, index) =>
+                    buildTask({ id: `task-${index}`, title: `Plan ${index}`, startTime: '2026-04-05' }),
+                ),
+            });
+        });
+
+        renderView();
+
+        const cell = document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement;
+        expect(cell.querySelector('[data-task-count]')).toHaveTextContent('9+');
     });
 
     it('announces how many tasks are on a day with plans', () => {

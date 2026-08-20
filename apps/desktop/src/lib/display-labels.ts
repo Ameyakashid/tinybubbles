@@ -72,6 +72,7 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.add.success': 'Added! It is on your Today list.',
     'kidface.calendar.title': 'Calendar',
     'kidface.calendar.empty': 'No big plans this month.',
+    'kidface.calendar.emptyHint': 'Tap a day to make a plan.',
     // Offline reassurance.
     'kidface.offline.message': 'Offline — your changes are saved.',
     'kidface.offline.action': 'Try syncing',
@@ -93,6 +94,8 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.today.scheduledEmpty.title': 'Nothing for today',
     'kidface.today.scheduledEmpty.one': '1 thing coming up.',
     'kidface.today.scheduledEmpty.other': '{count} things coming up.',
+    'kidface.today.plainEmpty.hint': 'Tap the big + above if something needs doing.',
+    'kidface.today.doneToday': 'Done today',
     'kidface.undo.toast': 'Done! Tap to undo.',
     'kidface.undo.action': 'Undo',
     // Child editing in the task sheet.

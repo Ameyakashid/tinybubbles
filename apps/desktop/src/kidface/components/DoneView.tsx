@@ -108,6 +108,9 @@ export function DoneView() {
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
             <header className="flex flex-col gap-1">
+                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    Done
+                </p>
                 <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
                     Trophy case
                 </h1>
@@ -117,7 +120,7 @@ export function DoneView() {
             </header>
 
             {groups.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                     <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
                         <Trophy className="size-14 text-primary" />
                     </div>

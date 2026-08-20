@@ -28,14 +28,17 @@ function NavItem({ room, activeRoom, label, icon, onSelect }: NavItemProps) {
             onClick={() => onSelect(room)}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-                'flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors',
+                'relative flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors',
                 isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground active:bg-muted',
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground active:bg-muted',
             )}
         >
-            {icon}
-            <span className="text-sm font-bold">{label}</span>
+            {isActive && (
+                <span className="absolute inset-x-2 top-1 bottom-1 rounded-xl bg-primary/10" />
+            )}
+            <span className="relative z-10">{icon}</span>
+            <span className="relative z-10 text-sm font-bold">{label}</span>
         </button>
     );
 }

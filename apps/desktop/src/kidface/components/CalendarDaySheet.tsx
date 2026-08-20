@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CalendarDays } from 'lucide-react';
 import type { Task } from '@tinybubbles/core';
 import { safeFormatDate, useTaskStore } from '@tinybubbles/core';
 import { Dialog, DialogBody, DialogHeader } from '@/components/ui/Dialog';
@@ -62,7 +62,7 @@ export function CalendarDaySheet({ date, tasks, onClose }: CalendarDaySheetProps
                 <button
                     type="button"
                     onClick={onClose}
-                    className="flex size-14 items-center justify-center rounded-full text-foreground active:scale-90"
+                    className="flex size-14 items-center justify-center rounded-full bg-card text-foreground shadow-sm active:scale-90"
                     aria-label={closeLabel}
                 >
                     <ArrowLeft className="size-7" strokeWidth={2.5} />
@@ -72,9 +72,12 @@ export function CalendarDaySheet({ date, tasks, onClose }: CalendarDaySheetProps
 
             <DialogBody className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-8 pt-2">
                 {sortedTasks.length === 0 ? (
-                    <p className="rounded-2xl bg-card p-6 text-center text-lg text-muted-foreground shadow-sm">
-                        {emptyLabel}
-                    </p>
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-card p-8 text-center shadow-sm">
+                        <div className="flex size-16 items-center justify-center rounded-full bg-secondary">
+                            <CalendarDays className="size-8 text-primary" aria-hidden="true" />
+                        </div>
+                        <p className="text-lg text-muted-foreground">{emptyLabel}</p>
+                    </div>
                 ) : (
                     <ul className="flex flex-col gap-3">
                         {sortedTasks.map((task) => (

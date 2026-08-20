@@ -91,6 +91,8 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
 
     const now = new Date();
     const toDoLabel = displayLabel(t, language, 'agenda.nextActions', 'To do');
+    const doneTodayLabel = displayLabel(t, language, 'kidface.today.doneToday', 'Done today');
+    const plainEmptyHint = displayLabel(t, language, 'kidface.today.plainEmpty.hint', 'Tap the big + above if something needs doing.');
     const undoToast = displayLabel(t, language, 'kidface.undo.toast', 'Done! Tap to undo.');
     const undoAction = displayLabel(t, language, 'kidface.undo.action', 'Undo');
     const allDoneTitle = displayLabel(t, language, 'kidface.today.allDone.title', 'All done!');
@@ -128,6 +130,9 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
             <header className="flex flex-col gap-1">
+                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                    {toDoLabel}
+                </p>
                 <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
                     {greetingForHour(now.getHours())}
                 </h1>
@@ -135,7 +140,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
             </header>
 
             <section className="flex min-h-0 flex-1 flex-col gap-3">
-                <h2 className="text-xl font-bold text-foreground">{toDoLabel}</h2>
+                <h2 className="sr-only">{toDoLabel}</h2>
                 {recentlyCompletedTask && (
                     <div
                         className="flex items-center justify-between gap-3 rounded-2xl bg-success/10 p-4 kidface-slide-up"
@@ -180,13 +185,11 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                             <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
                                 <Sparkles className="size-14 text-primary" />
                             </div>
-                            <p className="max-w-[16rem] text-lg text-muted-foreground">
-                                Tap the big + above if something needs doing.
-                            </p>
+                            <p className="max-w-[16rem] text-lg text-muted-foreground">{plainEmptyHint}</p>
                         </div>
                     )
                 ) : (
@@ -210,7 +213,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
 
             {doneToday.length > 0 && (
                 <section className="flex shrink-0 flex-col gap-3">
-                    <h2 className="text-xl font-bold text-foreground">Done today</h2>
+                    <h2 className="text-xl font-bold text-foreground">{doneTodayLabel}</h2>
                     <ul className="flex flex-col gap-2">
                         {doneToday.slice(0, RECENT_DONE_LIMIT).map((task) => (
                             <li

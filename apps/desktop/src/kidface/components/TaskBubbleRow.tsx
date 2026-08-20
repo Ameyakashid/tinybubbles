@@ -29,7 +29,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
     return (
         <div
             className={cn(
-                'flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-transform duration-150',
+                'group flex items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-all duration-150 hover:shadow-md',
                 isPopping && 'kidface-pop',
             )}
         >
@@ -64,7 +64,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
                     />
                 )}
                 <ChevronRight
-                    className="size-6 shrink-0 text-muted-foreground"
+                    className="size-6 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
                     aria-hidden="true"
                 />
             </div>

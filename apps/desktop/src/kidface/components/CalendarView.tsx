@@ -100,6 +100,7 @@ export function CalendarView() {
     const title = displayLabel(t, language, 'kidface.calendar.title', 'Calendar');
     const monthLabel = safeFormatDate(currentMonth, 'MMMM yyyy');
     const emptyLabel = displayLabel(t, language, 'kidface.calendar.empty', 'No big plans this month.');
+    const emptyHintLabel = displayLabel(t, language, 'kidface.calendar.emptyHint', 'Tap a day to make a plan.');
 
     const hasPlansThisMonth = useMemo(
         () => days.some((day) => tasksByDay.has(safeFormatDate(day, 'yyyy-MM-dd') ?? '')),
@@ -113,25 +114,25 @@ export function CalendarView() {
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
             <header className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{title}</h1>
-                    <p className="text-lg text-muted-foreground">{monthLabel}</p>
+                    <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{title}</p>
+                    <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{monthLabel}</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
                         type="button"
                         onClick={handlePrev}
                         aria-label="Previous month"
-                        className="flex size-14 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform active:scale-90"
+                        className="flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
                     >
-                        <ChevronLeft className="size-7" strokeWidth={2.5} />
+                        <ChevronLeft className="size-6" strokeWidth={2.5} />
                     </button>
                     <button
                         type="button"
                         onClick={handleNext}
                         aria-label="Next month"
-                        className="flex size-14 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform active:scale-90"
+                        className="flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
                     >
-                        <ChevronRight className="size-7" strokeWidth={2.5} />
+                        <ChevronRight className="size-6" strokeWidth={2.5} />
                     </button>
                 </div>
             </header>
@@ -153,6 +154,7 @@ export function CalendarView() {
                         const isToday = isSameDay(day, today);
                         const dateLabel = safeFormatDate(day, 'MMMM d, yyyy') ?? dayKey;
                         const countLabel = taskCountLabel(t, language, dayTasks.length);
+                        const hasTasks = dayTasks.length > 0;
                         return (
                             <button
                                 key={dayKey}
@@ -163,30 +165,29 @@ export function CalendarView() {
                                 aria-current={isToday ? 'date' : undefined}
                                 aria-haspopup="dialog"
                                 className={cn(
-                                    'flex min-h-16 flex-col items-center justify-start gap-1 rounded-2xl p-2 transition-transform',
+                                    'group flex min-h-20 flex-col items-center justify-start gap-1.5 rounded-2xl p-2 transition-all',
                                     inCurrentMonth
-                                        ? 'bg-card text-foreground shadow-sm active:scale-[0.99]'
+                                        ? 'bg-card text-foreground shadow-sm hover:shadow-md active:scale-[0.99]'
                                         : 'bg-transparent text-muted-foreground/50',
                                     isToday && 'ring-4 ring-primary/30',
                                 )}
                             >
                                 <span
                                     className={cn(
-                                        'flex size-9 items-center justify-center rounded-full text-base font-bold',
+                                        'flex size-9 items-center justify-center rounded-full text-base font-bold transition-colors',
                                         isToday && 'bg-primary text-primary-foreground',
+                                        hasTasks && !isToday && 'group-hover:bg-primary/10',
                                     )}
                                 >
                                     {day.getDate()}
                                 </span>
-                                {dayTasks.length > 0 && (
-                                    <span className="flex gap-0.5" aria-hidden="true">
-                                        {dayTasks.slice(0, 3).map((task, index) => (
-                                            <span
-                                                key={`${task.id}-${index}`}
-                                                data-task-dot
-                                                className="size-2 rounded-full bg-primary"
-                                            />
-                                        ))}
+                                {hasTasks && (
+                                    <span
+                                        data-task-count
+                                        className="flex min-h-5 items-center rounded-full bg-primary/10 px-1.5 text-xs font-bold text-primary"
+                                        aria-hidden="true"
+                                    >
+                                        {dayTasks.length > 9 ? '9+' : dayTasks.length}
                                     </span>
                                 )}
                             </button>
@@ -195,11 +196,14 @@ export function CalendarView() {
                 </div>
 
                 {!hasPlansThisMonth && (
-                    <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
-                        <div className="flex size-20 items-center justify-center rounded-full bg-secondary">
-                            <CalendarDays className="size-10 text-primary" aria-hidden="true" />
+                    <div className="flex flex-col items-center justify-center gap-4 py-6 text-center">
+                        <div className="flex size-24 items-center justify-center rounded-full bg-secondary">
+                            <CalendarDays className="size-12 text-primary" aria-hidden="true" />
                         </div>
-                        <p className="max-w-[16rem] text-lg text-muted-foreground">{emptyLabel}</p>
+                        <div className="flex max-w-[18rem] flex-col gap-1">
+                            <p className="text-2xl font-extrabold text-foreground">{emptyLabel}</p>
+                            <p className="text-base text-muted-foreground">{emptyHintLabel}</p>
+                        </div>
                     </div>
                 )}
             </section>
