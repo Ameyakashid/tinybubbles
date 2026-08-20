@@ -115,10 +115,16 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             </button>
             <div className="flex shrink-0 items-center gap-2">
                 {task.isFocusedToday && (
-                    <Star
-                        className="size-7 shrink-0 fill-focus-star text-focus-star"
-                        aria-label="Focused today"
-                    />
+                    <span className="relative flex size-7 items-center justify-center">
+                        <span
+                            className="absolute left-1/2 top-1/2 size-7 rounded-full bg-focus-star/30 kidface-pulse-ring-slow"
+                            aria-hidden="true"
+                        />
+                        <Star
+                            className="relative z-10 size-7 shrink-0 fill-focus-star text-focus-star"
+                            aria-label="Focused today"
+                        />
+                    </span>
                 )}
                 <ChevronRight
                     className="size-7 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"

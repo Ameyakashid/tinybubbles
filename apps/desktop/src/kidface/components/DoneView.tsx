@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Trophy, RotateCcw, Sparkles } from 'lucide-react';
 import { useTaskStore, type Task, type Language } from '@tinybubbles/core';
+import { AmbientField } from './AmbientField';
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -181,9 +182,10 @@ export function DoneView() {
             )}
 
             {groups.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                    <AmbientField />
                     <div className="relative flex size-32 items-center justify-center">
-                        <div className="absolute inset-0 rounded-full bg-secondary" />
+                        <div className="absolute inset-0 rounded-full bg-secondary kidface-breathe-soft" />
                         <div className="kidface-float relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-secondary">
                             <Trophy className="relative z-10 size-14 text-primary" />
                             <span
@@ -192,7 +194,7 @@ export function DoneView() {
                             />
                         </div>
                     </div>
-                    <div className="flex max-w-[18rem] flex-col gap-1">
+                    <div className="relative flex max-w-[18rem] flex-col gap-1">
                         <p className="text-2xl font-extrabold text-foreground">{emptyTitle}</p>
                         <p className="text-lg text-muted-foreground">{emptyHint}</p>
                     </div>

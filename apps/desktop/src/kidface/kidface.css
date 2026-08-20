@@ -363,6 +363,28 @@
     }
 }
 
+@keyframes kidface-pulse-ring-slow {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.45;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.8);
+        opacity: 0;
+    }
+}
+
+@keyframes kidface-breathe-soft {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.9;
+    }
+    50% {
+        transform: scale(1.08);
+        opacity: 1;
+    }
+}
+
 @keyframes kidface-squish {
     0%, 100% {
         transform: scale(1, 1);
@@ -536,6 +558,14 @@
 
 .kidface-pulse-ring {
     animation: kidface-pulse-ring 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.kidface-pulse-ring-slow {
+    animation: kidface-pulse-ring-slow 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.kidface-breathe-soft {
+    animation: kidface-breathe-soft 4s ease-in-out infinite;
 }
 
 .kidface-squish {

@@ -49,7 +49,7 @@ export function AddView() {
                         className="flex items-center gap-3 rounded-2xl bg-success p-4 text-success-foreground kidface-joy-bounce"
                         aria-live="polite"
                     >
-                        <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-success-foreground/20">
+                        <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-success-foreground/20 kidface-elastic-pop">
                             <Sparkles className="size-5" strokeWidth={2.5} aria-hidden="true" />
                             <span className="absolute inset-0 rounded-full bg-success-foreground/30 kidface-bubble-ripple" aria-hidden="true" />
                         </span>

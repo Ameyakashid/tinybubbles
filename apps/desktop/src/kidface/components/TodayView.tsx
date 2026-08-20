@@ -3,6 +3,7 @@ import { Sparkles, RotateCcw, ChevronRight, Trophy, CalendarDays } from 'lucide-
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { TaskBubbleRow } from './TaskBubbleRow';
 import { OpenTaskView } from './OpenTaskView';
+import { AmbientField } from './AmbientField';
 import { selectTodayTasks } from './today-task-filter';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -166,42 +167,45 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                 )}
                 {openTasks.length === 0 ? (
                     doneToday.length > 0 ? (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
-                            <div className="relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-success/10">
+                        <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                            <AmbientField />
+                            <div className="relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-success/10 kidface-breathe-soft">
                                 <Trophy className="relative z-10 size-14 text-success kidface-float" />
                                 <span
                                     className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-r from-transparent via-success-foreground/30 to-transparent kidface-trophy-shine"
                                     aria-hidden="true"
                                 />
                             </div>
-                            <div className="flex max-w-[18rem] flex-col gap-1">
+                            <div className="relative flex max-w-[18rem] flex-col gap-1">
                                 <p className="text-2xl font-extrabold text-foreground">{allDoneTitle}</p>
                                 <p className="text-lg text-muted-foreground">{allDoneMessage}</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={onSeeAllDone}
-                                className="flex min-h-[88px] items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
+                                className="relative flex min-h-[88px] items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
                             >
                                 {seeDoneLabel}
                             </button>
                         </div>
                     ) : upcomingCount > 0 ? (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
-                            <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
-                                <CalendarDays className="size-14 text-primary kidface-float" />
+                        <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                            <AmbientField />
+                            <div className="relative flex size-28 items-center justify-center rounded-full bg-secondary kidface-breathe-soft">
+                                <CalendarDays className="relative z-10 size-14 text-primary kidface-float" />
                             </div>
-                            <div className="flex max-w-[18rem] flex-col gap-1">
+                            <div className="relative flex max-w-[18rem] flex-col gap-1">
                                 <p className="text-2xl font-extrabold text-foreground">{scheduledEmptyTitle}</p>
                                 <p className="text-lg text-muted-foreground">{scheduledEmptyMessage}</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
-                            <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
-                                <Sparkles className="size-14 text-primary kidface-float" />
+                        <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
+                            <AmbientField />
+                            <div className="relative flex size-28 items-center justify-center rounded-full bg-secondary kidface-breathe-soft">
+                                <Sparkles className="relative z-10 size-14 text-primary kidface-float" />
                             </div>
-                            <p className="max-w-[16rem] text-lg text-muted-foreground">{plainEmptyHint}</p>
+                            <p className="relative max-w-[16rem] text-lg text-muted-foreground">{plainEmptyHint}</p>
                         </div>
                     )
                 ) : (

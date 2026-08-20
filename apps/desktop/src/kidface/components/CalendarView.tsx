@@ -23,6 +23,7 @@ import {
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
+import { AmbientField } from './AmbientField';
 import { CalendarDaySheet } from './CalendarDaySheet';
 
 const WEEK_START_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
@@ -220,11 +221,12 @@ export function CalendarView() {
                 </div>
 
                 {!hasPlansThisMonth && (
-                    <div className="flex flex-col items-center justify-center gap-4 py-6 text-center">
-                        <div className="flex size-24 items-center justify-center rounded-full bg-secondary">
-                            <CalendarDays className="size-12 text-primary" aria-hidden="true" />
+                    <div className="relative flex flex-col items-center justify-center gap-4 py-6 text-center">
+                        <AmbientField />
+                        <div className="relative flex size-24 items-center justify-center rounded-full bg-secondary kidface-breathe-soft">
+                            <CalendarDays className="relative z-10 size-12 text-primary" aria-hidden="true" />
                         </div>
-                        <div className="flex max-w-[18rem] flex-col gap-1">
+                        <div className="relative flex max-w-[18rem] flex-col gap-1">
                             <p className="text-2xl font-extrabold text-foreground">{emptyLabel}</p>
                             <p className="text-base text-muted-foreground">{emptyHintLabel}</p>
                         </div>

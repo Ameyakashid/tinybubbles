@@ -18,11 +18,13 @@ export function AddBubble({
     autoFocus = false,
 }: AddBubbleProps) {
     const [draft, setDraft] = useState('');
+    const [isPopping, setIsPopping] = useState(false);
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const title = draft.trim();
         if (!title) return;
+        setIsPopping(true);
         void onAdd(title);
         setDraft('');
     };
@@ -44,9 +46,11 @@ export function AddBubble({
                 type="submit"
                 disabled={!draft.trim()}
                 aria-label={submitLabel}
+                onAnimationEnd={() => setIsPopping(false)}
                 className={cn(
                     'flex size-[88px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90',
                     'disabled:opacity-50 disabled:active:scale-100',
+                    isPopping && 'kidface-pop',
                 )}
             >
                 <Plus className="size-10" strokeWidth={2.5} />

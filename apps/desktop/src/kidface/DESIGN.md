@@ -108,6 +108,23 @@ highlights today, and lets the child flip months with big arrow buttons. There
 are no day/week/schedule modes to get lost in, and no search or planning panels
 — just a calm view of what is coming up.
 
+## Motion studies that graduated into the face
+
+The `MotionPlayground` is a dev sandbox for trying motion ideas without
+exposing them to children. When a study proves itself in a real surface, it
+moves out of the playground and into production:
+
+- **Room transitions** → every room switch in `KidFaceApp`.
+- **Bubble checkbox celebration** → `BubbleCheckbox` / `TaskBubbleRow` complete
+  control plus the global `CelebrationLayer`.
+- **Trophy shine** → `DoneView` and the `TodayView` all-done payoff.
+- **List stagger** → `TodayView`, `DoneView`, and `CalendarView` lists.
+- **Ambient field + breathing buddy** → empty states in `TodayView`, `DoneView`,
+  and `CalendarView`, so quiet rooms still feel alive.
+- **Pulse rings** → parent-priority tasks in `TaskBubbleRow` (the focus star).
+- **Button pops / elastic pop** → `AddBubble` submit button and the `AddView`
+  success confirmation.
+
 ## Verification floor
 
 Per `apps/desktop/KID-FACE-CONTRACT.md`: every pass runs
