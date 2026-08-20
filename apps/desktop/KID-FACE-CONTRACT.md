@@ -22,7 +22,7 @@ ugly proof page — delete its markup wholesale. Keep exactly one thing: the
 `useKidFaceRuntime()` call at the root. It hydrates the store, runs the same
 auto-sync engine as the stock shell (focus, visibility, debounced
 data-change, initial sync), and returns `{ hydrated, loadError,
-lastSyncError, requestSync }`. `loadError` is set when loading stored data
+lastSyncError, requestSync, retryLoad }`. `loadError` is set when loading stored data
 failed — a failed load must be rendered as its own state, never as an empty
 day ("Nothing left to do" after a storage error reads to a child as their
 tasks vanishing).

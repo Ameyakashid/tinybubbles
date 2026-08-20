@@ -26,6 +26,7 @@ export type KidFaceRuntimeStatus = {
     loadError: string | null;
     lastSyncError: string | null;
     requestSync: () => void;
+    retryLoad: () => void;
 };
 
 export function useKidFaceRuntime(): KidFaceRuntimeStatus {
@@ -34,9 +35,11 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
     const [loadError, setLoadError] = useState<string | null>(null);
     const [lastSyncError, setLastSyncError] = useState<string | null>(null);
     const [requestSyncFn, setRequestSyncFn] = useState<() => void>(() => () => undefined);
+    const [retryLoadFn, setRetryLoadFn] = useState<() => void>(() => () => undefined);
 
     useEffect(() => {
         let disposed = false;
+        let initialLoadCompleted = false;
 
         const reportError = (label: string, error: unknown) => {
             void logError(error, { scope: 'kidface', step: label });
@@ -70,21 +73,29 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
             void controller.requestSync(0).catch((error) => reportError('Sync failed', error));
         });
 
-        fetchData({ isResultStillRelevant: () => !disposed })
-            .then(() => {
-                if (!disposed) setLoadError(null);
-            })
-            .catch((error) => {
-                reportError('Load failed', error);
-                if (!disposed) {
-                    setLoadError(error instanceof Error ? error.message : String(error));
-                }
-            })
-            .finally(() => {
-                if (disposed) return;
-                setHydrated(true);
-                controller.scheduleInitialSync();
-            });
+        const loadData = () => {
+            void fetchData({ isResultStillRelevant: () => !disposed })
+                .then(() => {
+                    if (!disposed) setLoadError(null);
+                })
+                .catch((error) => {
+                    reportError('Load failed', error);
+                    if (!disposed) {
+                        setLoadError(error instanceof Error ? error.message : String(error));
+                    }
+                })
+                .finally(() => {
+                    if (disposed) return;
+                    setHydrated(true);
+                    if (!initialLoadCompleted) {
+                        initialLoadCompleted = true;
+                        controller.scheduleInitialSync();
+                    }
+                });
+        };
+
+        setRetryLoadFn(() => loadData);
+        loadData();
 
         const focusListener = () => controller.handleFocus();
         const blurListener = () => controller.handleBlur();
@@ -115,5 +126,11 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
         };
     }, [fetchData]);
 
-    return { hydrated, loadError, lastSyncError, requestSync: requestSyncFn };
+    return {
+        hydrated,
+        loadError,
+        lastSyncError,
+        requestSync: requestSyncFn,
+        retryLoad: retryLoadFn,
+    };
 }

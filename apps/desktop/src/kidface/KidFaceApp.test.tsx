@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '@/contexts/language-context';
 import { useKidFaceRuntime } from './runtime';
 import { KidFaceApp } from './KidFaceApp';
@@ -27,6 +28,7 @@ describe('KidFaceApp', () => {
             loadError: null,
             lastSyncError: null,
             requestSync: vi.fn(),
+            retryLoad: vi.fn(),
         });
 
         renderApp();
@@ -40,6 +42,7 @@ describe('KidFaceApp', () => {
             loadError: 'disk unreadable',
             lastSyncError: null,
             requestSync: vi.fn(),
+            retryLoad: vi.fn(),
         });
 
         renderApp();
@@ -49,20 +52,28 @@ describe('KidFaceApp', () => {
         expect(screen.queryByText('Nothing left to do')).not.toBeInTheDocument();
     });
 
-    it('calls requestSync when the load-error retry button is pressed', () => {
-        const requestSync = vi.fn();
-        mockedUseKidFaceRuntime.mockReturnValue({
-            hydrated: true,
-            loadError: 'disk unreadable',
-            lastSyncError: null,
-            requestSync,
-        });
+    it('recovers when loading stored data succeeds on retry', async () => {
+        const actualRuntime = await vi.importActual<typeof import('./runtime')>('./runtime');
+        const originalFetchData = useTaskStore.getState().fetchData;
+        const fetchData = vi.fn()
+            .mockRejectedValueOnce(new Error('disk unreadable'))
+            .mockResolvedValueOnce(undefined);
+        useTaskStore.setState({ fetchData });
+        mockedUseKidFaceRuntime.mockImplementation(actualRuntime.useKidFaceRuntime);
 
-        renderApp();
+        const view = renderApp();
 
+        expect(await screen.findByText('Could not load your morning')).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
 
-        expect(requestSync).toHaveBeenCalled();
+        await waitFor(() => {
+            expect(screen.queryByText('Could not load your morning')).not.toBeInTheDocument();
+            expect(screen.getByRole('main', { name: 'Today' })).toBeInTheDocument();
+        });
+        expect(fetchData).toHaveBeenCalledTimes(2);
+
+        view.unmount();
+        useTaskStore.setState({ fetchData: originalFetchData });
     });
 
     it('moves focus to the main content when the room changes', () => {
@@ -71,6 +82,7 @@ describe('KidFaceApp', () => {
             loadError: null,
             lastSyncError: null,
             requestSync: vi.fn(),
+            retryLoad: vi.fn(),
         });
 
         renderApp();
@@ -87,6 +99,7 @@ describe('KidFaceApp', () => {
             loadError: null,
             lastSyncError: 'offline',
             requestSync,
+            retryLoad: vi.fn(),
         });
 
         renderApp();

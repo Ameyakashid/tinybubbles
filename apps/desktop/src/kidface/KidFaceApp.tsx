@@ -18,7 +18,7 @@ import { useLanguage } from '@/contexts/language-context';
 import './kidface.css';
 
 export function KidFaceApp() {
-    const { hydrated, loadError, lastSyncError, requestSync } = useKidFaceRuntime();
+    const { hydrated, loadError, lastSyncError, requestSync, retryLoad } = useKidFaceRuntime();
     const { t, language } = useLanguage();
     const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
     const mainRef = useRef<HTMLElement>(null);
@@ -58,7 +58,7 @@ export function KidFaceApp() {
                 </div>
                 <button
                     type="button"
-                    onClick={requestSync}
+                    onClick={retryLoad}
                     className="flex min-h-14 items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
                 >
                     <RotateCcw className="size-6" />
