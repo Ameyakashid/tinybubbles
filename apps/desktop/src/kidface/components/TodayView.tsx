@@ -21,10 +21,10 @@ function sortOpenTasks(a: Task, b: Task): number {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 }
 
-function greetingForHour(hour: number): string {
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
+function greetingKeyForHour(hour: number): string {
+    if (hour < 12) return 'kidface.today.greeting.morning';
+    if (hour < 17) return 'kidface.today.greeting.afternoon';
+    return 'kidface.today.greeting.evening';
 }
 
 interface TodayViewProps {
@@ -106,6 +106,14 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
     const scheduledEmptyTitle = displayLabel(t, language, 'kidface.today.scheduledEmpty.title', 'Nothing for today');
     const scheduledEmptyOne = displayLabel(t, language, 'kidface.today.scheduledEmpty.one', '1 thing coming up.');
     const scheduledEmptyOther = displayLabel(t, language, 'kidface.today.scheduledEmpty.other', '{count} things coming up.');
+    const greeting = displayLabel(
+        t,
+        language,
+        greetingKeyForHour(now.getHours()),
+        'Good morning',
+    );
+    const seeAllDoneTemplate = displayLabel(t, language, 'kidface.today.seeAllDone', 'See all {count} done');
+    const undoTaskLabelTemplate = displayLabel(t, language, 'kidface.today.undo.label', 'Undo {title}');
 
     const headerSubtitle = (() => {
         if (openTasks.length > 0) {
@@ -134,7 +142,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                     {toDoLabel}
                 </p>
                 <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-                    {greetingForHour(now.getHours())}
+                    {greeting}
                 </h1>
                 <p className="text-lg text-muted-foreground">{headerSubtitle}</p>
             </header>
@@ -227,7 +235,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                                     type="button"
                                     onClick={() => void handleToggle(task)}
                                     className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm active:scale-90"
-                                    aria-label={`Undo ${task.title}`}
+                                    aria-label={undoTaskLabelTemplate.replace('{title}', task.title)}
                                 >
                                     <RotateCcw className="size-6" />
                                 </button>
@@ -240,7 +248,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                             onClick={onSeeAllDone}
                             className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-card px-4 py-3 text-left text-lg font-semibold text-foreground shadow-sm active:scale-[0.99]"
                         >
-                            <span>See all {doneToday.length} done</span>
+                            <span>{seeAllDoneTemplate.replace('{count}', String(doneToday.length))}</span>
                             <ChevronRight className="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
                         </button>
                     )}

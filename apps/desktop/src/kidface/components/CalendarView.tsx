@@ -101,6 +101,8 @@ export function CalendarView() {
     const monthLabel = safeFormatDate(currentMonth, 'MMMM yyyy');
     const emptyLabel = displayLabel(t, language, 'kidface.calendar.empty', 'No big plans this month.');
     const emptyHintLabel = displayLabel(t, language, 'kidface.calendar.emptyHint', 'Tap a day to make a plan.');
+    const prevMonthLabel = displayLabel(t, language, 'kidface.calendar.prevMonth', 'Previous month');
+    const nextMonthLabel = displayLabel(t, language, 'kidface.calendar.nextMonth', 'Next month');
 
     const hasPlansThisMonth = useMemo(
         () => days.some((day) => tasksByDay.has(safeFormatDate(day, 'yyyy-MM-dd') ?? '')),
@@ -121,7 +123,7 @@ export function CalendarView() {
                     <button
                         type="button"
                         onClick={handlePrev}
-                        aria-label="Previous month"
+                        aria-label={prevMonthLabel}
                         className="flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
                     >
                         <ChevronLeft className="size-6" strokeWidth={2.5} />
@@ -129,7 +131,7 @@ export function CalendarView() {
                     <button
                         type="button"
                         onClick={handleNext}
-                        aria-label="Next month"
+                        aria-label={nextMonthLabel}
                         className="flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
                     >
                         <ChevronRight className="size-6" strokeWidth={2.5} />

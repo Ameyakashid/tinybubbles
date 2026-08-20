@@ -34,6 +34,10 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const editTitlePlaceholder = displayLabel(t, language, 'kidface.task.editTitlePlaceholder', 'What is this called?');
     const addStepPlaceholder = displayLabel(t, language, 'kidface.task.addStepPlaceholder', 'Add a step');
     const addStepAction = displayLabel(t, language, 'kidface.task.addStepAction', 'Add step');
+    const titleLabel = displayLabel(t, language, 'kidface.task.titleLabel', 'Task title');
+    const checklistEmpty = displayLabel(t, language, 'kidface.task.checklistEmpty', 'Nothing to check off — just do it.');
+    const markDoneLabel = displayLabel(t, language, 'kidface.task.markDone', 'Mark {title} as done').replace('{title}', task.title);
+    const markNotDoneLabel = displayLabel(t, language, 'kidface.task.markNotDone', 'Mark {title} as not done').replace('{title}', task.title);
 
     const updateTask = useTaskStore((state) => state.updateTask);
     const [titleDraft, setTitleDraft] = useState(task.title);
@@ -95,9 +99,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                     <BubbleCheckbox
                         checked={finished}
                         onChange={() => void onToggleTask(task)}
-                        label={finished
-                            ? `Mark ${task.title} as not done`
-                            : `Mark ${task.title} as done`}
+                        label={finished ? markNotDoneLabel : markDoneLabel}
                         className={finished ? 'border-success bg-success text-success-foreground' : undefined}
                     />
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -108,7 +110,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                             onBlur={commitTitle}
                             onKeyDown={handleTitleKeyDown}
                             placeholder={editTitlePlaceholder}
-                            aria-label="Task title"
+                            aria-label={titleLabel}
                             className={cn(
                                 'w-full bg-transparent text-2xl font-bold leading-tight placeholder:text-muted-foreground focus-visible:outline-none',
                                 finished && 'text-muted-foreground line-through',
@@ -132,7 +134,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                     <h3 className="text-lg font-bold text-foreground">{checklistLabel}</h3>
                     {checklist.length === 0 && (
                         <p className="rounded-2xl bg-card p-5 text-center text-lg text-muted-foreground shadow-sm">
-                            Nothing to check off — just do it.
+                            {checklistEmpty}
                         </p>
                     )}
                     {checklist.length > 0 && (

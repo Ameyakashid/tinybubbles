@@ -26,6 +26,9 @@ export function AddView() {
     const title = displayLabel(t, language, 'kidface.add.title', 'Add something');
     const prompt = displayLabel(t, language, 'kidface.add.prompt', 'What do you need to do?');
     const success = displayLabel(t, language, 'kidface.add.success', 'Added! It is on your Today list.');
+    const placeholder = displayLabel(t, language, 'kidface.add.placeholder', 'I need to…');
+    const inputLabel = displayLabel(t, language, 'kidface.add.inputLabel', 'Add something to do');
+    const submitLabel = displayLabel(t, language, 'kidface.add.submitLabel', 'Add');
 
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
@@ -39,7 +42,7 @@ export function AddView() {
             </header>
 
             <section className="flex flex-col gap-4">
-                <AddBubble onAdd={handleAdd} placeholder="I need to…" autoFocus />
+                <AddBubble onAdd={handleAdd} placeholder={placeholder} inputLabel={inputLabel} submitLabel={submitLabel} autoFocus />
 
                 {justAdded && (
                     <div

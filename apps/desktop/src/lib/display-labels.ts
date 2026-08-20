@@ -62,6 +62,11 @@ const EN_OVERRIDES: Record<string, string> = {
     // has the same declension limits in a "{n} {label}" slot, so the fallback
     // is no worse — and zh embeds the measure word the count needs.
     'projects.title': 'lists',
+    // Kid-face loading and fatal load-error screens.
+    'kidface.loading': 'Loading…',
+    'kidface.loadError.title': 'Could not load your morning',
+    'kidface.loadError.message': 'Something went wrong while waking up. Your tasks are still there — tap below to try again.',
+    'kidface.loadError.action': 'Try again',
     // Kid-face bottom navigation and the dedicated Add room.
     'kidface.nav.today': 'Today',
     'kidface.nav.add': 'Add',
@@ -70,9 +75,14 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.add.title': 'Add something',
     'kidface.add.prompt': 'What do you need to do?',
     'kidface.add.success': 'Added! It is on your Today list.',
+    'kidface.add.placeholder': 'I need to…',
+    'kidface.add.inputLabel': 'Add something to do',
+    'kidface.add.submitLabel': 'Add',
     'kidface.calendar.title': 'Calendar',
     'kidface.calendar.empty': 'No big plans this month.',
     'kidface.calendar.emptyHint': 'Tap a day to make a plan.',
+    'kidface.calendar.prevMonth': 'Previous month',
+    'kidface.calendar.nextMonth': 'Next month',
     // Offline reassurance.
     'kidface.offline.message': 'Offline — your changes are saved.',
     'kidface.offline.action': 'Try syncing',
@@ -83,6 +93,9 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.calendar.daySheet.empty': 'No plans for this day.',
     'kidface.calendar.daySheet.close': 'Back to calendar',
     // Today header and payoff.
+    'kidface.today.greeting.morning': 'Good morning',
+    'kidface.today.greeting.afternoon': 'Good afternoon',
+    'kidface.today.greeting.evening': 'Good evening',
     'kidface.today.header.count.one': '1 thing to do today',
     'kidface.today.header.count.other': '{count} things to do today',
     'kidface.today.header.empty': 'Nothing left to do — nice work!',
@@ -96,6 +109,8 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.today.scheduledEmpty.other': '{count} things coming up.',
     'kidface.today.plainEmpty.hint': 'Tap the big + above if something needs doing.',
     'kidface.today.doneToday': 'Done today',
+    'kidface.today.seeAllDone': 'See all {count} done',
+    'kidface.today.undo.label': 'Undo {title}',
     'kidface.undo.toast': 'Done! Tap to undo.',
     'kidface.undo.action': 'Undo',
     // Done room (trophy case).
@@ -113,6 +128,11 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.done.summary.total.other': '{count} trophies total',
     'kidface.done.undo.label': 'Put {title} back on the list',
     // Child editing in the task sheet.
+    'kidface.task.openLabel': 'Open {title}',
+    'kidface.task.markDone': 'Mark {title} as done',
+    'kidface.task.markNotDone': 'Mark {title} as not done',
+    'kidface.task.titleLabel': 'Task title',
+    'kidface.task.checklistEmpty': 'Nothing to check off — just do it.',
     'kidface.task.editTitlePlaceholder': 'What is this called?',
     'kidface.task.addStepPlaceholder': 'Add a step',
     'kidface.task.addStepAction': 'Add step',

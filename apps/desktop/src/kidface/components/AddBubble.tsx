@@ -5,10 +5,18 @@ import { cn } from '@/lib/utils';
 interface AddBubbleProps {
     onAdd: (title: string) => void | Promise<void>;
     placeholder?: string;
+    inputLabel?: string;
+    submitLabel?: string;
     autoFocus?: boolean;
 }
 
-export function AddBubble({ onAdd, placeholder = 'I need to…', autoFocus = false }: AddBubbleProps) {
+export function AddBubble({
+    onAdd,
+    placeholder = 'I need to…',
+    inputLabel = 'Add something to do',
+    submitLabel = 'Add',
+    autoFocus = false,
+}: AddBubbleProps) {
     const [draft, setDraft] = useState('');
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -26,7 +34,7 @@ export function AddBubble({ onAdd, placeholder = 'I need to…', autoFocus = fal
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={placeholder}
                 autoFocus={autoFocus}
-                aria-label="Add something to do"
+                aria-label={inputLabel}
                 className={cn(
                     'h-14 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
                     'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50',
@@ -35,7 +43,7 @@ export function AddBubble({ onAdd, placeholder = 'I need to…', autoFocus = fal
             <button
                 type="submit"
                 disabled={!draft.trim()}
-                aria-label="Add"
+                aria-label={submitLabel}
                 className={cn(
                     'flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90',
                     'disabled:opacity-50 disabled:active:scale-100',

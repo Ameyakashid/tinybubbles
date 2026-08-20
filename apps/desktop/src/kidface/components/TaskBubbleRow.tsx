@@ -1,7 +1,9 @@
 import { Star, ChevronRight } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Task } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
+import { displayLabel } from '@/lib/display-labels';
+import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
 
 interface TaskBubbleRowProps {
@@ -11,8 +13,18 @@ interface TaskBubbleRowProps {
 }
 
 export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
+    const { t, language } = useLanguage();
     const [isPopping, setIsPopping] = useState(false);
     const popTimeoutRef = useRef<number | null>(null);
+
+    const doneLabel = useMemo(
+        () => displayLabel(t, language, 'kidface.task.markDone', 'Mark {title} as done').replace('{title}', task.title),
+        [t, language, task.title],
+    );
+    const openLabel = useMemo(
+        () => displayLabel(t, language, 'kidface.task.openLabel', 'Open {title}').replace('{title}', task.title),
+        [t, language, task.title],
+    );
 
     useEffect(() => () => {
         if (popTimeoutRef.current !== null) {
@@ -36,14 +48,14 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             <BubbleCheckbox
                 checked={false}
                 onChange={handleToggle}
-                label={`Mark ${task.title} as done`}
+                label={doneLabel}
                 celebrating={isPopping}
             />
             <button
                 type="button"
                 onClick={() => onOpen(task)}
                 className="flex min-h-14 min-w-0 flex-1 flex-col justify-center text-left"
-                aria-label={`Open ${task.title}`}
+                aria-label={openLabel}
             >
                 <span className="truncate text-lg font-semibold leading-snug text-foreground">
                     {task.title}

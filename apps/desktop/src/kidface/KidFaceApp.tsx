@@ -28,6 +28,15 @@ export function KidFaceApp() {
     const previousRoom = useRef<KidRoom | null>(null);
 
     const roomLabel = displayLabel(t, language, `kidface.nav.${activeRoom}`, activeRoom);
+    const loadingLabel = displayLabel(t, language, 'kidface.loading', 'Loading…');
+    const loadErrorTitle = displayLabel(t, language, 'kidface.loadError.title', 'Could not load your morning');
+    const loadErrorMessage = displayLabel(
+        t,
+        language,
+        'kidface.loadError.message',
+        'Something went wrong while waking up. Your tasks are still there — tap below to try again.',
+    );
+    const loadErrorAction = displayLabel(t, language, 'kidface.loadError.action', 'Try again');
 
     useEffect(() => {
         if (previousRoom.current !== null && previousRoom.current !== activeRoom) {
@@ -41,7 +50,7 @@ export function KidFaceApp() {
             <div className="flex h-screen items-center justify-center bg-background text-foreground">
                 <div className="flex flex-col items-center gap-4">
                     <div className="size-12 animate-pulse rounded-full bg-primary/20" />
-                    <p className="text-lg text-muted-foreground">Loading…</p>
+                    <p className="text-lg text-muted-foreground">{loadingLabel}</p>
                 </div>
             </div>
         );
@@ -54,9 +63,9 @@ export function KidFaceApp() {
                     <AlertCircle className="size-14 text-warning" />
                 </div>
                 <div className="flex max-w-xs flex-col gap-2">
-                    <h1 className="text-2xl font-extrabold">Could not load your morning</h1>
+                    <h1 className="text-2xl font-extrabold">{loadErrorTitle}</h1>
                     <p className="text-lg text-muted-foreground">
-                        Something went wrong while waking up. Your tasks are still there — tap below to try again.
+                        {loadErrorMessage}
                     </p>
                 </div>
                 <button
@@ -65,7 +74,7 @@ export function KidFaceApp() {
                     className="flex min-h-14 items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
                 >
                     <RotateCcw className="size-6" />
-                    Try again
+                    {loadErrorAction}
                 </button>
             </div>
         );
