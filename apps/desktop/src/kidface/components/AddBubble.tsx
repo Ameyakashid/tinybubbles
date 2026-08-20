@@ -5,9 +5,10 @@ import { cn } from '@/lib/utils';
 interface AddBubbleProps {
     onAdd: (title: string) => void | Promise<void>;
     placeholder?: string;
+    autoFocus?: boolean;
 }
 
-export function AddBubble({ onAdd, placeholder = 'I need to…' }: AddBubbleProps) {
+export function AddBubble({ onAdd, placeholder = 'I need to…', autoFocus = false }: AddBubbleProps) {
     const [draft, setDraft] = useState('');
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -24,6 +25,7 @@ export function AddBubble({ onAdd, placeholder = 'I need to…' }: AddBubbleProp
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder={placeholder}
+                autoFocus={autoFocus}
                 aria-label="Add something to do"
                 className={cn(
                     'h-14 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',

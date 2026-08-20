@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Sparkles, RotateCcw, ChevronRight } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
-import { AddBubble } from './AddBubble';
 import { TaskBubbleRow } from './TaskBubbleRow';
 import { OpenTaskView } from './OpenTaskView';
 import { displayLabel } from '@/lib/display-labels';
@@ -42,7 +41,6 @@ interface TodayViewProps {
 export function TodayView({ onSeeAllDone }: TodayViewProps) {
     const { t, language } = useLanguage();
     const tasks = useTaskStore((state) => state.tasks);
-    const addTask = useTaskStore((state) => state.addTask);
     const updateTask = useTaskStore((state) => state.updateTask);
     const [justCompletedIds, setJustCompletedIds] = useState<Set<string>>(new Set());
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
@@ -72,10 +70,6 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
         () => tasks.find((task) => task.id === openTaskId) ?? null,
         [tasks, openTaskId],
     );
-
-    const handleAdd = async (title: string) => {
-        await addTask(title, { status: 'next' });
-    };
 
     const handleToggle = async (task: Task) => {
         if (task.status === 'done' || task.status === 'archived') {
@@ -122,8 +116,6 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                         : `${openTasks.length} thing${openTasks.length === 1 ? '' : 's'} to do today`}
                 </p>
             </header>
-
-            <AddBubble onAdd={handleAdd} placeholder="I need to…" />
 
             <section className="flex min-h-0 flex-1 flex-col gap-3">
                 <h2 className="text-xl font-bold text-foreground">{toDoLabel}</h2>

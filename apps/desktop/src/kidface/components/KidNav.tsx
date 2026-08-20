@@ -1,8 +1,10 @@
-import { Sun, Trophy } from 'lucide-react';
+import { Plus, Sun, Trophy } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { displayLabel } from '@/lib/display-labels';
+import { useLanguage } from '@/contexts/language-context';
 
-export type KidRoom = 'today' | 'done';
+export type KidRoom = 'today' | 'add' | 'done';
 
 interface KidNavProps {
     activeRoom: KidRoom;
@@ -39,6 +41,8 @@ function NavItem({ room, activeRoom, label, icon, onSelect }: NavItemProps) {
 }
 
 export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
+    const { t, language } = useLanguage();
+
     return (
         <nav
             className="relative z-10 flex h-20 shrink-0 items-center gap-2 border-t border-border bg-card/80 px-4 pb-2 pt-2 backdrop-blur-sm"
@@ -47,14 +51,21 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
             <NavItem
                 room="today"
                 activeRoom={activeRoom}
-                label="Today"
+                label={displayLabel(t, language, 'kidface.nav.today', 'Today')}
                 icon={<Sun className="size-7" strokeWidth={2.5} />}
+                onSelect={onChangeRoom}
+            />
+            <NavItem
+                room="add"
+                activeRoom={activeRoom}
+                label={displayLabel(t, language, 'kidface.nav.add', 'Add')}
+                icon={<Plus className="size-7" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
             />
             <NavItem
                 room="done"
                 activeRoom={activeRoom}
-                label="Done"
+                label={displayLabel(t, language, 'kidface.nav.done', 'Done')}
                 icon={<Trophy className="size-7" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
             />

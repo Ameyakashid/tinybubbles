@@ -62,6 +62,13 @@ const EN_OVERRIDES: Record<string, string> = {
     // has the same declension limits in a "{n} {label}" slot, so the fallback
     // is no worse — and zh embeds the measure word the count needs.
     'projects.title': 'lists',
+    // Kid-face bottom navigation and the dedicated Add room.
+    'kidface.nav.today': 'Today',
+    'kidface.nav.add': 'Add',
+    'kidface.nav.done': 'Done',
+    'kidface.add.title': 'Add something',
+    'kidface.add.prompt': 'What do you need to do?',
+    'kidface.add.success': 'Added! It is on your Today list.',
 };
 
 const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<string, string>>> = {

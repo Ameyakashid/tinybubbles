@@ -30,9 +30,9 @@ app is built around three ideas:
    complete.
 3. **Done** — a trophy case of finished things, not a grey trash-looking list.
 
-Navigation is intentionally shallow. The first pass was **Today**; this pass
-adds the **Done** trophy case. A later pass will add a child-scale **Add**
-surface.
+Navigation is intentionally shallow. The first pass was **Today**; the next
+added the **Done** trophy case. This pass adds the child-scale **Add** room
+as a third bottom-nav stop, so Today can stay focused on what to do now.
 
 ## Typography and tokens
 
@@ -57,8 +57,6 @@ voice is plain, short, and spoken-aloud friendly.
 `TodayView.tsx` is where the child lands. It shows:
 
 - A friendly top-of-day header (time-aware greeting, kept simple).
-- A big, always-visible add row: "I need to…" + a bubbly Add button. Typed
-  markdown tokens are not advertised; the parser still accepts them.
 - The list of things to do today: large rows, a circular checkbox, the task
   title, and a focus star when the parent has marked something important.
 - A small "Done today" section at the bottom so finishing something is visible
@@ -66,19 +64,31 @@ voice is plain, short, and spoken-aloud friendly.
 
 Every row control is always visible. There are no hover-only actions.
 
+Adding was previously an inline row on Today; it now lives in the dedicated
+**Add** room so the child faces one question per screen.
+
 ## Components (kidface-only)
 
 - `KidFaceApp.tsx` — root; keeps `useKidFaceRuntime()` and mounts the layout
   plus the shallow room switcher.
 - `KidLayout.tsx` — safe-area-aware frame, error banner, ambient bubble layer.
-- `KidNav.tsx` — big bottom tabs for switching between Today and Done.
+- `KidNav.tsx` — big bottom tabs for switching between Today, Add, and Done.
 - `TodayView.tsx` — the child's first screen.
+- `AddView.tsx` — the child-scale Add room.
 - `DoneView.tsx` — trophy case of finished things, grouped by day.
 - `TaskBubbleRow.tsx` — a single task row with the circular complete control.
 - `BubbleCheckbox.tsx` — large circular checkbox, empty / filled / celebratory.
-- `AddBubble.tsx` — the big add input + button.
+- `AddBubble.tsx` — the big add input + button, used by the Add room.
 - `kidface.css` — animations scoped to the new face so the stock shell is not
   affected.
+
+## The Add room
+
+`AddView.tsx` is the child-scale Add surface. It is a full-screen room with a
+single friendly prompt, the big `AddBubble` input, and a brief celebratory
+confirmation when a task is created. The new task lands on **Today** as a
+`next` action; there are no due dates, projects, or other filing decisions to
+make in the moment.
 
 ## The Done room
 

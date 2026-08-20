@@ -9,6 +9,7 @@ import { AlertCircle, RotateCcw } from 'lucide-react';
 import { useKidFaceRuntime } from './runtime';
 import { KidLayout } from './components/KidLayout';
 import { TodayView } from './components/TodayView';
+import { AddView } from './components/AddView';
 import { DoneView } from './components/DoneView';
 import { KidNav, type KidRoom } from './components/KidNav';
 import './kidface.css';
@@ -55,9 +56,9 @@ export function KidFaceApp() {
     return (
         <KidLayout lastSyncError={lastSyncError} onRequestSync={requestSync}>
             <div className="flex flex-1 flex-col overflow-hidden">
-                {activeRoom === 'today'
-                    ? <TodayView onSeeAllDone={() => setActiveRoom('done')} />
-                    : <DoneView />}
+                {activeRoom === 'today' && <TodayView onSeeAllDone={() => setActiveRoom('done')} />}
+                {activeRoom === 'add' && <AddView />}
+                {activeRoom === 'done' && <DoneView />}
                 <KidNav activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
             </div>
         </KidLayout>
