@@ -21,8 +21,11 @@ The dev server at http://localhost:5173 serves both faces from one origin:
 ugly proof page — delete its markup wholesale. Keep exactly one thing: the
 `useKidFaceRuntime()` call at the root. It hydrates the store, runs the same
 auto-sync engine as the stock shell (focus, visibility, debounced
-data-change, initial sync), and returns `{ hydrated, lastSyncError,
-requestSync }`.
+data-change, initial sync), and returns `{ hydrated, loadError,
+lastSyncError, requestSync }`. `loadError` is set when loading stored data
+failed — a failed load must be rendered as its own state, never as an empty
+day ("Nothing left to do" after a storage error reads to a child as their
+tasks vanishing).
 
 **Data and actions come from `useTaskStore` (`@tinybubbles/core`).** The ones
 a kid face plausibly needs:

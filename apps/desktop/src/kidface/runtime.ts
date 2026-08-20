@@ -18,6 +18,12 @@ import { logError, logInfo } from '../lib/app-log';
 
 export type KidFaceRuntimeStatus = {
     hydrated: boolean;
+    /**
+     * Set when loading stored data failed. A failed load must never render as
+     * a successfully loaded empty day - to a child, "Nothing left to do"
+     * after a storage error looks like their tasks vanished (audit #1).
+     */
+    loadError: string | null;
     lastSyncError: string | null;
     requestSync: () => void;
 };
@@ -25,6 +31,7 @@ export type KidFaceRuntimeStatus = {
 export function useKidFaceRuntime(): KidFaceRuntimeStatus {
     const fetchData = useTaskStore((state) => state.fetchData);
     const [hydrated, setHydrated] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [lastSyncError, setLastSyncError] = useState<string | null>(null);
     const [requestSyncFn, setRequestSyncFn] = useState<() => void>(() => () => undefined);
 
@@ -37,14 +44,20 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
 
         const controller = createDesktopAutoSyncController({
             canSync: () => canDesktopAutoSync(SyncService),
-            performSync: () => SyncService.performSync(),
+            // A successful sync of any kind (focus, periodic, data-change,
+            // manual) clears the failure banner; only failures re-arm it
+            // (audit #9).
+            performSync: async () => {
+                const result = await SyncService.performSync();
+                if (result.success && !disposed) setLastSyncError(null);
+                return result;
+            },
             flushPendingSave,
             reportError,
             onSyncFailure: (message: string) => {
                 if (!disposed) setLastSyncError(message);
             },
             isRuntimeActive: () => !disposed,
-            // The new face has no modal edit sessions yet; nothing pauses sync.
             shouldPauseWindowSync: () => useTaskStore.getState().editLockCount > 0,
             hasPendingLocalChanges: () => SyncService.hasPendingLocalChangesForAutoSync(),
             logInfo: (message, extra) => {
@@ -57,10 +70,19 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
             void controller.requestSync(0).catch((error) => reportError('Sync failed', error));
         });
 
-        fetchData()
-            .catch((error) => reportError('Load failed', error))
+        fetchData({ isResultStillRelevant: () => !disposed })
+            .then(() => {
+                if (!disposed) setLoadError(null);
+            })
+            .catch((error) => {
+                reportError('Load failed', error);
+                if (!disposed) {
+                    setLoadError(error instanceof Error ? error.message : String(error));
+                }
+            })
             .finally(() => {
-                if (!disposed) setHydrated(true);
+                if (disposed) return;
+                setHydrated(true);
                 controller.scheduleInitialSync();
             });
 
@@ -71,12 +93,12 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
             if (action === 'focus') controller.handleFocus();
             else if (action === 'blur') controller.handleBlur();
         };
+        // Gate on lastDataChangeAt exactly like the stock shell: the store
+        // bumps it only for real local data changes, so hydration and applied
+        // remote results do not queue pointless extra syncs (audit #4).
         const storeUnsubscribe = useTaskStore.subscribe((state, prevState) => {
-            if (state.tasks !== prevState.tasks
-                || state.projects !== prevState.projects
-                || state.settings !== prevState.settings) {
-                controller.handleDataChange();
-            }
+            if (state.lastDataChangeAt === prevState.lastDataChangeAt) return;
+            controller.handleDataChange();
         });
 
         window.addEventListener('focus', focusListener);
@@ -93,5 +115,5 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
         };
     }, [fetchData]);
 
-    return { hydrated, lastSyncError, requestSync: requestSyncFn };
+    return { hydrated, loadError, lastSyncError, requestSync: requestSyncFn };
 }
