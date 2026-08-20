@@ -67,6 +67,7 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.loadError.title': 'Could not load your morning',
     'kidface.loadError.message': 'Something went wrong while waking up. Your tasks are still there — tap below to try again.',
     'kidface.loadError.action': 'Try again',
+    'kidface.loadError.trying': 'Waking up…',
     // Kid-face bottom navigation and the dedicated Add room.
     'kidface.nav.today': 'Today',
     'kidface.nav.add': 'Add',
@@ -86,6 +87,8 @@ const EN_OVERRIDES: Record<string, string> = {
     // Offline reassurance.
     'kidface.offline.message': 'Offline — your changes are saved.',
     'kidface.offline.action': 'Try syncing',
+    'kidface.offline.trying': 'Trying to sync…',
+    'kidface.offline.synced': 'Synced!',
     // Calendar day a11y + day sheet.
     'kidface.calendar.dayTaskCount.zero': 'nothing to do',
     'kidface.calendar.dayTaskCount.one': 'one thing',

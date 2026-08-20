@@ -47,6 +47,7 @@ describe('KidFaceApp', () => {
 
         renderApp();
 
+        expect(screen.getByRole('alert')).toBeInTheDocument();
         expect(screen.getByText('Could not load your morning')).toBeInTheDocument();
         expect(screen.getByText(/Something went wrong while waking up/)).toBeInTheDocument();
         expect(screen.queryByText('Nothing left to do')).not.toBeInTheDocument();
@@ -107,6 +108,9 @@ describe('KidFaceApp', () => {
         fireEvent.click(screen.getByRole('button', { name: /Offline — your changes are saved/ }));
 
         expect(requestSync).toHaveBeenCalled();
+        const busyBanner = screen.getByRole('button', { name: 'Trying to sync…' });
+        expect(busyBanner).toBeDisabled();
+        expect(busyBanner).toHaveAttribute('aria-busy', 'true');
     });
 
     it('navigates to the settings room and moves focus to it', () => {
