@@ -53,8 +53,11 @@ inherits theme classes on `<html>`), `src/lib/utils` (`cn`).
    the runtime grows to meet you — that is an infrastructure change and it
    arrives reviewed.
 2. Do not import from `src/components/` — that is the old face. If something
-   there tempts you, that is a sign it should be rebuilt, not reused. (The
-   exception is nothing; ask if you think you found one.)
+   there tempts you, that is a sign it should be rebuilt, not reused. One
+   ratified exception: machinery primitives from `src/components/ui/` (the
+   Dialog focus shell and similar mechanics) may be reused — accessibility
+   machinery beats a hand-rolled focus trap — with their look owned by
+   kid-face styling. Everything else still needs asking first.
 3. The stock shell at `/` must keep working untouched. The switch in
    `main.tsx` is the only line both faces share.
 4. `?face=next` is the only way in. No other entry, no redirects.
@@ -65,7 +68,15 @@ inherits theme classes on `<html>`), `src/lib/utils` (`cn`).
 recent pass skipped it and shipped red types), `bun run lint`, and the full
 **desktop package** suite (`bun run test` from `apps/desktop`) one-shot, plus
 a live look at `/?face=next` and a confirmation that `/` still renders the
-stock shell.
+stock shell. The live look means a rendered page you have seen (screenshot or
+read the DOM) — an HTTP 200 with the right content-type proves the server is
+up, not that the app works; a pass once reported a live look while the page
+was a blank ReferenceError.
+
+Green is a property of the commit, not the tree: after committing, confirm
+`git status` is clean before you report — a green working tree above a
+partial commit ships a red branch tip, which is exactly what happened to
+pass 4 (tests committed, implementation forgotten).
 
 The root-level `bun run test` (core, cloud, mobile) is NOT part of the floor:
 the cloud package cannot run on a Windows host by design (it fsyncs
