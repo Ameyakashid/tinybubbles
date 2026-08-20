@@ -17,13 +17,17 @@ import { SettingsView } from './components/SettingsView';
 import { KidNav, type KidRoom } from './components/KidNav';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
+import { cn } from '@/lib/utils';
 import './kidface.css';
+
+const ROOM_ORDER: KidRoom[] = ['today', 'add', 'done', 'calendar', 'settings'];
 
 export function KidFaceApp() {
     const { hydrated, loadError, lastSyncError, requestSync, retryLoad } = useKidFaceRuntime();
     const { t, language } = useLanguage();
     useKidFaceTheme();
     const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
+    const [roomDirection, setRoomDirection] = useState<'left' | 'right'>('right');
     const mainRef = useRef<HTMLElement>(null);
     const previousRoom = useRef<KidRoom | null>(null);
 
@@ -40,6 +44,9 @@ export function KidFaceApp() {
 
     useEffect(() => {
         if (previousRoom.current !== null && previousRoom.current !== activeRoom) {
+            const previousIndex = ROOM_ORDER.indexOf(previousRoom.current);
+            const nextIndex = ROOM_ORDER.indexOf(activeRoom);
+            setRoomDirection(nextIndex > previousIndex ? 'right' : 'left');
             mainRef.current?.focus({ preventScroll: true });
         }
         previousRoom.current = activeRoom;
@@ -88,7 +95,13 @@ export function KidFaceApp() {
                 aria-label={roomLabel}
                 className="relative flex flex-1 flex-col overflow-hidden outline-none"
             >
-                <div key={activeRoom} className="kidface-room-enter flex flex-1 flex-col overflow-hidden">
+                <div
+                    key={activeRoom}
+                    className={cn(
+                        'flex flex-1 flex-col overflow-hidden',
+                        roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
+                    )}
+                >
                     {activeRoom === 'today' && <TodayView onSeeAllDone={() => setActiveRoom('done')} />}
                     {activeRoom === 'add' && <AddView />}
                     {activeRoom === 'done' && <DoneView />}

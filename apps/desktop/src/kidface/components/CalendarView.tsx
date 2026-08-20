@@ -176,11 +176,17 @@ export function CalendarView() {
                             >
                                 <span
                                     className={cn(
-                                        'flex size-9 items-center justify-center rounded-full text-base font-bold transition-colors',
+                                        'relative flex size-9 items-center justify-center rounded-full text-base font-bold transition-colors',
                                         isToday && 'bg-primary text-primary-foreground',
                                         hasTasks && !isToday && 'group-hover:bg-primary/10',
                                     )}
                                 >
+                                    {isToday && (
+                                        <span
+                                            className="absolute inset-[-4px] z-[-1] rounded-full bg-primary/20 kidface-glow-pulse"
+                                            aria-hidden="true"
+                                        />
+                                    )}
                                     {day.getDate()}
                                 </span>
                                 {hasTasks && (

@@ -19,6 +19,8 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
                 <div className="kidface-drift absolute -left-8 top-[8%] size-40 rounded-full bg-primary/5 blur-2xl" />
                 <div className="kidface-drift-medium absolute right-[5%] top-[20%] size-56 rounded-full bg-success/5 blur-3xl" />
                 <div className="kidface-drift-slow absolute bottom-[12%] left-[20%] size-48 rounded-full bg-info/5 blur-2xl" />
+                <div className="kidface-drift-very-slow absolute bottom-[5%] right-[15%] size-64 rounded-full bg-focus-star/5 blur-3xl" />
+                <div className="kidface-drift absolute left-[45%] top-[4%] size-32 rounded-full bg-info/5 blur-2xl" />
             </div>
 
             {lastSyncError && (

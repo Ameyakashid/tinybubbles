@@ -15,6 +15,15 @@
     }
 }
 
+@keyframes kidface-drift-slow {
+    0%, 100% {
+        transform: translateY(0) translateX(0);
+    }
+    50% {
+        transform: translateY(-18px) translateX(-10px);
+    }
+}
+
 @keyframes kidface-pop {
     0% {
         transform: scale(1);
@@ -59,14 +68,25 @@
     }
 }
 
-@keyframes kidface-room-enter {
+@keyframes kidface-room-enter-right {
     from {
         opacity: 0;
-        transform: translateY(16px);
+        transform: translateX(28px) scale(0.98);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateX(0) scale(1);
+    }
+}
+
+@keyframes kidface-room-enter-left {
+    from {
+        opacity: 0;
+        transform: translateX(-28px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
     }
 }
 
@@ -76,6 +96,105 @@
     }
     50% {
         transform: translateY(-8px);
+    }
+}
+
+@keyframes kidface-bubble-ripple {
+    0% {
+        transform: scale(0.85);
+        opacity: 0.55;
+    }
+    100% {
+        transform: scale(1.7);
+        opacity: 0;
+    }
+}
+
+@keyframes kidface-sparkle-burst {
+    0% {
+        transform: translate(-50%, -50%) rotate(var(--sparkle-angle)) translateX(0) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) rotate(var(--sparkle-angle)) translateX(26px) scale(0);
+        opacity: 0;
+    }
+}
+
+@keyframes kidface-check-bounce {
+    0% {
+        transform: scale(0) rotate(-20deg);
+    }
+    55% {
+        transform: scale(1.2) rotate(6deg);
+    }
+    100% {
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+@keyframes kidface-glow-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.55;
+    }
+    50% {
+        transform: scale(1.08);
+        opacity: 0.85;
+    }
+}
+
+@keyframes kidface-joy-bounce {
+    0% {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+    }
+    40% {
+        opacity: 1;
+        transform: translateY(-4px) scale(1.02);
+    }
+    70% {
+        transform: translateY(2px) scale(0.99);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes kidface-nav-icon-bounce {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+    40% {
+        transform: translateY(-4px) scale(1.15);
+    }
+    100% {
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes kidface-trophy-shine {
+    0% {
+        transform: rotate(0deg) translateX(-120%);
+    }
+    100% {
+        transform: rotate(0deg) translateX(120%);
+    }
+}
+
+@keyframes kidface-bubble-wobble {
+    0%, 100% {
+        border-radius: 50%;
+    }
+    25% {
+        border-radius: 52% 48% 50% 50%;
+    }
+    50% {
+        border-radius: 50% 50% 52% 48%;
+    }
+    75% {
+        border-radius: 48% 52% 50% 50%;
     }
 }
 
@@ -91,6 +210,10 @@
     animation: kidface-drift 20s ease-in-out infinite;
 }
 
+.kidface-drift-very-slow {
+    animation: kidface-drift-slow 32s ease-in-out infinite;
+}
+
 .kidface-pop {
     animation: kidface-pop 0.25s ease-out;
 }
@@ -103,23 +226,84 @@
     animation: kidface-slide-up 0.3s ease-out both;
 }
 
-.kidface-room-enter {
-    animation: kidface-room-enter 0.25s ease-out both;
+.kidface-room-enter-right {
+    animation: kidface-room-enter-right 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.kidface-room-enter-left {
+    animation: kidface-room-enter-left 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .kidface-float {
     animation: kidface-float 3s ease-in-out infinite;
 }
 
+.kidface-bubble-ripple {
+    animation: kidface-bubble-ripple 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.kidface-bubble-ripple-delayed {
+    animation: kidface-bubble-ripple 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.1s forwards;
+}
+
+.kidface-sparkle {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    animation: kidface-sparkle-burst 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.kidface-sparkle-0 { --sparkle-angle: 0deg; }
+.kidface-sparkle-1 { --sparkle-angle: 60deg; }
+.kidface-sparkle-2 { --sparkle-angle: 120deg; }
+.kidface-sparkle-3 { --sparkle-angle: 180deg; }
+.kidface-sparkle-4 { --sparkle-angle: 240deg; }
+.kidface-sparkle-5 { --sparkle-angle: 300deg; }
+
+.kidface-check-bounce {
+    animation: kidface-check-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.kidface-glow-pulse {
+    animation: kidface-glow-pulse 2.2s ease-in-out infinite;
+}
+
+.kidface-joy-bounce {
+    animation: kidface-joy-bounce 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.kidface-nav-icon-bounce {
+    animation: kidface-nav-icon-bounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.kidface-trophy-shine {
+    animation: kidface-trophy-shine 1.6s ease-in-out infinite;
+}
+
+.kidface-bubble-wobble {
+    animation: kidface-bubble-wobble 4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .kidface-drift,
     .kidface-drift-slow,
     .kidface-drift-medium,
+    .kidface-drift-very-slow,
     .kidface-pop,
     .kidface-celebrate,
     .kidface-slide-up,
-    .kidface-room-enter,
-    .kidface-float {
+    .kidface-room-enter-right,
+    .kidface-room-enter-left,
+    .kidface-float,
+    .kidface-bubble-ripple,
+    .kidface-bubble-ripple-delayed,
+    .kidface-sparkle,
+    .kidface-check-bounce,
+    .kidface-glow-pulse,
+    .kidface-joy-bounce,
+    .kidface-nav-icon-bounce,
+    .kidface-trophy-shine,
+    .kidface-bubble-wobble {
         animation: none;
     }
 }

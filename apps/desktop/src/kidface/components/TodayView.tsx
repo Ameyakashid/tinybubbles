@@ -151,7 +151,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                 <h2 className="sr-only">{toDoLabel}</h2>
                 {recentlyCompletedTask && (
                     <div
-                        className="flex items-center justify-between gap-3 rounded-2xl bg-success/10 p-4 kidface-slide-up"
+                        className="flex items-center justify-between gap-3 rounded-2xl bg-success/10 p-4 kidface-joy-bounce"
                         aria-live="polite"
                     >
                         <span className="text-lg font-semibold text-success">{undoToast}</span>
@@ -167,8 +167,12 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                 {openTasks.length === 0 ? (
                     doneToday.length > 0 ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
-                            <div className="flex size-28 items-center justify-center rounded-full bg-success/10">
-                                <Trophy className="size-14 text-success" />
+                            <div className="relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-success/10">
+                                <Trophy className="relative z-10 size-14 text-success kidface-float" />
+                                <span
+                                    className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-r from-transparent via-success-foreground/30 to-transparent kidface-trophy-shine"
+                                    aria-hidden="true"
+                                />
                             </div>
                             <div className="flex max-w-[18rem] flex-col gap-1">
                                 <p className="text-2xl font-extrabold text-foreground">{allDoneTitle}</p>
@@ -185,7 +189,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                     ) : upcomingCount > 0 ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                             <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
-                                <CalendarDays className="size-14 text-primary" />
+                                <CalendarDays className="size-14 text-primary kidface-float" />
                             </div>
                             <div className="flex max-w-[18rem] flex-col gap-1">
                                 <p className="text-2xl font-extrabold text-foreground">{scheduledEmptyTitle}</p>
@@ -195,7 +199,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                     ) : (
                         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                             <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
-                                <Sparkles className="size-14 text-primary" />
+                                <Sparkles className="size-14 text-primary kidface-float" />
                             </div>
                             <p className="max-w-[16rem] text-lg text-muted-foreground">{plainEmptyHint}</p>
                         </div>
