@@ -7,11 +7,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { useKidFaceRuntime } from './runtime';
+import { useKidFaceTheme } from './use-kidface-theme';
 import { KidLayout } from './components/KidLayout';
 import { TodayView } from './components/TodayView';
 import { AddView } from './components/AddView';
 import { DoneView } from './components/DoneView';
 import { CalendarView } from './components/CalendarView';
+import { SettingsView } from './components/SettingsView';
 import { KidNav, type KidRoom } from './components/KidNav';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -20,6 +22,7 @@ import './kidface.css';
 export function KidFaceApp() {
     const { hydrated, loadError, lastSyncError, requestSync, retryLoad } = useKidFaceRuntime();
     const { t, language } = useLanguage();
+    useKidFaceTheme();
     const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
     const mainRef = useRef<HTMLElement>(null);
     const previousRoom = useRef<KidRoom | null>(null);
@@ -81,6 +84,7 @@ export function KidFaceApp() {
                     {activeRoom === 'add' && <AddView />}
                     {activeRoom === 'done' && <DoneView />}
                     {activeRoom === 'calendar' && <CalendarView />}
+                    {activeRoom === 'settings' && <SettingsView />}
                 </div>
                 <KidNav activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
             </main>

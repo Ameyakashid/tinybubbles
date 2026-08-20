@@ -108,4 +108,22 @@ describe('KidFaceApp', () => {
 
         expect(requestSync).toHaveBeenCalled();
     });
+
+    it('navigates to the settings room and moves focus to it', () => {
+        mockedUseKidFaceRuntime.mockReturnValue({
+            hydrated: true,
+            loadError: null,
+            lastSyncError: null,
+            requestSync: vi.fn(),
+            retryLoad: vi.fn(),
+        });
+
+        renderApp();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Me' }));
+
+        expect(screen.getByRole('main', { name: 'Me' })).toBeInTheDocument();
+        expect(screen.getByRole('main', { name: 'Me' })).toHaveFocus();
+        expect(screen.getByRole('heading', { name: 'Your settings' })).toBeInTheDocument();
+    });
 });

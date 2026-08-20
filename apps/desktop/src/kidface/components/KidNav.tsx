@@ -1,10 +1,10 @@
-import { CalendarDays, Plus, Sun, Trophy } from 'lucide-react';
+import { CalendarDays, Plus, Settings, Sun, Trophy } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 
-export type KidRoom = 'today' | 'add' | 'done' | 'calendar';
+export type KidRoom = 'today' | 'add' | 'done' | 'calendar' | 'settings';
 
 interface KidNavProps {
     activeRoom: KidRoom;
@@ -77,6 +77,13 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
                 activeRoom={activeRoom}
                 label={displayLabel(t, language, 'kidface.nav.calendar', 'Calendar')}
                 icon={<CalendarDays className="size-7" strokeWidth={2.5} />}
+                onSelect={onChangeRoom}
+            />
+            <NavItem
+                room="settings"
+                activeRoom={activeRoom}
+                label={displayLabel(t, language, 'kidface.nav.settings', 'Me')}
+                icon={<Settings className="size-7" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
             />
         </nav>

@@ -102,6 +102,24 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.task.editTitlePlaceholder': 'What is this called?',
     'kidface.task.addStepPlaceholder': 'Add a step',
     'kidface.task.addStepAction': 'Add step',
+    // Settings room (theme and language are wired to existing infra).
+    'kidface.nav.settings': 'Me',
+    'kidface.settings.title': 'Me',
+    'kidface.settings.heading': 'Your settings',
+    'kidface.settings.subtitle': 'Make it feel like you.',
+    'kidface.settings.themeSection': 'Look and feel',
+    'kidface.settings.languageSection': 'Language',
+    'kidface.settings.theme.system': 'Match device',
+    'kidface.settings.theme.light': 'Light',
+    'kidface.settings.theme.dark': 'Dark',
+    'kidface.settings.theme.eink': 'E-ink',
+    'kidface.settings.theme.nord': 'Nord',
+    'kidface.settings.theme.sepia': 'Sepia',
+    'kidface.settings.theme.material3-light': 'Light (Material)',
+    'kidface.settings.theme.material3-dark': 'Dark (Material)',
+    'kidface.settings.theme.oled': 'OLED',
+    'kidface.settings.theme.catppuccin-macchiato': 'Macchiato',
+    'kidface.settings.theme.dracula': 'Dracula',
 };
 
 const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<string, string>>> = {
