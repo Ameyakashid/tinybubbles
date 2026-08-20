@@ -66,4 +66,17 @@ describe('AddView', () => {
             expect(screen.getByText('Added! It is on your Today list.')).toBeInTheDocument();
         });
     });
+
+    it('announces the celebratory confirmation to screen readers', async () => {
+        vi.spyOn(useTaskStore.getState(), 'addTask').mockResolvedValue({ success: true });
+        renderView();
+
+        const input = screen.getByLabelText('Add something to do');
+        fireEvent.change(input, { target: { value: 'Feed the cat' } });
+        fireEvent.click(screen.getByLabelText('Add'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Added! It is on your Today list.').parentElement).toHaveAttribute('aria-live', 'polite');
+        });
+    });
 });

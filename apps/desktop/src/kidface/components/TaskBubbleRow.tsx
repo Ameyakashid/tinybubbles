@@ -30,6 +30,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
                 checked={false}
                 onChange={handleToggle}
                 label={`Mark ${task.title} as done`}
+                celebrating={isPopping}
             />
             <button
                 type="button"

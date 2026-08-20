@@ -5,10 +5,11 @@ interface BubbleCheckboxProps {
     checked: boolean;
     onChange: () => void;
     label?: string;
+    celebrating?: boolean;
     className?: string;
 }
 
-export function BubbleCheckbox({ checked, onChange, label, className }: BubbleCheckboxProps) {
+export function BubbleCheckbox({ checked, onChange, label, celebrating = false, className }: BubbleCheckboxProps) {
     return (
         <button
             type="button"
@@ -21,6 +22,7 @@ export function BubbleCheckbox({ checked, onChange, label, className }: BubbleCh
                 checked
                     ? 'border-success bg-success text-success-foreground'
                     : 'border-border bg-card text-muted-foreground hover:border-primary/60',
+                celebrating && 'kidface-celebrate',
                 className,
             )}
         >

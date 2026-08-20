@@ -40,7 +40,10 @@ export function AddView() {
                 <AddBubble onAdd={handleAdd} placeholder="I need to…" autoFocus />
 
                 {justAdded && (
-                    <div className="flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-success kidface-slide-up">
+                    <div
+                        className="flex items-center gap-3 rounded-2xl bg-success/10 p-4 text-success kidface-slide-up"
+                        aria-live="polite"
+                    >
                         <Sparkles className="size-6" strokeWidth={2.5} aria-hidden="true" />
                         <span className="text-lg font-semibold">{success}</span>
                     </div>
