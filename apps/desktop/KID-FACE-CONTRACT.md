@@ -49,6 +49,9 @@ inherits theme classes on `<html>`), `src/lib/utils` (`cn`).
 ## Rules
 
 1. Nothing in `packages/core` or `src/lib` may change for the face's sake.
+   One ratified exception: `src/lib/display-labels.ts` is the kid vocabulary
+   table and is expected to grow words (new keys, kid register, per-locale
+   care) as surfaces are added — words yes, machinery no.
    If the contract is missing something you need, say so in your report and
    the runtime grows to meet you — that is an infrastructure change and it
    arrives reviewed.

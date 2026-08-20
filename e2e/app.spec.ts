@@ -79,7 +79,11 @@ test('restores a deleted task from trash', async ({ page }) => {
     await expect(taskItem).toBeVisible();
 });
 
-test('filters trashed tasks by search query', async ({ page }) => {
+test('the Deleted page rescues only: no search, everything visible', async ({ page }) => {
+    // The kid shell's safety pass removed search (and every destructive
+    // control) from the Deleted page; this pins the rescue-only contract the
+    // unit tests assert, at the e2e level. The old version of this test
+    // filled the removed search box and had been red since that pass.
     await page.goto('/');
     await openInbox(page);
     await createInboxTask(page, 'Trash Keep Alpha');
@@ -91,9 +95,7 @@ test('filters trashed tasks by search query', async ({ page }) => {
     await trashNav.click();
     await expect(trashNav).toHaveAttribute('aria-current', 'page');
 
-    const searchInput = page.getByPlaceholder(/search/i).first();
-    await searchInput.fill('Alpha');
-
+    await expect(page.getByPlaceholder(/search/i)).toHaveCount(0);
     await expect(page.locator('h4', { hasText: 'Trash Keep Alpha' })).toBeVisible();
-    await expect(page.locator('h4', { hasText: 'Trash Keep Beta' })).toHaveCount(0);
+    await expect(page.locator('h4', { hasText: 'Trash Keep Beta' })).toBeVisible();
 });
