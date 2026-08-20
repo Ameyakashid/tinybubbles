@@ -70,6 +70,15 @@
     }
 }
 
+@keyframes kidface-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
 .kidface-drift {
     animation: kidface-drift 18s ease-in-out infinite;
 }
@@ -98,6 +107,10 @@
     animation: kidface-room-enter 0.25s ease-out both;
 }
 
+.kidface-float {
+    animation: kidface-float 3s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .kidface-drift,
     .kidface-drift-slow,
@@ -105,7 +118,8 @@
     .kidface-pop,
     .kidface-celebrate,
     .kidface-slide-up,
-    .kidface-room-enter {
+    .kidface-room-enter,
+    .kidface-float {
         animation: none;
     }
 }

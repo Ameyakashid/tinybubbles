@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
-import { Trophy, RotateCcw } from 'lucide-react';
-import { useTaskStore, type Task } from '@tinybubbles/core';
+import { Trophy, RotateCcw, Sparkles } from 'lucide-react';
+import { useTaskStore, type Task, type Language } from '@tinybubbles/core';
 import { cn } from '@/lib/utils';
+import { displayLabel } from '@/lib/display-labels';
+import { useLanguage } from '@/contexts/language-context';
 
 function isSameDay(a: string, b: Date): boolean {
     const date = new Date(a);
@@ -27,9 +29,10 @@ function completedAtTime(task: Task): number {
     return task.completedAt ? new Date(task.completedAt).getTime() : 0;
 }
 
+type DoneGroupKey = 'today' | 'yesterday' | 'earlier';
+
 type DoneGroup = {
-    key: 'today' | 'yesterday' | 'earlier';
-    title: string;
+    key: DoneGroupKey;
     tasks: Task[];
 };
 
@@ -55,30 +58,40 @@ function groupDoneTasks(tasks: Task[]): DoneGroup[] {
     }
 
     const groups: DoneGroup[] = [
-        { key: 'today', title: 'Today', tasks: today },
-        { key: 'yesterday', title: 'Yesterday', tasks: yesterday },
-        { key: 'earlier', title: 'Before that', tasks: earlier },
+        { key: 'today', tasks: today },
+        { key: 'yesterday', tasks: yesterday },
+        { key: 'earlier', tasks: earlier },
     ];
     return groups.filter((group) => group.tasks.length > 0);
+}
+
+function countLabel(t: (key: string) => string, language: Language, keyOne: string, keyOther: string, count: number): string {
+    const template = displayLabel(t, language, count === 1 ? keyOne : keyOther, count === 1 ? '1' : '{count}');
+    return template.replace('{count}', String(count));
 }
 
 interface DoneBubbleRowProps {
     task: Task;
     onUndo: (task: Task) => void | Promise<void>;
+    undoLabel: string;
 }
 
-function DoneBubbleRow({ task, onUndo }: DoneBubbleRowProps) {
+function DoneBubbleRow({ task, onUndo, undoLabel }: DoneBubbleRowProps) {
     return (
         <div
             className={cn(
-                'flex items-center gap-4 rounded-2xl bg-success/10 p-4 kidface-slide-up',
+                'group flex items-center gap-4 rounded-2xl bg-success/10 p-4 kidface-slide-up',
             )}
         >
             <div
-                className="flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] border-success bg-success text-success-foreground"
+                className="relative flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] border-success bg-success text-success-foreground"
                 aria-hidden="true"
             >
                 <Trophy className="size-7" strokeWidth={2.5} />
+                <Sparkles
+                    className="absolute -right-1 -top-1 size-4 text-focus-star opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    aria-hidden="true"
+                />
             </div>
             <span className="min-w-0 flex-1 text-lg font-semibold leading-snug text-foreground line-through">
                 {task.title}
@@ -87,7 +100,7 @@ function DoneBubbleRow({ task, onUndo }: DoneBubbleRowProps) {
                 type="button"
                 onClick={() => void onUndo(task)}
                 className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm transition-transform active:scale-90"
-                aria-label={`Put ${task.title} back on the list`}
+                aria-label={undoLabel.replace('{title}', task.title)}
             >
                 <RotateCcw className="size-6" strokeWidth={2.5} />
             </button>
@@ -96,6 +109,7 @@ function DoneBubbleRow({ task, onUndo }: DoneBubbleRowProps) {
 }
 
 export function DoneView() {
+    const { t, language } = useLanguage();
     const tasks = useTaskStore((state) => state.tasks);
     const updateTask = useTaskStore((state) => state.updateTask);
 
@@ -105,38 +119,94 @@ export function DoneView() {
         await updateTask(task.id, { status: 'next', completedAt: undefined });
     };
 
+    const todayCount = groups.find((group) => group.key === 'today')?.tasks.length ?? 0;
+    const totalCount = groups.reduce((sum, group) => sum + group.tasks.length, 0);
+
+    const title = displayLabel(t, language, 'kidface.done.title', 'Done');
+    const heading = displayLabel(t, language, 'kidface.done.heading', 'Trophy case');
+    const subtitle = displayLabel(t, language, 'kidface.done.subtitle', 'Things you finished');
+    const emptyTitle = displayLabel(t, language, 'kidface.done.empty.title', 'No trophies yet');
+    const emptyHint = displayLabel(t, language, 'kidface.done.empty.hint', 'Finish something and it will show up here.');
+    const todaySummary = countLabel(
+        t,
+        language,
+        'kidface.done.summary.today.one',
+        'kidface.done.summary.today.other',
+        todayCount,
+    );
+    const totalSummary = countLabel(
+        t,
+        language,
+        'kidface.done.summary.total.one',
+        'kidface.done.summary.total.other',
+        totalCount,
+    );
+    const undoLabelTemplate = displayLabel(t, language, 'kidface.done.undo.label', 'Put {title} back on the list');
+
+    const groupTitle = (key: DoneGroupKey) => {
+        const map: Record<DoneGroupKey, string> = {
+            today: displayLabel(t, language, 'kidface.done.group.today', 'Today'),
+            yesterday: displayLabel(t, language, 'kidface.done.group.yesterday', 'Yesterday'),
+            earlier: displayLabel(t, language, 'kidface.done.group.earlier', 'Before that'),
+        };
+        return map[key];
+    };
+
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
             <header className="flex flex-col gap-1">
                 <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                    Done
+                    {title}
                 </p>
                 <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-                    Trophy case
+                    {heading}
                 </h1>
-                <p className="text-lg text-muted-foreground">
-                    Things you finished
-                </p>
+                <p className="text-lg text-muted-foreground">{subtitle}</p>
             </header>
+
+            {groups.length > 0 && (
+                <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm kidface-slide-up">
+                    <div className="flex size-12 items-center justify-center rounded-full bg-success/10">
+                        <Trophy className="size-7 text-success" strokeWidth={2.5} />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-lg font-bold text-foreground">{todaySummary}</span>
+                        <span className="text-sm text-muted-foreground">{totalSummary}</span>
+                    </div>
+                </div>
+            )}
 
             {groups.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
-                    <div className="flex size-28 items-center justify-center rounded-full bg-secondary">
-                        <Trophy className="size-14 text-primary" />
+                    <div className="relative flex size-32 items-center justify-center">
+                        <div className="absolute inset-0 rounded-full bg-secondary" />
+                        <div className="kidface-float relative flex size-28 items-center justify-center rounded-full bg-secondary">
+                            <Trophy className="size-14 text-primary" />
+                        </div>
                     </div>
-                    <p className="max-w-[16rem] text-lg text-muted-foreground">
-                        No trophies yet. Finish something and it will show up here.
-                    </p>
+                    <div className="flex max-w-[18rem] flex-col gap-1">
+                        <p className="text-2xl font-extrabold text-foreground">{emptyTitle}</p>
+                        <p className="text-lg text-muted-foreground">{emptyHint}</p>
+                    </div>
                 </div>
             ) : (
                 <section className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto pb-2">
                     {groups.map((group) => (
                         <div key={group.key} className="flex flex-col gap-3">
-                            <h2 className="text-xl font-bold text-foreground">{group.title}</h2>
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-xl font-bold text-foreground">{groupTitle(group.key)}</h2>
+                                <span className="rounded-full bg-secondary px-3 py-1 text-sm font-bold text-muted-foreground">
+                                    {group.tasks.length}
+                                </span>
+                            </div>
                             <ul className="flex flex-col gap-3">
                                 {group.tasks.map((task) => (
                                     <li key={task.id}>
-                                        <DoneBubbleRow task={task} onUndo={handleUndo} />
+                                        <DoneBubbleRow
+                                            task={task}
+                                            onUndo={handleUndo}
+                                            undoLabel={undoLabelTemplate}
+                                        />
                                     </li>
                                 ))}
                             </ul>

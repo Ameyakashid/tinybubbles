@@ -38,7 +38,8 @@ describe('DoneView', () => {
         renderView();
 
         expect(screen.getByText('Trophy case')).toBeInTheDocument();
-        expect(screen.getByText('No trophies yet. Finish something and it will show up here.')).toBeInTheDocument();
+        expect(screen.getByText('No trophies yet')).toBeInTheDocument();
+        expect(screen.getByText('Finish something and it will show up here.')).toBeInTheDocument();
     });
 
     it('renders finished tasks grouped by day', () => {
@@ -60,6 +61,35 @@ describe('DoneView', () => {
         expect(screen.getByText('Brush teeth')).toBeInTheDocument();
         expect(screen.getByText('Yesterday')).toBeInTheDocument();
         expect(screen.getByText('Make bed')).toBeInTheDocument();
+    });
+
+    it('shows a trophy summary when there are finished tasks', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Brush teeth' }),
+                    buildTask({ id: 'task-2', title: 'Make bed' }),
+                ],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('2 trophies today')).toBeInTheDocument();
+        expect(screen.getByText('2 trophies total')).toBeInTheDocument();
+    });
+
+    it('uses singular summary labels for one trophy', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('1 trophy today')).toBeInTheDocument();
+        expect(screen.getByText('1 trophy total')).toBeInTheDocument();
     });
 
     it('puts a task back on the list when undo is clicked', () => {
