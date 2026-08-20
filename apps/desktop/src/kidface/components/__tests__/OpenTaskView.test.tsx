@@ -53,7 +53,7 @@ describe('OpenTaskView', () => {
         const onClose = vi.fn();
         renderView({ onClose });
 
-        fireEvent.keyDown(window, { key: 'Escape' });
+        fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
 
         expect(onClose).toHaveBeenCalled();
     });
@@ -82,9 +82,23 @@ describe('OpenTaskView', () => {
         expect(screen.getByText('Put toothpaste on')).toBeInTheDocument();
         expect(screen.getByText('1 / 2')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: 'Get toothbrush' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Get toothbrush' }));
 
         expect(onToggleChecklistItem).toHaveBeenCalledWith('task-1', 'item-1');
+    });
+
+    it('exposes each checklist item as a checkbox with an aria-checked state', () => {
+        const task: Task = {
+            ...baseTask,
+            checklist: [
+                { id: 'item-1', title: 'Get toothbrush', isCompleted: false },
+                { id: 'item-2', title: 'Put toothpaste on', isCompleted: true },
+            ],
+        };
+        renderView({ task });
+
+        expect(screen.getByRole('checkbox', { name: 'Get toothbrush' })).toHaveAttribute('aria-checked', 'false');
+        expect(screen.getByRole('checkbox', { name: 'Put toothpaste on' })).toHaveAttribute('aria-checked', 'true');
     });
 
     it('shows a friendly empty state when the task has no checklist', () => {
@@ -98,5 +112,39 @@ describe('OpenTaskView', () => {
         renderView({ task });
 
         expect(screen.getByLabelText('Focused today')).toBeInTheDocument();
+    });
+
+    it('moves focus into the sheet on open', () => {
+        renderView({});
+
+        expect(screen.getByRole('dialog')).toHaveFocus();
+    });
+
+    it('keeps Tab cycling inside the sheet', () => {
+        renderView({});
+
+        const back = screen.getByRole('button', { name: 'Back' });
+        const checkbox = screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' });
+
+        checkbox.focus();
+        fireEvent.keyDown(checkbox, { key: 'Tab' });
+        expect(back).toHaveFocus();
+
+        fireEvent.keyDown(back, { key: 'Tab', shiftKey: true });
+        expect(checkbox).toHaveFocus();
+    });
+
+    it('restores focus to the opener when the sheet closes', () => {
+        const trigger = document.createElement('button');
+        document.body.append(trigger);
+        trigger.focus();
+
+        const onClose = vi.fn();
+        const { unmount } = renderView({ onClose });
+
+        unmount();
+
+        expect(trigger).toHaveFocus();
+        trigger.remove();
     });
 });

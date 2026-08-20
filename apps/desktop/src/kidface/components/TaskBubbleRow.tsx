@@ -34,7 +34,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             <button
                 type="button"
                 onClick={() => onOpen(task)}
-                className="flex min-w-0 flex-1 flex-col text-left"
+                className="flex min-h-14 min-w-0 flex-1 flex-col justify-center text-left"
                 aria-label={`Open ${task.title}`}
             >
                 <span className="truncate text-lg font-semibold leading-snug text-foreground">

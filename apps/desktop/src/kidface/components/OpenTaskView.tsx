@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { ArrowLeft, Star, Check } from 'lucide-react';
 import type { Task } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
+import { Dialog, DialogBody, DialogHeader } from '@/components/ui/Dialog';
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -20,16 +21,6 @@ function isTaskFinished(task: Task): boolean {
 export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistItem }: OpenTaskViewProps) {
     const { t, language } = useLanguage();
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                onClose();
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
-
     const finished = isTaskFinished(task);
     const checklist = task.checklist ?? [];
     const completedCount = useMemo(
@@ -42,24 +33,25 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const checklistLabel = displayLabel(t, language, 'taskEdit.checklist', 'Steps');
 
     return (
-        <div
-            className="kidface-slide-up fixed inset-0 z-50 flex flex-col bg-background text-foreground"
-            role="dialog"
-            aria-modal="true"
-            aria-label={task.title}
+        <Dialog
+            onClose={onClose}
+            label={task.title}
+            closeOnBackdrop={false}
+            overlayClassName="bg-background"
+            panelClassName="fixed inset-0 max-h-none max-w-none rounded-none border-none shadow-none"
         >
-            <header className="flex h-16 shrink-0 items-center px-3">
+            <DialogHeader className="flex h-16 shrink-0 items-center px-3">
                 <button
                     type="button"
                     onClick={onClose}
-                    className="flex size-12 items-center justify-center rounded-full text-foreground active:scale-90"
+                    className="flex size-14 items-center justify-center rounded-full text-foreground active:scale-90"
                     aria-label={t('common.back')}
                 >
                     <ArrowLeft className="size-7" strokeWidth={2.5} />
                 </button>
-            </header>
+            </DialogHeader>
 
-            <section className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 pb-8 pt-2">
+            <DialogBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 pb-8 pt-2">
                 <div className="flex items-center gap-5 rounded-2xl bg-card p-5 shadow-sm">
                     <BubbleCheckbox
                         checked={finished}
@@ -104,6 +96,8 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                                 <li key={item.id}>
                                     <button
                                         type="button"
+                                        role="checkbox"
+                                        aria-checked={item.isCompleted}
                                         onClick={() => void onToggleChecklistItem(task.id, item.id)}
                                         className={cn(
                                             'flex w-full items-center gap-4 rounded-2xl bg-card p-4 text-left shadow-sm transition-colors active:scale-[0.99]',
@@ -141,7 +135,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                         </ul>
                     )}
                 </div>
-            </section>
-        </div>
+            </DialogBody>
+        </Dialog>
     );
 }

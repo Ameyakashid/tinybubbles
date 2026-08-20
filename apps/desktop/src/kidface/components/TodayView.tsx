@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, RotateCcw } from 'lucide-react';
+import { Sparkles, RotateCcw, ChevronRight } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { AddBubble } from './AddBubble';
 import { TaskBubbleRow } from './TaskBubbleRow';
@@ -7,6 +7,8 @@ import { OpenTaskView } from './OpenTaskView';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
+
+const RECENT_DONE_LIMIT = 3;
 
 function isSameDay(a: string, b: Date): boolean {
     const date = new Date(a);
@@ -33,7 +35,11 @@ function greetingForHour(hour: number): string {
     return 'Good evening';
 }
 
-export function TodayView() {
+interface TodayViewProps {
+    onSeeAllDone: () => void;
+}
+
+export function TodayView({ onSeeAllDone }: TodayViewProps) {
     const { t, language } = useLanguage();
     const tasks = useTaskStore((state) => state.tasks);
     const addTask = useTaskStore((state) => state.addTask);
@@ -153,7 +159,7 @@ export function TodayView() {
                 <section className="flex shrink-0 flex-col gap-3">
                     <h2 className="text-xl font-bold text-foreground">Done today</h2>
                     <ul className="flex flex-col gap-2">
-                        {doneToday.map((task) => (
+                        {doneToday.slice(0, RECENT_DONE_LIMIT).map((task) => (
                             <li
                                 key={task.id}
                                 className="flex items-center justify-between rounded-xl bg-success/10 px-4 py-3"
@@ -164,14 +170,24 @@ export function TodayView() {
                                 <button
                                     type="button"
                                     onClick={() => void handleToggle(task)}
-                                    className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm active:scale-90"
+                                    className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm active:scale-90"
                                     aria-label={`Undo ${task.title}`}
                                 >
-                                    <RotateCcw className="size-5" />
+                                    <RotateCcw className="size-6" />
                                 </button>
                             </li>
                         ))}
                     </ul>
+                    {doneToday.length > RECENT_DONE_LIMIT && (
+                        <button
+                            type="button"
+                            onClick={onSeeAllDone}
+                            className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-card px-4 py-3 text-left text-lg font-semibold text-foreground shadow-sm active:scale-[0.99]"
+                        >
+                            <span>See all {doneToday.length} done</span>
+                            <ChevronRight className="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        </button>
+                    )}
                 </section>
             )}
 
