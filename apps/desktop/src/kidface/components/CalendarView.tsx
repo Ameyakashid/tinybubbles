@@ -183,7 +183,7 @@ export function CalendarView() {
                                 aria-current={isToday ? 'date' : undefined}
                                 aria-haspopup="dialog"
                                 className={cn(
-                                    'group flex min-h-20 flex-col items-center justify-start gap-1.5 rounded-2xl p-2 transition-all',
+                                    'group flex min-h-24 flex-col items-center justify-start gap-1.5 rounded-2xl p-2 transition-all',
                                     inCurrentMonth
                                         ? 'bg-card text-foreground shadow-sm hover:shadow-md active:scale-[0.99]'
                                         : 'bg-transparent text-muted-foreground/50',
@@ -192,7 +192,7 @@ export function CalendarView() {
                             >
                                 <span
                                     className={cn(
-                                        'relative flex size-9 items-center justify-center rounded-full text-base font-bold transition-colors',
+                                        'relative flex size-11 items-center justify-center rounded-full text-base font-bold transition-colors',
                                         isToday && 'bg-primary text-primary-foreground',
                                         hasTasks && !isToday && 'group-hover:bg-primary/10',
                                     )}

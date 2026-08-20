@@ -158,7 +158,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                         <button
                             type="button"
                             onClick={() => void handleToggle(recentlyCompletedTask)}
-                            className="flex min-h-12 items-center rounded-full bg-card px-5 text-base font-bold text-success shadow-sm active:scale-90"
+                            className="flex min-h-14 items-center rounded-full bg-card px-6 text-base font-bold text-success shadow-sm active:scale-90"
                         >
                             {undoAction}
                         </button>
@@ -181,7 +181,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                             <button
                                 type="button"
                                 onClick={onSeeAllDone}
-                                className="flex min-h-14 items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
+                                className="flex min-h-[88px] items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
                             >
                                 {seeDoneLabel}
                             </button>
@@ -238,10 +238,10 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                                 <button
                                     type="button"
                                     onClick={() => void handleToggle(task)}
-                                    className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm active:scale-90"
+                                    className="flex size-[88px] shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm active:scale-90"
                                     aria-label={undoTaskLabelTemplate.replace('{title}', task.title)}
                                 >
-                                    <RotateCcw className="size-6" />
+                                    <RotateCcw className="size-8" />
                                 </button>
                             </li>
                         ))}
@@ -250,7 +250,7 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                         <button
                             type="button"
                             onClick={onSeeAllDone}
-                            className="flex min-h-14 w-full items-center justify-between rounded-2xl bg-card px-4 py-3 text-left text-lg font-semibold text-foreground shadow-sm active:scale-[0.99]"
+                            className="flex min-h-[88px] w-full items-center justify-between rounded-2xl bg-card px-4 py-3 text-left text-lg font-semibold text-foreground shadow-sm active:scale-[0.99]"
                         >
                             <span>{seeAllDoneTemplate.replace('{count}', String(doneToday.length))}</span>
                             <ChevronRight className="size-6 shrink-0 text-muted-foreground" aria-hidden="true" />

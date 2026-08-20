@@ -10,7 +10,13 @@
  */
 export const KID_FACE_PARAM = 'face';
 export const KID_FACE_NEXT = 'next';
+export const KID_FACE_PLAYGROUND_ROOM = 'playground';
 
 export function isNextFaceLocation(location: Pick<Location, 'search'> = window.location): boolean {
     return new URLSearchParams(location.search).get(KID_FACE_PARAM) === KID_FACE_NEXT;
+}
+
+export function isKidFacePlaygroundRoom(location: Pick<Location, 'search'> = window.location): boolean {
+    return isNextFaceLocation(location)
+        && new URLSearchParams(location.search).get('room') === KID_FACE_PLAYGROUND_ROOM;
 }

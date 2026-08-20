@@ -84,12 +84,12 @@ function DoneBubbleRow({ task, onUndo, undoLabel }: DoneBubbleRowProps) {
             )}
         >
             <div
-                className="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-success bg-success text-success-foreground"
+                className="relative flex size-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-success bg-success text-success-foreground"
                 aria-hidden="true"
             >
-                <Trophy className="relative z-10 size-7" strokeWidth={2.5} />
+                <Trophy className="relative z-10 size-9" strokeWidth={2.5} />
                 <Sparkles
-                    className="absolute -right-1 -top-1 z-30 size-4 text-focus-star opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                    className="absolute -right-1 -top-1 z-30 size-5 text-focus-star opacity-0 transition-opacity duration-200 group-hover:opacity-100"
                     aria-hidden="true"
                 />
             </div>
@@ -99,10 +99,10 @@ function DoneBubbleRow({ task, onUndo, undoLabel }: DoneBubbleRowProps) {
             <button
                 type="button"
                 onClick={() => void onUndo(task)}
-                className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm transition-transform active:scale-90"
+                className="flex size-[88px] shrink-0 items-center justify-center rounded-full bg-card text-success shadow-sm transition-transform active:scale-90"
                 aria-label={undoLabel.replace('{title}', task.title)}
             >
-                <RotateCcw className="size-6" strokeWidth={2.5} />
+                <RotateCcw className="size-8" strokeWidth={2.5} />
             </button>
         </div>
     );

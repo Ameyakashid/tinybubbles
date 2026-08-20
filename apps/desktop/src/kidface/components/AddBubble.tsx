@@ -45,11 +45,11 @@ export function AddBubble({
                 disabled={!draft.trim()}
                 aria-label={submitLabel}
                 className={cn(
-                    'flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90',
+                    'flex size-[88px] items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-90',
                     'disabled:opacity-50 disabled:active:scale-100',
                 )}
             >
-                <Plus className="size-8" strokeWidth={2.5} />
+                <Plus className="size-10" strokeWidth={2.5} />
             </button>
         </form>
     );

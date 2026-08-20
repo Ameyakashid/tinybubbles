@@ -64,7 +64,7 @@ function ThemeButton({ theme, selected, label, onSelect }: ThemeButtonProps) {
         >
             <span
                 className={cn(
-                    'flex size-10 items-center justify-center rounded-full border shadow-sm',
+                    'flex size-14 items-center justify-center rounded-full border shadow-sm',
                     THEME_SWATCHES[theme],
                 )}
                 aria-hidden="true"
@@ -72,13 +72,13 @@ function ThemeButton({ theme, selected, label, onSelect }: ThemeButtonProps) {
                 {selected && (
                     <span
                         className={cn(
-                            'flex size-6 items-center justify-center rounded-full',
+                            'flex size-8 items-center justify-center rounded-full',
                             theme === 'light' || theme === 'eink' || theme === 'sepia' || theme === 'material3-light'
                                 ? 'bg-foreground text-background'
                                 : 'bg-background text-foreground',
                         )}
                     >
-                        <Check className="size-4" strokeWidth={3} />
+                        <Check className="size-5" strokeWidth={3} />
                     </span>
                 )}
             </span>
@@ -101,14 +101,14 @@ function LanguageButton({ language, selected, label, onSelect }: LanguageButtonP
             onClick={() => onSelect(language)}
             aria-pressed={selected}
             className={cn(
-                'flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm transition-all',
+                'flex min-h-[88px] items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-sm transition-all',
                 'hover:shadow-md active:scale-[0.99]',
                 selected && 'bg-primary text-primary-foreground',
             )}
         >
             <span className="text-lg font-semibold">{label}</span>
             {selected && (
-                <Check className="size-6" strokeWidth={3} aria-hidden="true" />
+                <Check className="size-8" strokeWidth={3} aria-hidden="true" />
             )}
         </button>
     );

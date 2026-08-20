@@ -99,7 +99,7 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             <button
                 type="button"
                 onClick={() => onOpen(task)}
-                className="flex min-h-14 min-w-0 flex-1 flex-col justify-center text-left"
+                className="flex min-h-[88px] min-w-0 flex-1 flex-col justify-center text-left"
                 aria-label={openLabel}
             >
                 <span className="truncate text-lg font-semibold leading-snug text-foreground">
@@ -116,12 +116,12 @@ export function TaskBubbleRow({ task, onToggle, onOpen }: TaskBubbleRowProps) {
             <div className="flex shrink-0 items-center gap-2">
                 {task.isFocusedToday && (
                     <Star
-                        className="size-6 shrink-0 fill-focus-star text-focus-star"
+                        className="size-7 shrink-0 fill-focus-star text-focus-star"
                         aria-label="Focused today"
                     />
                 )}
                 <ChevronRight
-                    className="size-6 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
+                    className="size-7 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground"
                     aria-hidden="true"
                 />
             </div>

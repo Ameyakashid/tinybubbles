@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { useKidFaceRuntime } from './runtime';
 import { useKidFaceTheme } from './use-kidface-theme';
+import { isKidFacePlaygroundRoom } from './face-location';
 import { CelebrationProvider } from './components/CelebrationContext';
 import { KidLayout } from './components/KidLayout';
 import { TodayView } from './components/TodayView';
@@ -15,6 +16,7 @@ import { AddView } from './components/AddView';
 import { DoneView } from './components/DoneView';
 import { CalendarView } from './components/CalendarView';
 import { SettingsView } from './components/SettingsView';
+import { MotionPlayground } from './components/MotionPlayground';
 import { KidNav, type KidRoom } from './components/KidNav';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -58,6 +60,8 @@ export function KidFaceApp() {
         mainRef.current?.focus({ preventScroll: true });
     }, [activeRoom]);
 
+    const showPlayground = isKidFacePlaygroundRoom();
+
     if (!hydrated) {
         return (
             <div className="flex h-screen items-center justify-center bg-background text-foreground">
@@ -99,23 +103,29 @@ export function KidFaceApp() {
                 <main
                     ref={mainRef}
                     tabIndex={-1}
-                    aria-label={roomLabel}
+                    aria-label={showPlayground ? 'Motion playground' : roomLabel}
                     className="relative flex flex-1 flex-col overflow-hidden outline-none"
                 >
-                    <div
-                        key={activeRoom}
-                        className={cn(
-                            'flex flex-1 flex-col overflow-hidden',
-                            roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
-                        )}
-                    >
-                        {activeRoom === 'today' && <TodayView onSeeAllDone={() => changeRoom('done')} />}
-                        {activeRoom === 'add' && <AddView />}
-                        {activeRoom === 'done' && <DoneView />}
-                        {activeRoom === 'calendar' && <CalendarView />}
-                        {activeRoom === 'settings' && <SettingsView />}
-                    </div>
-                    <KidNav activeRoom={activeRoom} onChangeRoom={changeRoom} />
+                    {showPlayground ? (
+                        <MotionPlayground />
+                    ) : (
+                        <>
+                            <div
+                                key={activeRoom}
+                                className={cn(
+                                    'flex flex-1 flex-col overflow-hidden',
+                                    roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
+                                )}
+                            >
+                                {activeRoom === 'today' && <TodayView onSeeAllDone={() => changeRoom('done')} />}
+                                {activeRoom === 'add' && <AddView />}
+                                {activeRoom === 'done' && <DoneView />}
+                                {activeRoom === 'calendar' && <CalendarView />}
+                                {activeRoom === 'settings' && <SettingsView />}
+                            </div>
+                            <KidNav activeRoom={activeRoom} onChangeRoom={changeRoom} />
+                        </>
+                    )}
                 </main>
             </KidLayout>
         </CelebrationProvider>

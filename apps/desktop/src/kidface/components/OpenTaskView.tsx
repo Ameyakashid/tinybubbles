@@ -115,10 +115,10 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                 <button
                     type="button"
                     onClick={onClose}
-                    className="flex size-14 items-center justify-center rounded-full text-foreground active:scale-90"
+                    className="flex size-[88px] items-center justify-center rounded-full text-foreground active:scale-90"
                     aria-label={t('common.back')}
                 >
-                    <ArrowLeft className="size-7" strokeWidth={2.5} />
+                    <ArrowLeft className="size-8" strokeWidth={2.5} />
                 </button>
             </DialogHeader>
 
@@ -177,13 +177,13 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                                         aria-checked={item.isCompleted}
                                         onClick={() => void onToggleChecklistItem(task.id, item.id)}
                                         className={cn(
-                                            'flex w-full items-center gap-4 rounded-2xl bg-card p-4 text-left shadow-sm transition-colors active:scale-[0.99]',
+                                            'flex min-h-[88px] w-full items-center gap-4 rounded-2xl bg-card p-4 text-left shadow-sm transition-colors active:scale-[0.99]',
                                             item.isCompleted && 'bg-success/10',
                                         )}
                                     >
                                         <span
                                             className={cn(
-                                                'flex size-10 shrink-0 items-center justify-center rounded-full border-[3px] transition-colors',
+                                                'flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] transition-colors',
                                                 item.isCompleted
                                                     ? 'border-success bg-success text-success-foreground'
                                                     : 'border-border bg-card text-muted-foreground',
@@ -192,7 +192,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                                         >
                                             <Check
                                                 className={cn(
-                                                    'size-6 transition-transform duration-150',
+                                                    'size-8 transition-transform duration-150',
                                                     item.isCompleted ? 'scale-100' : 'scale-0',
                                                 )}
                                                 strokeWidth={3}
@@ -218,7 +218,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                             placeholder={addStepPlaceholder}
                             aria-label={addStepPlaceholder}
                             className={cn(
-                                'h-12 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
+                                'h-14 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
                                 'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50',
                             )}
                         />
@@ -226,7 +226,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                             type="submit"
                             disabled={!stepDraft.trim()}
                             className={cn(
-                                'flex min-h-12 items-center rounded-full bg-primary px-5 text-base font-bold text-primary-foreground shadow-sm transition-transform active:scale-90',
+                                'flex min-h-14 items-center rounded-full bg-primary px-6 text-base font-bold text-primary-foreground shadow-sm transition-transform active:scale-90',
                                 'disabled:opacity-50 disabled:active:scale-100',
                             )}
                         >

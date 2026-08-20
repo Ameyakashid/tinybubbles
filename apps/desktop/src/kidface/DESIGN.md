@@ -15,8 +15,9 @@ gamified or noisy:
   buttons, and circular touch targets. Nothing is sharper than the existing
   `rounded-2xl` tokens.
 - **Bigger, fewer choices.** A young child with ADHD needs a room, not a
-  dashboard. Every tap target is at least 56 px. Every screen answers one
-  question at a time.
+  dashboard. Primary tap targets are at least 88 px; secondary text rows and
+  list cells clear 88 px in height. Every screen answers one question at a
+  time.
 - **Calm motion only.** Slow ambient drift and a tiny press-pop; nothing that
   competes with the child's own attention. Respects `prefers-reduced-motion`.
 

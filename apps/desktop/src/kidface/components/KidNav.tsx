@@ -85,7 +85,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
     return (
         <nav
             ref={navRef}
-            className="relative z-10 flex h-20 shrink-0 items-center gap-2 border-t border-border bg-card/80 px-4 pb-2 pt-2 backdrop-blur-sm"
+            className="relative z-10 flex h-24 shrink-0 items-center gap-2 border-t border-border bg-card/80 px-4 pb-2 pt-2 backdrop-blur-sm"
             aria-label="Kid rooms"
         >
             <span
@@ -97,7 +97,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
                 room="today"
                 activeRoom={activeRoom}
                 label={displayLabel(t, language, 'kidface.nav.today', 'Today')}
-                icon={<Sun className="size-7" strokeWidth={2.5} />}
+                icon={<Sun className="size-8" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
                 setItemRef={setItemRef}
             />
@@ -105,7 +105,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
                 room="add"
                 activeRoom={activeRoom}
                 label={displayLabel(t, language, 'kidface.nav.add', 'Add')}
-                icon={<Plus className="size-7" strokeWidth={2.5} />}
+                icon={<Plus className="size-8" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
                 setItemRef={setItemRef}
             />
@@ -113,7 +113,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
                 room="done"
                 activeRoom={activeRoom}
                 label={displayLabel(t, language, 'kidface.nav.done', 'Done')}
-                icon={<Trophy className="size-7" strokeWidth={2.5} />}
+                icon={<Trophy className="size-8" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
                 setItemRef={setItemRef}
             />
@@ -121,7 +121,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
                 room="calendar"
                 activeRoom={activeRoom}
                 label={displayLabel(t, language, 'kidface.nav.calendar', 'Calendar')}
-                icon={<CalendarDays className="size-7" strokeWidth={2.5} />}
+                icon={<CalendarDays className="size-8" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
                 setItemRef={setItemRef}
             />
@@ -129,7 +129,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
                 room="settings"
                 activeRoom={activeRoom}
                 label={displayLabel(t, language, 'kidface.nav.settings', 'Me')}
-                icon={<Settings className="size-7" strokeWidth={2.5} />}
+                icon={<Settings className="size-8" strokeWidth={2.5} />}
                 onSelect={onChangeRoom}
                 setItemRef={setItemRef}
             />

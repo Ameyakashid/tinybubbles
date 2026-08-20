@@ -36,10 +36,10 @@ describe('BubbleCheckbox', () => {
         expect(onChange).toHaveBeenCalled();
     });
 
-    it('uses a 56px touch target', () => {
+    it('uses an 88px touch target', () => {
         renderCheckbox();
 
-        expect(screen.getByRole('checkbox')).toHaveClass('size-14');
+        expect(screen.getByRole('checkbox')).toHaveClass('size-[88px]');
     });
 
     it('shows the celebratory animation class when celebrating', () => {

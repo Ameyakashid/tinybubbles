@@ -96,9 +96,9 @@ describe('TaskBubbleRow', () => {
         expect(screen.getByLabelText('Focused today')).toBeInTheDocument();
     });
 
-    it('keeps the open-row touch target at least 56px tall', () => {
+    it('keeps the open-row touch target at least 88px tall', () => {
         renderRow({});
 
-        expect(screen.getByRole('button', { name: 'Open Brush teeth' })).toHaveClass('min-h-14');
+        expect(screen.getByRole('button', { name: 'Open Brush teeth' })).toHaveClass('min-h-[88px]');
     });
 });
