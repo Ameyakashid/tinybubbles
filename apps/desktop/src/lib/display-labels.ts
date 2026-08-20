@@ -66,9 +66,12 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.nav.today': 'Today',
     'kidface.nav.add': 'Add',
     'kidface.nav.done': 'Done',
+    'kidface.nav.calendar': 'Calendar',
     'kidface.add.title': 'Add something',
     'kidface.add.prompt': 'What do you need to do?',
     'kidface.add.success': 'Added! It is on your Today list.',
+    'kidface.calendar.title': 'Calendar',
+    'kidface.calendar.empty': 'No big plans this month.',
 };
 
 const DISPLAY_LABEL_OVERRIDES_BY_LANGUAGE: Partial<Record<Language, Record<string, string>>> = {

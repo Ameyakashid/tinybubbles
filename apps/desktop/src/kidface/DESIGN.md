@@ -31,8 +31,9 @@ app is built around three ideas:
 3. **Done** — a trophy case of finished things, not a grey trash-looking list.
 
 Navigation is intentionally shallow. The first pass was **Today**; the next
-added the **Done** trophy case. This pass adds the child-scale **Add** room
-as a third bottom-nav stop, so Today can stay focused on what to do now.
+added the **Done** trophy case, then the child-scale **Add** room. This pass
+adds the child-scale **Calendar** room as a fourth bottom-nav stop, so a child
+can see what is coming up without leaving the shallow room model.
 
 ## Typography and tokens
 
@@ -76,6 +77,7 @@ Adding was previously an inline row on Today; it now lives in the dedicated
 - `TodayView.tsx` — the child's first screen.
 - `AddView.tsx` — the child-scale Add room.
 - `DoneView.tsx` — trophy case of finished things, grouped by day.
+- `CalendarView.tsx` — child-scale month grid showing scheduled or due tasks.
 - `TaskBubbleRow.tsx` — a single task row with the circular complete control.
 - `BubbleCheckbox.tsx` — large circular checkbox, empty / filled / celebratory.
 - `AddBubble.tsx` — the big add input + button, used by the Add room.
@@ -96,6 +98,14 @@ make in the moment.
 **Yesterday**, and **Before that**, with a big undo button on each row so a
 child (or a parent helping them) can put something back on the list. The empty
 state is celebratory, not apologetic — a trophy waiting for its first win.
+
+## The Calendar room
+
+`CalendarView.tsx` is a month-only grid built for the child, not a reuse of the
+stock calendar. It shows which days have a scheduled or due task as small dots,
+highlights today, and lets the child flip months with big arrow buttons. There
+are no day/week/schedule modes to get lost in, and no search or planning panels
+— just a calm view of what is coming up.
 
 ## Verification floor
 

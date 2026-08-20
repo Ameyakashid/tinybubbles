@@ -1,0 +1,186 @@
+import { useMemo, useState } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+    addMonths,
+    eachDayOfInterval,
+    endOfMonth,
+    endOfWeek,
+    isSameDay,
+    isSameMonth,
+    startOfMonth,
+    startOfWeek,
+    subMonths,
+} from 'date-fns';
+import {
+    getShortWeekdayLabels,
+    getTaskCalendarOccurrenceDate,
+    safeFormatDate,
+    safeParseDate,
+    useTaskStore,
+    type Task,
+} from '@tinybubbles/core';
+import { cn } from '@/lib/utils';
+import { displayLabel } from '@/lib/display-labels';
+import { useLanguage } from '@/contexts/language-context';
+
+const WEEK_START_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+};
+
+function getTaskDate(task: Task): Date | null {
+    const value = getTaskCalendarOccurrenceDate(task);
+    if (!value) return null;
+    return safeParseDate(value);
+}
+
+function isOpenTask(task: Task): boolean {
+    return !task.deletedAt && task.status !== 'done' && task.status !== 'archived';
+}
+
+export function CalendarView() {
+    const { t, language } = useLanguage();
+    const tasks = useTaskStore((state) => state.tasks);
+    const weekStartSetting = useTaskStore((state) => state.settings.weekStart);
+    const weekStart = WEEK_START_MAP[typeof weekStartSetting === 'string' ? weekStartSetting : 'sunday'] ?? 0;
+    const [currentMonth, setCurrentMonth] = useState(new Date());
+
+    const today = new Date();
+
+    const days = useMemo(() => {
+        const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: weekStart });
+        const end = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: weekStart });
+        return eachDayOfInterval({ start, end });
+    }, [currentMonth, weekStart]);
+
+    const tasksByDay = useMemo(() => {
+        const map = new Map<string, Task[]>();
+        for (const task of tasks) {
+            if (!isOpenTask(task)) continue;
+            const date = getTaskDate(task);
+            if (!date) continue;
+            const key = safeFormatDate(date, 'yyyy-MM-dd');
+            if (!key) continue;
+            const list = map.get(key) ?? [];
+            list.push(task);
+            map.set(key, list);
+        }
+        return map;
+    }, [tasks]);
+
+    const weekdayLabels = useMemo(() => {
+        const labels = getShortWeekdayLabels(language);
+        return [...labels.slice(weekStart), ...labels.slice(0, weekStart)];
+    }, [language, weekStart]);
+
+    const title = displayLabel(t, language, 'kidface.calendar.title', 'Calendar');
+    const monthLabel = safeFormatDate(currentMonth, 'MMMM yyyy');
+    const emptyLabel = displayLabel(t, language, 'kidface.calendar.empty', 'No big plans this month.');
+
+    const hasPlansThisMonth = useMemo(
+        () => days.some((day) => tasksByDay.has(safeFormatDate(day, 'yyyy-MM-dd') ?? '')),
+        [days, tasksByDay],
+    );
+
+    const handlePrev = () => setCurrentMonth((prev) => subMonths(prev, 1));
+    const handleNext = () => setCurrentMonth((prev) => addMonths(prev, 1));
+
+    return (
+        <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
+            <header className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{title}</h1>
+                    <p className="text-lg text-muted-foreground">{monthLabel}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handlePrev}
+                        aria-label="Previous month"
+                        className="flex size-14 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform active:scale-90"
+                    >
+                        <ChevronLeft className="size-7" strokeWidth={2.5} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleNext}
+                        aria-label="Next month"
+                        className="flex size-14 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform active:scale-90"
+                    >
+                        <ChevronRight className="size-7" strokeWidth={2.5} />
+                    </button>
+                </div>
+            </header>
+
+            <section className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="grid grid-cols-7 gap-1">
+                    {weekdayLabels.map((label) => (
+                        <div key={label} className="py-2 text-center text-sm font-bold text-muted-foreground">
+                            {label}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="grid flex-1 grid-cols-7 gap-1">
+                    {days.map((day) => {
+                        const dayKey = safeFormatDate(day, 'yyyy-MM-dd') ?? '';
+                        const dayTasks = tasksByDay.get(dayKey) ?? [];
+                        const inCurrentMonth = isSameMonth(day, currentMonth);
+                        const isToday = isSameDay(day, today);
+                        return (
+                            <button
+                                key={dayKey}
+                                type="button"
+                                data-calendar-day={dayKey}
+                                disabled={!inCurrentMonth}
+                                aria-label={safeFormatDate(day, 'MMMM d, yyyy') ?? undefined}
+                                aria-current={isToday ? 'date' : undefined}
+                                className={cn(
+                                    'flex min-h-16 flex-col items-center justify-start gap-1 rounded-2xl p-2 transition-transform',
+                                    inCurrentMonth
+                                        ? 'bg-card text-foreground shadow-sm active:scale-[0.99]'
+                                        : 'bg-transparent text-muted-foreground/50',
+                                    isToday && 'ring-4 ring-primary/30',
+                                )}
+                            >
+                                <span
+                                    className={cn(
+                                        'flex size-9 items-center justify-center rounded-full text-base font-bold',
+                                        isToday && 'bg-primary text-primary-foreground',
+                                    )}
+                                >
+                                    {day.getDate()}
+                                </span>
+                                {dayTasks.length > 0 && (
+                                    <span className="flex gap-0.5" aria-hidden="true">
+                                        {dayTasks.slice(0, 3).map((task, index) => (
+                                            <span
+                                                key={`${task.id}-${index}`}
+                                                data-task-dot
+                                                className="size-2 rounded-full bg-primary"
+                                            />
+                                        ))}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {!hasPlansThisMonth && (
+                    <div className="flex flex-col items-center justify-center gap-3 py-4 text-center">
+                        <div className="flex size-20 items-center justify-center rounded-full bg-secondary">
+                            <CalendarDays className="size-10 text-primary" aria-hidden="true" />
+                        </div>
+                        <p className="max-w-[16rem] text-lg text-muted-foreground">{emptyLabel}</p>
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+}

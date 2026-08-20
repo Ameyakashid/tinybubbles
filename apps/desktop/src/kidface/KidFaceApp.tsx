@@ -2,7 +2,7 @@
  * Root of the rebuilt kid face (owner directive #23).
  *
  * See apps/desktop/KID-FACE-CONTRACT.md for the runtime contract.
- * The living surfaces are Today and Done; navigation stays shallow.
+ * The living surfaces are Today, Add, Done, and Calendar; navigation stays shallow.
  */
 import { useState } from 'react';
 import { AlertCircle, RotateCcw } from 'lucide-react';
@@ -11,6 +11,7 @@ import { KidLayout } from './components/KidLayout';
 import { TodayView } from './components/TodayView';
 import { AddView } from './components/AddView';
 import { DoneView } from './components/DoneView';
+import { CalendarView } from './components/CalendarView';
 import { KidNav, type KidRoom } from './components/KidNav';
 import './kidface.css';
 
@@ -59,6 +60,7 @@ export function KidFaceApp() {
                 {activeRoom === 'today' && <TodayView onSeeAllDone={() => setActiveRoom('done')} />}
                 {activeRoom === 'add' && <AddView />}
                 {activeRoom === 'done' && <DoneView />}
+                {activeRoom === 'calendar' && <CalendarView />}
                 <KidNav activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
             </div>
         </KidLayout>
