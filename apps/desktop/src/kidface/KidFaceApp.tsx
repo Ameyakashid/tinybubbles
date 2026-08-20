@@ -2,15 +2,19 @@
  * Root of the rebuilt kid face (owner directive #23).
  *
  * See apps/desktop/KID-FACE-CONTRACT.md for the runtime contract.
- * The proof markup has been replaced with the first living surface: Today.
+ * The living surfaces are Today and Done; navigation stays shallow.
  */
+import { useState } from 'react';
 import { useKidFaceRuntime } from './runtime';
 import { KidLayout } from './components/KidLayout';
 import { TodayView } from './components/TodayView';
+import { DoneView } from './components/DoneView';
+import { KidNav, type KidRoom } from './components/KidNav';
 import './kidface.css';
 
 export function KidFaceApp() {
     const { hydrated, lastSyncError, requestSync } = useKidFaceRuntime();
+    const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
 
     if (!hydrated) {
         return (
@@ -25,7 +29,10 @@ export function KidFaceApp() {
 
     return (
         <KidLayout lastSyncError={lastSyncError} onRequestSync={requestSync}>
-            <TodayView />
+            <div className="flex flex-1 flex-col overflow-hidden">
+                {activeRoom === 'today' ? <TodayView /> : <DoneView />}
+                <KidNav activeRoom={activeRoom} onChangeRoom={setActiveRoom} />
+            </div>
         </KidLayout>
     );
 }

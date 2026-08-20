@@ -30,8 +30,9 @@ app is built around three ideas:
    complete.
 3. **Done** — a trophy case of finished things, not a grey trash-looking list.
 
-Navigation is intentionally shallow. The first pass is **Today**; later passes
-add the **Done** trophy case and a child-scale **Add** surface.
+Navigation is intentionally shallow. The first pass was **Today**; this pass
+adds the **Done** trophy case. A later pass will add a child-scale **Add**
+surface.
 
 ## Typography and tokens
 
@@ -67,14 +68,24 @@ Every row control is always visible. There are no hover-only actions.
 
 ## Components (kidface-only)
 
-- `KidFaceApp.tsx` — root; keeps `useKidFaceRuntime()` and mounts the layout.
+- `KidFaceApp.tsx` — root; keeps `useKidFaceRuntime()` and mounts the layout
+  plus the shallow room switcher.
 - `KidLayout.tsx` — safe-area-aware frame, error banner, ambient bubble layer.
+- `KidNav.tsx` — big bottom tabs for switching between Today and Done.
 - `TodayView.tsx` — the child's first screen.
+- `DoneView.tsx` — trophy case of finished things, grouped by day.
 - `TaskBubbleRow.tsx` — a single task row with the circular complete control.
 - `BubbleCheckbox.tsx` — large circular checkbox, empty / filled / celebratory.
 - `AddBubble.tsx` — the big add input + button.
 - `kidface.css` — animations scoped to the new face so the stock shell is not
   affected.
+
+## The Done room
+
+`DoneView.tsx` is the trophy case. It shows finished tasks grouped as **Today**,
+**Yesterday**, and **Before that**, with a big undo button on each row so a
+child (or a parent helping them) can put something back on the list. The empty
+state is celebratory, not apologetic — a trophy waiting for its first win.
 
 ## Verification floor
 
