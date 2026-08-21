@@ -135,16 +135,16 @@ export function CalendarView() {
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
             <header className="flex items-center justify-between gap-4">
-                <div className="flex flex-col gap-1">
+                <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{title}</p>
-                    <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{monthLabel}</h1>
+                    <h1 className="truncate text-3xl font-extrabold tracking-tight text-foreground">{monthLabel}</h1>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                     <button
                         type="button"
                         onClick={handleToday}
                         aria-label={todayLabel}
-                        className="flex min-h-12 items-center rounded-full bg-primary px-5 text-base font-bold text-primary-foreground shadow-sm transition-transform active:scale-[0.99]"
+                        className="flex min-h-22 items-center rounded-full bg-primary px-6 text-lg font-bold text-primary-foreground shadow-sm transition-transform active:scale-[0.99]"
                     >
                         {todayLabel}
                     </button>
@@ -152,17 +152,17 @@ export function CalendarView() {
                         type="button"
                         onClick={handlePrev}
                         aria-label={prevMonthLabel}
-                        className="flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
+                        className="flex size-22 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
                     >
-                        <ChevronLeft className="size-6" strokeWidth={2.5} />
+                        <ChevronLeft className="size-8" strokeWidth={2.5} />
                     </button>
                     <button
                         type="button"
                         onClick={handleNext}
                         aria-label={nextMonthLabel}
-                        className="flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
+                        className="flex size-22 items-center justify-center rounded-full bg-card text-foreground shadow-sm transition-transform hover:bg-muted active:scale-90"
                     >
-                        <ChevronRight className="size-6" strokeWidth={2.5} />
+                        <ChevronRight className="size-8" strokeWidth={2.5} />
                     </button>
                 </div>
             </header>

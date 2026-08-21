@@ -67,4 +67,11 @@ describe('AddBubble', () => {
 
         expect(input).not.toHaveClass('kidface-shake');
     });
+
+    it('keeps the input and add button on the 88px floor', () => {
+        renderBubble();
+
+        expect(screen.getByLabelText('Add something to do')).toHaveClass('min-h-22');
+        expect(screen.getByLabelText('Add')).toHaveClass('size-[88px]');
+    });
 });

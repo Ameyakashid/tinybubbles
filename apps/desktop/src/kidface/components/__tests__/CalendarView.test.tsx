@@ -232,4 +232,12 @@ describe('CalendarView', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Today' }));
         expect(screen.getByText('April 2026')).toBeInTheDocument();
     });
+
+    it('keeps the calendar header controls on the 88px floor', () => {
+        renderView();
+
+        expect(screen.getByRole('button', { name: 'Today' })).toHaveClass('min-h-22');
+        expect(screen.getByRole('button', { name: 'Previous month' })).toHaveClass('size-22');
+        expect(screen.getByRole('button', { name: 'Next month' })).toHaveClass('size-22');
+    });
 });

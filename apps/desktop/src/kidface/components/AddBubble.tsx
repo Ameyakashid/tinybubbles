@@ -43,7 +43,7 @@ export function AddBubble({
                 aria-label={inputLabel}
                 onAnimationEnd={() => setIsShaking(false)}
                 className={cn(
-                    'h-14 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
+                    'min-h-22 flex-1 rounded-xl border border-input bg-background px-4 text-xl text-foreground placeholder:text-muted-foreground',
                     'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50',
                     isShaking && 'kidface-shake',
                 )}
