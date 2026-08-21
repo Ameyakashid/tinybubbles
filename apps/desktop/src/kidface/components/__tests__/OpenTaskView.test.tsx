@@ -76,6 +76,29 @@ describe('OpenTaskView', () => {
         });
     });
 
+    it('lets the child remove a checklist step they added', async () => {
+        const updateTask = vi.spyOn(useTaskStore.getState(), 'updateTask');
+        const task: Task = {
+            ...baseTask,
+            checklist: [
+                { id: 'item-1', title: 'Get toothbrush', isCompleted: false },
+                { id: 'item-2', title: 'Put toothpaste on', isCompleted: true },
+            ],
+        };
+        renderView({ task });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Get toothbrush' }));
+
+        await waitFor(() => {
+            expect(updateTask).toHaveBeenCalledWith(
+                'task-1',
+                expect.objectContaining({
+                    checklist: [expect.objectContaining({ id: 'item-2', title: 'Put toothpaste on' })],
+                }),
+            );
+        });
+    });
+
     it('calls onClose when the back button is clicked', () => {
         const onClose = vi.fn();
         renderView({ onClose });

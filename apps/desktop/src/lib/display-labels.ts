@@ -140,6 +140,7 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.task.editTitlePlaceholder': 'What is this called?',
     'kidface.task.addStepPlaceholder': 'Add a step',
     'kidface.task.addStepAction': 'Add step',
+    'kidface.task.deleteStepLabel': 'Remove {title}',
     // Settings room (theme and language are wired to existing infra).
     'kidface.nav.settings': 'Me',
     'kidface.settings.title': 'Me',

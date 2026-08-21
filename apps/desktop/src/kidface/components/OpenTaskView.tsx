@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, Star, Check } from 'lucide-react';
+import { ArrowLeft, Star, Check, X } from 'lucide-react';
 import { useTaskStore, type Task, generateUUID } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
 import { useCelebration } from './CelebrationContext';
@@ -36,6 +36,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const editTitlePlaceholder = displayLabel(t, language, 'kidface.task.editTitlePlaceholder', 'What is this called?');
     const addStepPlaceholder = displayLabel(t, language, 'kidface.task.addStepPlaceholder', 'Add a step');
     const addStepAction = displayLabel(t, language, 'kidface.task.addStepAction', 'Add step');
+    const deleteStepLabel = displayLabel(t, language, 'kidface.task.deleteStepLabel', 'Remove {title}');
     const titleLabel = displayLabel(t, language, 'kidface.task.titleLabel', 'Task title');
     const checklistEmpty = displayLabel(t, language, 'kidface.task.checklistEmpty', 'Nothing to check off — just do it.');
     const markDoneLabel = displayLabel(t, language, 'kidface.task.markDone', 'Mark {title} as done').replace('{title}', task.title);
@@ -101,6 +102,11 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
         const nextChecklist = [...checklist, { id: generateUUID(), title: trimmed, isCompleted: false }];
         void updateTask(task.id, { checklist: nextChecklist });
         setStepDraft('');
+    };
+
+    const handleDeleteStep = (itemId: string) => {
+        const nextChecklist = checklist.filter((item) => item.id !== itemId);
+        void updateTask(task.id, { checklist: nextChecklist });
     };
 
     return (
@@ -170,20 +176,24 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                     {checklist.length > 0 && (
                         <ul className="flex flex-col gap-2">
                             {checklist.map((item) => (
-                                <li key={item.id}>
+                                <li
+                                    key={item.id}
+                                    className={cn(
+                                        'flex min-h-[88px] items-center gap-4 rounded-2xl bg-card p-4 shadow-sm transition-colors',
+                                        item.isCompleted && 'bg-success/10',
+                                    )}
+                                >
                                     <button
                                         type="button"
                                         role="checkbox"
                                         aria-checked={item.isCompleted}
                                         onClick={() => void onToggleChecklistItem(task.id, item.id)}
-                                        className={cn(
-                                            'flex min-h-[88px] w-full items-center gap-4 rounded-2xl bg-card p-4 text-left shadow-sm transition-colors active:scale-[0.99]',
-                                            item.isCompleted && 'bg-success/10',
-                                        )}
+                                        className="flex shrink-0 items-center justify-center rounded-full transition-colors active:scale-90"
+                                        aria-label={item.title}
                                     >
                                         <span
                                             className={cn(
-                                                'flex size-14 shrink-0 items-center justify-center rounded-full border-[3px] transition-colors',
+                                                'flex size-14 items-center justify-center rounded-full border-[3px] transition-colors',
                                                 item.isCompleted
                                                     ? 'border-success bg-success text-success-foreground'
                                                     : 'border-border bg-card text-muted-foreground',
@@ -198,14 +208,22 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                                                 strokeWidth={3}
                                             />
                                         </span>
-                                        <span
-                                            className={cn(
-                                                'min-w-0 flex-1 text-lg font-medium leading-snug',
-                                                item.isCompleted && 'text-muted-foreground line-through',
-                                            )}
-                                        >
-                                            {item.title}
-                                        </span>
+                                    </button>
+                                    <span
+                                        className={cn(
+                                            'min-w-0 flex-1 text-lg font-medium leading-snug',
+                                            item.isCompleted && 'text-muted-foreground line-through',
+                                        )}
+                                    >
+                                        {item.title}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteStep(item.id)}
+                                        aria-label={deleteStepLabel.replace('{title}', item.title)}
+                                        className="flex size-14 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90"
+                                    >
+                                        <X className="size-7" strokeWidth={2.5} />
                                     </button>
                                 </li>
                             ))}
