@@ -5,6 +5,7 @@ import {
     eachDayOfInterval,
     endOfMonth,
     endOfWeek,
+    isBefore,
     isSameDay,
     isSameMonth,
     startOfMonth,
@@ -83,6 +84,13 @@ export function CalendarView() {
         setCurrentMonth((prev) => addMonths(prev, 1));
     };
 
+    const handleToday = () => {
+        setMonthDirection(
+            isBefore(startOfMonth(currentMonth), startOfMonth(today)) ? 'right' : 'left',
+        );
+        setCurrentMonth(new Date());
+    };
+
     const days = useMemo(() => {
         const start = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: weekStart });
         const end = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: weekStart });
@@ -112,9 +120,10 @@ export function CalendarView() {
     const title = displayLabel(t, language, 'kidface.calendar.title', 'Calendar');
     const monthLabel = safeFormatDate(currentMonth, 'MMMM yyyy');
     const emptyLabel = displayLabel(t, language, 'kidface.calendar.empty', 'No big plans this month.');
-    const emptyHintLabel = displayLabel(t, language, 'kidface.calendar.emptyHint', 'Tap a day to make a plan.');
+    const emptyHintLabel = displayLabel(t, language, 'kidface.calendar.emptyHint', 'Tap a day to see what is coming.');
     const prevMonthLabel = displayLabel(t, language, 'kidface.calendar.prevMonth', 'Previous month');
     const nextMonthLabel = displayLabel(t, language, 'kidface.calendar.nextMonth', 'Next month');
+    const todayLabel = displayLabel(t, language, 'kidface.calendar.today', 'Today');
 
     const hasPlansThisMonth = useMemo(
         () => days.some((day) => tasksByDay.has(safeFormatDate(day, 'yyyy-MM-dd') ?? '')),
@@ -131,6 +140,14 @@ export function CalendarView() {
                     <h1 className="text-3xl font-extrabold tracking-tight text-foreground">{monthLabel}</h1>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={handleToday}
+                        aria-label={todayLabel}
+                        className="flex min-h-12 items-center rounded-full bg-primary px-5 text-base font-bold text-primary-foreground shadow-sm transition-transform active:scale-[0.99]"
+                    >
+                        {todayLabel}
+                    </button>
                     <button
                         type="button"
                         onClick={handlePrev}

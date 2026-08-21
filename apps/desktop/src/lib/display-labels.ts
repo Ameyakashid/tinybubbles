@@ -81,9 +81,10 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.add.submitLabel': 'Add',
     'kidface.calendar.title': 'Calendar',
     'kidface.calendar.empty': 'No big plans this month.',
-    'kidface.calendar.emptyHint': 'Tap a day to make a plan.',
+    'kidface.calendar.emptyHint': 'Tap a day to see what is coming.',
     'kidface.calendar.prevMonth': 'Previous month',
     'kidface.calendar.nextMonth': 'Next month',
+    'kidface.calendar.today': 'Today',
     // Offline reassurance.
     'kidface.offline.message': 'Offline — your changes are saved.',
     'kidface.offline.action': 'Try syncing',

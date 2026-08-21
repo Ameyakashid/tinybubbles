@@ -205,5 +205,16 @@ describe('CalendarView', () => {
         renderView();
 
         expect(screen.getByText('No big plans this month.')).toBeInTheDocument();
+        expect(screen.getByText('Tap a day to see what is coming.')).toBeInTheDocument();
+    });
+
+    it('returns to the current month when the Today button is pressed', () => {
+        renderView();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+        expect(screen.getByText('May 2026')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+        expect(screen.getByText('April 2026')).toBeInTheDocument();
     });
 });
