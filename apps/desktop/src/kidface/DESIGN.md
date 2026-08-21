@@ -175,6 +175,14 @@ regression back to the lie.
 Every future copy correction should ship with this two-sided shape:
 `expect(new).toBeInTheDocument()` *and* `expect(old).not.toBeInTheDocument()`.
 
+The same discipline applies to dimensional rules, but the second assertion is
+not the old class — it is the actual dimension or the config token that makes
+it real. A test that checks only a class name (`min-h-22`) proves the markup,
+not the pixels. If the Tailwind `spacing` scale does not define the `22` token,
+the class emits no CSS and the 88 px floor disappears while the test stays
+green (pass 31). Where a rule is dimensional, verify the dimension or the token
+it depends on, not only the string in `className`.
+
 ## Raising the floor backwards
 
 The 88 px minimum was first applied to new surfaces, then swept back through
