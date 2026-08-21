@@ -84,6 +84,15 @@ function useRetrigger() {
 export function MotionPlayground() {
     const celebrate = useCelebration();
     const heroRef = useRef<HTMLButtonElement>(null);
+    const heroTimeoutRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (heroTimeoutRef.current !== null) {
+                window.clearTimeout(heroTimeoutRef.current);
+            }
+        };
+    }, []);
 
     const pop = useRetrigger();
     const elastic = useRetrigger();
@@ -132,7 +141,13 @@ export function MotionPlayground() {
               }
             : undefined;
         celebrate(origin);
-        window.setTimeout(() => setHeroDone(false), 1200);
+        if (heroTimeoutRef.current !== null) {
+            window.clearTimeout(heroTimeoutRef.current);
+        }
+        heroTimeoutRef.current = window.setTimeout(() => {
+            heroTimeoutRef.current = null;
+            setHeroDone(false);
+        }, 1200);
     };
 
     return (
@@ -205,10 +220,10 @@ export function MotionPlayground() {
 
                 <PlaygroundCard title="Button pops">
                     <Stage className="gap-6">
-                        <div key={pop.key} className="kidface-pop">
+                        <div key={`pop-${pop.key}`} className="kidface-pop">
                             <TriggerButton label="Pop" onClick={pop.trigger} icon={<Plus className="size-5" />} />
                         </div>
-                        <div key={elastic.key} className="kidface-elastic-pop">
+                        <div key={`elastic-${elastic.key}`} className="kidface-elastic-pop">
                             <TriggerButton
                                 label="Elastic pop"
                                 onClick={elastic.trigger}
@@ -221,15 +236,15 @@ export function MotionPlayground() {
 
                 <PlaygroundCard title="Reaction motions">
                     <Stage className="gap-8">
-                        <div key={shake.key} className="kidface-shake">
+                        <div key={`shake-${shake.key}`} className="kidface-shake">
                             <TriggerButton label="Shake no" onClick={shake.trigger} />
                         </div>
-                        <div key={squish.key} className="kidface-squish">
+                        <div key={`squish-${squish.key}`} className="kidface-squish">
                             <div className="flex size-20 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
                                 <Move className="size-8" strokeWidth={2.5} />
                             </div>
                         </div>
-                        <div key={jelly.key} className="kidface-jelly">
+                        <div key={`jelly-${jelly.key}`} className="kidface-jelly">
                             <div className="flex size-20 items-center justify-center rounded-2xl bg-info text-info-foreground">
                                 <RotateCcw className="size-8" strokeWidth={2.5} />
                             </div>
@@ -241,7 +256,7 @@ export function MotionPlayground() {
                 <PlaygroundCard title="Room transitions">
                     <Stage>
                         <div
-                            key={rightEnter.key}
+                            key={`right-${rightEnter.key}`}
                             className={cn(
                                 'flex size-32 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md',
                                 rightEnter.key > 0 && 'kidface-room-enter-right',
@@ -251,7 +266,7 @@ export function MotionPlayground() {
                             <ArrowRight className="size-10" strokeWidth={2.5} />
                         </div>
                         <div
-                            key={leftEnter.key}
+                            key={`left-${leftEnter.key}`}
                             className={cn(
                                 'flex size-32 items-center justify-center rounded-2xl bg-success text-success-foreground shadow-md',
                                 leftEnter.key > 0 && 'kidface-room-enter-left',
@@ -355,13 +370,13 @@ export function MotionPlayground() {
 
                 <PlaygroundCard title="Pendulum & flip">
                     <Stage>
-                        <div key={pendulum.key} className="kidface-pendulum">
+                        <div key={`pendulum-${pendulum.key}`} className="kidface-pendulum">
                             <div className="flex size-16 items-center justify-center rounded-2xl bg-warning text-warning-foreground shadow-md">
                                 <Move className="size-8" strokeWidth={2.5} />
                             </div>
                         </div>
                         <div
-                            key={flip.key}
+                            key={`flip-${flip.key}`}
                             className={cn(
                                 'flex size-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md',
                                 flip.key > 0 && 'kidface-flip',

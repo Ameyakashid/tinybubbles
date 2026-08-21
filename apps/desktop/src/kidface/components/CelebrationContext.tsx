@@ -2,6 +2,7 @@ import {
     createContext,
     useCallback,
     useContext,
+    useEffect,
     useRef,
     useState,
     type ReactNode,
@@ -28,6 +29,16 @@ const BURST_DURATION_MS = 900;
 export function CelebrationProvider({ children }: { children: ReactNode }) {
     const [bursts, setBursts] = useState<(CelebrationOrigin & { id: number })[]>([]);
     const nextIdRef = useRef(0);
+    const timeoutsRef = useRef<Set<number>>(new Set());
+
+    useEffect(() => {
+        return () => {
+            for (const id of timeoutsRef.current) {
+                window.clearTimeout(id);
+            }
+            timeoutsRef.current.clear();
+        };
+    }, []);
 
     const celebrate = useCallback((origin: Partial<CelebrationOrigin> = {}) => {
         const id = nextIdRef.current++;
@@ -39,11 +50,10 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
         setBursts((prev) => [...prev, burst]);
 
         const timeoutId = window.setTimeout(() => {
+            timeoutsRef.current.delete(timeoutId);
             setBursts((prev) => prev.filter((candidate) => candidate.id !== id));
         }, BURST_DURATION_MS);
-
-        // If the provider unmounts during the burst, clean the timer.
-        return () => window.clearTimeout(timeoutId);
+        timeoutsRef.current.add(timeoutId);
     }, []);
 
     return (
