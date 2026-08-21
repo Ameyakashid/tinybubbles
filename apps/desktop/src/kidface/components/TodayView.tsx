@@ -94,7 +94,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
     const now = new Date();
     const toDoLabel = displayLabel(t, language, 'agenda.nextActions', 'To do');
     const doneTodayLabel = displayLabel(t, language, 'kidface.today.doneToday', 'Done today');
-    const plainEmptyHint = displayLabel(t, language, 'kidface.today.plainEmpty.hint', 'Tap the big + above if something needs doing.');
+    const plainEmptyHint = displayLabel(t, language, 'kidface.today.plainEmpty.hint', 'Tap the big + below if something needs doing.');
     const undoToast = displayLabel(t, language, 'kidface.undo.toast', 'Done! Tap to undo.');
     const undoAction = displayLabel(t, language, 'kidface.undo.action', 'Undo');
     const allDoneTitle = displayLabel(t, language, 'kidface.today.allDone.title', 'All done!');

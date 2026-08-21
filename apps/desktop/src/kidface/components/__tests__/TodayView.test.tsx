@@ -206,4 +206,15 @@ describe('TodayView', () => {
 
         expect(screen.getByTestId('ambient-field')).toBeInTheDocument();
     });
+
+    it('tells the child the Add button is below, not above', () => {
+        act(() => {
+            useTaskStore.setState({ _allTasks: [] });
+        });
+
+        renderView();
+
+        expect(screen.getByText('Tap the big + below if something needs doing.')).toBeInTheDocument();
+        expect(screen.queryByText('Tap the big + above if something needs doing.')).not.toBeInTheDocument();
+    });
 });

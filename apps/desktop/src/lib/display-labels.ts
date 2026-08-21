@@ -112,7 +112,7 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.today.scheduledEmpty.one': 'You have 1 thing coming up.',
     'kidface.today.scheduledEmpty.other': 'You have {count} things coming up.',
     'kidface.today.scheduledEmpty.seeCalendar': "See what's coming",
-    'kidface.today.plainEmpty.hint': 'Tap the big + above if something needs doing.',
+    'kidface.today.plainEmpty.hint': 'Tap the big + below if something needs doing.',
     'kidface.today.doneToday': 'Done today',
     'kidface.today.seeAllDone': 'See all {count} done',
     'kidface.today.undo.label': 'Undo {title}',
