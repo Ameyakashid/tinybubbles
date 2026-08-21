@@ -7,8 +7,6 @@ import { LanguageProvider } from '@/contexts/language-context';
 import { CelebrationProvider } from '../CelebrationContext';
 import { TodayView } from '../TodayView';
 
-const initialState = useTaskStore.getState();
-
 function buildTask(overrides: Partial<Task> & { id: string; title: string }): Task {
     const now = new Date();
     return {
@@ -35,7 +33,9 @@ const renderView = (props: { onSeeAllDone?: () => void; onSeeCalendar?: () => vo
 describe('TodayView', () => {
     beforeEach(() => {
         act(() => {
-            useTaskStore.setState(initialState, true);
+            // Reset the shared store to a known empty baseline so tests are not
+            // affected by filters or auto-archive settings left by other suites.
+            useTaskStore.setState({ _allTasks: [], settings: {} });
         });
     });
 
@@ -246,5 +246,23 @@ describe('TodayView', () => {
             expect(undoButton).toHaveClass('min-h-22');
             expect(undoButton).not.toHaveClass('min-h-14');
         });
+    });
+
+    it('does not leak timers when the view unmounts after a completion', async () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        const { unmount } = renderView();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Done! Tap to undo.')).toBeInTheDocument();
+        });
+
+        unmount();
     });
 });

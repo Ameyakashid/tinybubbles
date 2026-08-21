@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RotateCcw, ChevronRight } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { TaskBubbleRow } from './TaskBubbleRow';
@@ -41,12 +41,23 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
     const [justCompletedIds, setJustCompletedIds] = useState<Set<string>>(new Set());
     const [recentlyCompletedId, setRecentlyCompletedId] = useState<string | null>(null);
     const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+    const justCompletedTimeoutsRef = useRef<Map<string, number>>(new Map());
 
     useEffect(() => {
         if (!recentlyCompletedId) return undefined;
         const id = window.setTimeout(() => setRecentlyCompletedId(null), GENTLE_UNDO_MS);
         return () => window.clearTimeout(id);
     }, [recentlyCompletedId]);
+
+    useEffect(
+        () => () => {
+            for (const id of justCompletedTimeoutsRef.current.values()) {
+                window.clearTimeout(id);
+            }
+            justCompletedTimeoutsRef.current.clear();
+        },
+        [],
+    );
 
     const { openTasks, doneToday, upcomingCount } = useMemo(() => {
         const selection = selectTodayTasks(tasks, new Date());
@@ -60,9 +71,18 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
         [tasks, openTaskId],
     );
 
+    const clearJustCompletedTimeout = (taskId: string) => {
+        const id = justCompletedTimeoutsRef.current.get(taskId);
+        if (id) {
+            window.clearTimeout(id);
+        }
+        justCompletedTimeoutsRef.current.delete(taskId);
+    };
+
     const handleToggle = async (task: Task) => {
         if (task.status === 'done' || task.status === 'archived') {
             await updateTask(task.id, { status: 'next', completedAt: undefined });
+            clearJustCompletedTimeout(task.id);
             setJustCompletedIds((prev) => {
                 const next = new Set(prev);
                 next.delete(task.id);
@@ -73,13 +93,15 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
             await updateTask(task.id, { status: 'done', completedAt: new Date().toISOString() });
             setJustCompletedIds((prev) => new Set(prev).add(task.id));
             setRecentlyCompletedId(task.id);
-            window.setTimeout(() => {
+            clearJustCompletedTimeout(task.id);
+            const timeoutId = window.setTimeout(() => {
                 setJustCompletedIds((prev) => {
                     const next = new Set(prev);
                     next.delete(task.id);
                     return next;
                 });
             }, 1500);
+            justCompletedTimeoutsRef.current.set(task.id, timeoutId);
         }
     };
 
