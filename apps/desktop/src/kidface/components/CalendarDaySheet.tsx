@@ -62,7 +62,7 @@ export function CalendarDaySheet({ date, tasks, onClose }: CalendarDaySheetProps
                 <button
                     type="button"
                     onClick={onClose}
-                    className="flex size-14 items-center justify-center rounded-full bg-card text-foreground shadow-sm active:scale-90"
+                    className="flex size-[88px] items-center justify-center rounded-full bg-card text-foreground shadow-sm active:scale-90"
                     aria-label={closeLabel}
                 >
                     <ArrowLeft className="size-7" strokeWidth={2.5} />

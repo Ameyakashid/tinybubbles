@@ -152,6 +152,28 @@ child can actually use:
 3. **Empty states are answers, not apologies.** A child with nothing today but
    plenty this week is told "Free today" and given a way to see what is coming,
    not left to read "Nothing" as "you have nothing to do."
+4. **Ambient motion fails if it is still moving while the child is trying to
+   read or tap.** "Too much" motion means motion in the periphery and at the
+   focal point at the same time, repeating across list items, never letting the
+   screen settle, or becoming something the child watches instead of uses. The
+   face keeps motion to slow background drift and empty-state breathing; list
+   rows, checkboxes, and controls stay still unless the child interacts with
+   them.
+
+## Verification lessons
+
+A wording fix is not safe until its test rejects the old wording as well as
+asserting the new one. A test that only checks for the truth cannot catch a
+regression back to the lie.
+
+- `TodayView` empty-state hint: the test asserts "Tap the big + **below**" and
+  explicitly denies "Tap the big + **above**".
+- `CalendarView` month empty state: the test asserts "Tap a day to see what is
+  coming." and explicitly denies "Tap a day to make a plan." — the calendar
+  does not let a child make a plan, so promising that would be a lie.
+
+Every future copy correction should ship with this two-sided shape:
+`expect(new).toBeInTheDocument()` *and* `expect(old).not.toBeInTheDocument()`.
 
 ## Verification floor
 
