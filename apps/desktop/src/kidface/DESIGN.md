@@ -179,6 +179,21 @@ child can actually use:
    face keeps motion to slow background drift and empty-state breathing; list
    rows, checkboxes, and controls stay still unless the child interacts with
    them.
+5. **Animation timers must not outlive their component.** Any `setTimeout`,
+   `requestAnimationFrame`, or animation-end listener that updates state after a
+   delay must be cleared when the surface unmounts. The TodayView
+   completion-fade leak was the symptom; the pattern is the risk. New surfaces
+   must store timer IDs in refs (or a ref map) and clear them in an unmount
+   effect. A leaked timer is not a minor cleanup issue in a child interface —
+   it can fire after the child has left the room and update state they are no
+   longer looking at, causing jank or `ReferenceError`s in teardown.
+6. **Ambient motion has a density budget.** A quiet room gets at most one slow
+   ambient field and one breathing buddy (`Pebble`). List rows, checkboxes, and
+   buttons stay still unless the child interacts with them. Two independent
+   looping animations must never share the focal point. If a design wants more
+   motion, the answer is no until Fable rules otherwise; if less,
+   `prefers-reduced-motion` and the playground's reduced-motion preview remove
+   the loops entirely.
 
 ## Verification lessons
 
@@ -202,6 +217,12 @@ not the pixels. If the Tailwind `spacing` scale does not define the `22` token,
 the class emits no CSS and the 88 px floor disappears while the test stays
 green (pass 31). Where a rule is dimensional, verify the dimension or the token
 it depends on, not only the string in `className`.
+
+The same discipline applies to a reduced-motion toggle. A test that only
+checks the class name (`motion-reduce`) cannot tell whether the matching CSS
+rule exists; the MotionPlayground preview stayed green while the class emitted
+no CSS. Where a rule is CSS-backed, verify the rule (or its effect) and deny
+the absence of the rule, not only the string in `className`.
 
 The same discipline applies to a live look. An HTTP 200 from the dev server
 only proves the server is up; a blank page or a thrown `ReferenceError` also
@@ -237,6 +258,22 @@ class and deny the old one:
 The `22` spacing token (`5.5 rem`, 88 px) was added to the app Tailwind config so
 the floor can be expressed as `min-h-22` / `size-22` rather than arbitrary
 values, and existing `*-22` classes actually emit CSS.
+
+## Now / Next / Later — positions for Fable
+
+- **Now:** The shipped kid-face rooms (Today, Add, Done, Calendar, Settings)
+  are at a natural resting point. The four defects from the latest read —
+  broken reduced-motion preview, CelebrationContext timer leak, MotionPlayground
+  hero timer leak, and duplicate keys — are fixed and regression-tested.
+- **Next:** Ratify the ambient motion density rule. The position is one slow
+  ambient field plus one breathing buddy per quiet room; no looping motion on
+  task rows or controls; respect `prefers-reduced-motion` and the playground
+  preview.
+- **Later (gated):** Streaks/milestones, Calm Corner, and a dedicated Settings
+  room remain gated by Fable and Sunday. Calm Corner has a proposal in
+  `plans/proposal-calm-corner.md` and needs rulings on the help-button
+  adult-contact path, navigation placement, and clinical/asset review before any
+  code is written.
 
 ## Verification floor
 
