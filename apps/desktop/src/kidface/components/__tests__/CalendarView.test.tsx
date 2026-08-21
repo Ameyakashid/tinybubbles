@@ -208,6 +208,21 @@ describe('CalendarView', () => {
         expect(screen.getByText('Tap a day to see what is coming.')).toBeInTheDocument();
     });
 
+    it('does not promise the child they can make a plan in the calendar empty state', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'No date' }),
+                ],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('Tap a day to see what is coming.')).toBeInTheDocument();
+        expect(screen.queryByText('Tap a day to make a plan.')).not.toBeInTheDocument();
+    });
+
     it('returns to the current month when the Today button is pressed', () => {
         renderView();
 
