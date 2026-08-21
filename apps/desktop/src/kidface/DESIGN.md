@@ -183,6 +183,12 @@ the class emits no CSS and the 88 px floor disappears while the test stays
 green (pass 31). Where a rule is dimensional, verify the dimension or the token
 it depends on, not only the string in `className`.
 
+The same discipline applies to a live look. An HTTP 200 from the dev server
+only proves the server is up; a blank page or a thrown `ReferenceError` also
+returns 200. A live look must be a rendered page you have actually seen — DOM
+text, a screenshot, or an equivalent observed surface. Record what was seen,
+not that the route responded (pass 32).
+
 ## Raising the floor backwards
 
 The 88 px minimum was first applied to new surfaces, then swept back through
@@ -205,4 +211,5 @@ values, and existing `*-22` classes actually emit CSS.
 
 Per `apps/desktop/KID-FACE-CONTRACT.md`: every pass runs
 `bunx tsc --noEmit -p tsconfig.json`, `bun run lint`, `bun run test`, a live
-look at `/?face=next`, and a confirmation that `/` still serves the stock shell.
+look (rendered page, not HTTP 200) at `/?face=next`, and a confirmation that
+`/` still serves the stock shell.
