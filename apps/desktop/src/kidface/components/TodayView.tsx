@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, RotateCcw, ChevronRight, Trophy, CalendarDays } from 'lucide-react';
+import { RotateCcw, ChevronRight } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { TaskBubbleRow } from './TaskBubbleRow';
 import { OpenTaskView } from './OpenTaskView';
 import { AmbientField } from './AmbientField';
+import { Pebble } from './Pebble';
 import { selectTodayTasks } from './today-task-filter';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -171,13 +172,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
                     doneToday.length > 0 ? (
                         <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                             <AmbientField />
-                            <div className="relative flex size-28 items-center justify-center overflow-hidden rounded-full bg-success/10 kidface-breathe-soft">
-                                <Trophy className="relative z-10 size-14 text-success kidface-float" />
-                                <span
-                                    className="pointer-events-none absolute inset-0 z-20 bg-gradient-to-r from-transparent via-success-foreground/30 to-transparent kidface-trophy-shine"
-                                    aria-hidden="true"
-                                />
-                            </div>
+                            <Pebble state="celebrate" size={140} />
                             <div className="relative flex max-w-[18rem] flex-col gap-1">
                                 <p className="text-2xl font-extrabold text-foreground">{allDoneTitle}</p>
                                 <p className="text-lg text-muted-foreground">{allDoneMessage}</p>
@@ -193,9 +188,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
                     ) : upcomingCount > 0 ? (
                         <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                             <AmbientField />
-                            <div className="relative flex size-28 items-center justify-center rounded-full bg-secondary kidface-breathe-soft">
-                                <CalendarDays className="relative z-10 size-14 text-primary kidface-float" />
-                            </div>
+                            <Pebble state="idle" size={140} />
                             <div className="relative flex max-w-[18rem] flex-col gap-1">
                                 <p className="text-2xl font-extrabold text-foreground">{scheduledEmptyTitle}</p>
                                 <p className="text-lg text-muted-foreground">{scheduledEmptyMessage}</p>
@@ -211,9 +204,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
                     ) : (
                         <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">
                             <AmbientField />
-                            <div className="relative flex size-28 items-center justify-center rounded-full bg-secondary kidface-breathe-soft">
-                                <Sparkles className="relative z-10 size-14 text-primary kidface-float" />
-                            </div>
+                            <Pebble state="think" size={140} />
                             <p className="relative max-w-[16rem] text-lg text-muted-foreground">{plainEmptyHint}</p>
                         </div>
                     )

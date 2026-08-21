@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
     addMonths,
     eachDayOfInterval,
@@ -26,6 +26,7 @@ import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 import { AmbientField } from './AmbientField';
 import { CalendarDaySheet } from './CalendarDaySheet';
+import { Pebble } from './Pebble';
 
 const WEEK_START_MAP: Record<string, 0 | 1 | 2 | 3 | 4 | 5 | 6> = {
     sunday: 0,
@@ -240,9 +241,7 @@ export function CalendarView() {
                 {!hasPlansThisMonth && (
                     <div className="relative flex flex-col items-center justify-center gap-4 py-6 text-center">
                         <AmbientField />
-                        <div className="relative flex size-24 items-center justify-center rounded-full bg-secondary kidface-breathe-soft">
-                            <CalendarDays className="relative z-10 size-12 text-primary" aria-hidden="true" />
-                        </div>
+                        <Pebble state="idle" size={120} />
                         <div className="relative flex max-w-[18rem] flex-col gap-1">
                             <p className="text-2xl font-extrabold text-foreground">{emptyLabel}</p>
                             <p className="text-base text-muted-foreground">{emptyHintLabel}</p>

@@ -139,6 +139,7 @@ describe('TodayView', () => {
         await waitFor(() => {
             expect(screen.getByText('All done!')).toBeInTheDocument();
             expect(screen.getByRole('button', { name: 'See your trophies' })).toBeInTheDocument();
+            expect(screen.getByRole('img', { name: 'Pebble the bubble buddy, celebrate' })).toBeInTheDocument();
         });
     });
 
@@ -175,6 +176,7 @@ describe('TodayView', () => {
         expect(screen.getByText('Free today')).toBeInTheDocument();
         expect(screen.getByText('You have 1 thing coming up.')).toBeInTheDocument();
         expect(screen.getByRole('button', { name: "See what's coming" })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Pebble the bubble buddy, idle' })).toBeInTheDocument();
         expect(screen.queryByText('Future plan')).not.toBeInTheDocument();
     });
 
@@ -205,6 +207,16 @@ describe('TodayView', () => {
         renderView();
 
         expect(screen.getByTestId('ambient-field')).toBeInTheDocument();
+    });
+
+    it('shows Pebble the bubble buddy in the plain empty state', () => {
+        act(() => {
+            useTaskStore.setState({ _allTasks: [] });
+        });
+
+        renderView();
+
+        expect(screen.getByRole('img', { name: 'Pebble the bubble buddy, think' })).toBeInTheDocument();
     });
 
     it('tells the child the Add button is below, not above', () => {

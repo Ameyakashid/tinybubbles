@@ -89,6 +89,7 @@ Adding was previously an inline row on Today; it now lives in the dedicated
 - `TaskBubbleRow.tsx` — a single task row with the circular complete control.
 - `BubbleCheckbox.tsx` — large circular checkbox, empty / filled / celebratory.
 - `AddBubble.tsx` — the big add input + button, used by the Add room.
+- `Pebble.tsx` — the bubble buddy mascot for empty states and quiet moments.
 - `kidface.css` — animations scoped to the new face so the stock shell is not
   affected.
 
@@ -114,6 +115,25 @@ stock calendar. It shows which days have a scheduled or due task as small dots,
 highlights today, and lets the child flip months with big arrow buttons. There
 are no day/week/schedule modes to get lost in, and no search or planning panels
 — just a calm view of what is coming up.
+
+## Pebble, the bubble buddy
+
+`Pebble.tsx` is the kid-face mascot. It is an inline SVG with six states
+(`idle`, `happy`, `celebrate`, `wave`, `sleep`, `think`) controlled by a single
+prop, exactly like the design-kit handoff suggested. It inherits the app's CSS
+custom properties so it adapts to every theme.
+
+Pebble appears in the quiet moments:
+
+- **Today — all done:** celebrating, arms up.
+- **Today — free today but plans ahead:** idle, bobbing gently.
+- **Today — plain empty:** thinking, to suggest the child can add something.
+- **Done — no trophies yet:** sleepy, waiting for the first win.
+- **Calendar — no plans this month:** idle, keeping the room from feeling blank.
+
+The mascot is not a reward that only appears after success; it is a calm
+companion that makes every empty state feel like an answer rather than an
+apology.
 
 ## Motion studies that graduated into the face
 

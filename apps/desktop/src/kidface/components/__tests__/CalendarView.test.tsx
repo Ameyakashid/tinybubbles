@@ -206,6 +206,7 @@ describe('CalendarView', () => {
 
         expect(screen.getByText('No big plans this month.')).toBeInTheDocument();
         expect(screen.getByText('Tap a day to see what is coming.')).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Pebble the bubble buddy, idle' })).toBeInTheDocument();
     });
 
     it('does not promise the child they can make a plan in the calendar empty state', () => {

@@ -40,6 +40,7 @@ describe('DoneView', () => {
         expect(screen.getByText('Trophy case')).toBeInTheDocument();
         expect(screen.getByText('No trophies yet')).toBeInTheDocument();
         expect(screen.getByText('Finish something and it will show up here.')).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'Pebble the bubble buddy, sleep' })).toBeInTheDocument();
     });
 
     it('renders finished tasks grouped by day', () => {

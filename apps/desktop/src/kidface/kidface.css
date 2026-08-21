@@ -576,6 +576,156 @@
     animation: kidface-jelly 0.7s ease-in-out both;
 }
 
+/* ============================================================
+   PEBBLE — the bubble buddy mascot
+   ============================================================ */
+
+@keyframes pebble-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+}
+
+@keyframes pebble-happy-bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    35% { transform: translateY(-14px) scale(1.03, 0.97); }
+    60% { transform: translateY(0) scale(0.98, 1.04); }
+}
+
+@keyframes pebble-celebrate {
+    0%, 100% { transform: rotate(-7deg) translateY(0); }
+    50% { transform: rotate(7deg) translateY(-12px); }
+}
+
+@keyframes pebble-sleep-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes pebble-think-tilt {
+    0%, 100% { transform: rotate(0); }
+    50% { transform: rotate(4deg); }
+}
+
+@keyframes pebble-wave-arm {
+    0%, 100% { transform: rotate(0); }
+    50% { transform: rotate(-42deg); }
+}
+
+@keyframes pebble-arms-up {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-16px) rotate(10deg); }
+}
+
+@keyframes pebble-blink {
+    0%, 93%, 100% { transform: scaleY(1); }
+    96% { transform: scaleY(0.1); }
+}
+
+@keyframes pebble-zzz {
+    0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+    20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(22px, -44px) scale(1.15); }
+}
+
+@keyframes pebble-thought {
+    0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+    30% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-26px) scale(1); }
+}
+
+.pebble {
+    width: var(--pebble-size, 200px);
+    height: var(--pebble-size, 200px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pebble__svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.pebble__body {
+    transform-origin: center;
+}
+
+.pebble--idle .pebble__body { animation: pebble-bob 3.2s ease-in-out infinite; }
+.pebble--happy .pebble__body,
+.pebble--wave .pebble__body { animation: pebble-happy-bounce 1s ease-in-out infinite; }
+.pebble--celebrate .pebble__body { animation: pebble-celebrate 1.5s ease-in-out infinite; }
+.pebble--sleep .pebble__body { animation: pebble-sleep-float 4.6s ease-in-out infinite; }
+.pebble--think .pebble__body { animation: pebble-think-tilt 3.4s ease-in-out infinite; }
+
+.pebble__arm {
+    fill: hsl(var(--primary) / 0.7);
+    transform-box: fill-box;
+}
+
+.pebble__arm--left { transform-origin: 88% 50%; }
+.pebble__arm--right { transform-origin: 12% 50%; }
+
+.pebble--wave .pebble__arm--right { animation: pebble-wave-arm 0.9s ease-in-out infinite; }
+.pebble--celebrate .pebble__arm--left,
+.pebble--celebrate .pebble__arm--right { animation: pebble-arms-up 1.5s ease-in-out infinite; }
+
+.pebble__eyes-open {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: pebble-blink 4.4s infinite;
+}
+
+.pebble__face {
+    display: none;
+}
+
+.pebble--idle .pebble__face--idle,
+.pebble--happy .pebble__face--happy,
+.pebble--celebrate .pebble__face--happy,
+.pebble--wave .pebble__face--happy,
+.pebble--sleep .pebble__face--sleep,
+.pebble--think .pebble__face--think {
+    display: block;
+}
+
+.pebble__zzz {
+    display: none;
+}
+
+.pebble--sleep .pebble__zzz {
+    display: block;
+}
+
+.pebble__zzz text {
+    font-weight: 700;
+    fill: hsl(var(--primary));
+    animation: pebble-zzz 3s ease-out infinite;
+    opacity: 0;
+}
+
+.pebble__zzz text:nth-child(2) { animation-delay: 1s; font-size: 20px; }
+.pebble__zzz text:nth-child(3) { animation-delay: 2s; font-size: 16px; }
+
+.pebble__thought {
+    display: none;
+}
+
+.pebble--think .pebble__thought {
+    display: block;
+}
+
+.pebble__thought circle {
+    fill: hsl(var(--background));
+    stroke: hsl(var(--primary) / 0.6);
+    stroke-width: 2.5;
+    animation: pebble-thought 2.6s ease-out infinite;
+    opacity: 0;
+}
+
+.pebble__thought circle:nth-child(2) { animation-delay: 0.5s; }
+.pebble__thought circle:nth-child(3) { animation-delay: 1s; }
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -584,5 +734,10 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         transition-delay: 0ms !important;
+    }
+
+    .pebble__thought,
+    .pebble__zzz {
+        display: none !important;
     }
 }
