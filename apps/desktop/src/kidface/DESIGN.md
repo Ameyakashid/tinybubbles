@@ -209,6 +209,17 @@ returns 200. A live look must be a rendered page you have actually seen — DOM
 text, a screenshot, or an equivalent observed surface. Record what was seen,
 not that the route responded (pass 32).
 
+**Pre-existing is a claim, not a verdict.** The recurring post-suite
+`ReferenceError: window is not defined` thrown from `ProjectWorkspace` teardown
+was dismissed by several parties as a load-dependent environment flake or
+infra problem. It was not. `TodayView`'s 1.5 s completion-fade timeout had no
+cleanup, so it fired after the test environment was torn down. The fix stores
+each per-task timeout in a ref map, clears it on undo and on unmount, and a
+regression test (`does not leak timers when the view unmounts after a
+completion`) unmounts right after a completion so a future leak fails loudly.
+"Inherited" and "pre-existing" are hypotheses to be tested, not reasons to stop
+looking. Pass 35.
+
 ## Raising the floor backwards
 
 The 88 px minimum was first applied to new surfaces, then swept back through
