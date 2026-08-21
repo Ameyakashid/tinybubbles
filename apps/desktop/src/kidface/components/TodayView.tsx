@@ -30,9 +30,10 @@ function greetingKeyForHour(hour: number): string {
 
 interface TodayViewProps {
     onSeeAllDone: () => void;
+    onSeeCalendar: () => void;
 }
 
-export function TodayView({ onSeeAllDone }: TodayViewProps) {
+export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
     const { t, language } = useLanguage();
     const tasks = useTaskStore((state) => state.tasks);
     const updateTask = useTaskStore((state) => state.updateTask);
@@ -102,11 +103,12 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
     const headerCountOne = displayLabel(t, language, 'kidface.today.header.count.one', '1 thing to do today');
     const headerCountOther = displayLabel(t, language, 'kidface.today.header.count.other', '{count} things to do today');
     const headerEmpty = displayLabel(t, language, 'kidface.today.header.empty', 'Nothing left to do — nice work!');
-    const headerScheduledOne = displayLabel(t, language, 'kidface.today.header.emptyScheduled.one', 'Nothing for today — 1 thing coming up');
-    const headerScheduledOther = displayLabel(t, language, 'kidface.today.header.emptyScheduled.other', 'Nothing for today — {count} things coming up');
-    const scheduledEmptyTitle = displayLabel(t, language, 'kidface.today.scheduledEmpty.title', 'Nothing for today');
-    const scheduledEmptyOne = displayLabel(t, language, 'kidface.today.scheduledEmpty.one', '1 thing coming up.');
-    const scheduledEmptyOther = displayLabel(t, language, 'kidface.today.scheduledEmpty.other', '{count} things coming up.');
+    const headerScheduledOne = displayLabel(t, language, 'kidface.today.header.emptyScheduled.one', 'Nothing today — 1 thing coming up');
+    const headerScheduledOther = displayLabel(t, language, 'kidface.today.header.emptyScheduled.other', 'Nothing today — {count} things coming up');
+    const scheduledEmptyTitle = displayLabel(t, language, 'kidface.today.scheduledEmpty.title', 'Free today');
+    const scheduledEmptyOne = displayLabel(t, language, 'kidface.today.scheduledEmpty.one', 'You have 1 thing coming up.');
+    const scheduledEmptyOther = displayLabel(t, language, 'kidface.today.scheduledEmpty.other', 'You have {count} things coming up.');
+    const scheduledEmptyAction = displayLabel(t, language, 'kidface.today.scheduledEmpty.seeCalendar', "See what's coming");
     const greeting = displayLabel(
         t,
         language,
@@ -198,6 +200,13 @@ export function TodayView({ onSeeAllDone }: TodayViewProps) {
                                 <p className="text-2xl font-extrabold text-foreground">{scheduledEmptyTitle}</p>
                                 <p className="text-lg text-muted-foreground">{scheduledEmptyMessage}</p>
                             </div>
+                            <button
+                                type="button"
+                                onClick={onSeeCalendar}
+                                className="relative flex min-h-[88px] items-center gap-2 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground active:scale-[0.99]"
+                            >
+                                {scheduledEmptyAction}
+                            </button>
                         </div>
                     ) : (
                         <div className="relative flex flex-1 flex-col items-center justify-center gap-4 text-center kidface-slide-up">

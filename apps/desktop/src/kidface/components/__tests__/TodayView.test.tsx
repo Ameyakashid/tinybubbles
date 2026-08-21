@@ -21,10 +21,13 @@ function buildTask(overrides: Partial<Task> & { id: string; title: string }): Ta
     };
 }
 
-const renderView = (props: { onSeeAllDone?: () => void } = {}) => render(
+const renderView = (props: { onSeeAllDone?: () => void; onSeeCalendar?: () => void } = {}) => render(
     <LanguageProvider>
         <CelebrationProvider>
-            <TodayView onSeeAllDone={props.onSeeAllDone ?? vi.fn()} />
+            <TodayView
+                onSeeAllDone={props.onSeeAllDone ?? vi.fn()}
+                onSeeCalendar={props.onSeeCalendar ?? vi.fn()}
+            />
         </CelebrationProvider>
     </LanguageProvider>,
 );
@@ -169,9 +172,29 @@ describe('TodayView', () => {
 
         renderView();
 
-        expect(screen.getByText('Nothing for today')).toBeInTheDocument();
-        expect(screen.getByText('1 thing coming up.')).toBeInTheDocument();
+        expect(screen.getByText('Free today')).toBeInTheDocument();
+        expect(screen.getByText('You have 1 thing coming up.')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: "See what's coming" })).toBeInTheDocument();
         expect(screen.queryByText('Future plan')).not.toBeInTheDocument();
+    });
+
+    it('calls onSeeCalendar when the scheduled-empty action is pressed', () => {
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        const onSeeCalendar = vi.fn();
+
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Future plan', startTime: nextWeek.toISOString() }),
+                ],
+            });
+        });
+
+        renderView({ onSeeCalendar });
+
+        fireEvent.click(screen.getByRole('button', { name: "See what's coming" }));
+
+        expect(onSeeCalendar).toHaveBeenCalled();
     });
 
     it('shows ambient motion behind empty states', () => {

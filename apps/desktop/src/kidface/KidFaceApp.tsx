@@ -95,7 +95,12 @@ export function KidFaceApp() {
                                     roomDirection === 'right' ? 'kidface-room-enter-right' : 'kidface-room-enter-left',
                                 )}
                             >
-                                {activeRoom === 'today' && <TodayView onSeeAllDone={() => changeRoom('done')} />}
+                                {activeRoom === 'today' && (
+                                    <TodayView
+                                        onSeeAllDone={() => changeRoom('done')}
+                                        onSeeCalendar={() => changeRoom('calendar')}
+                                    />
+                                )}
                                 {activeRoom === 'add' && <AddView />}
                                 {activeRoom === 'done' && <DoneView />}
                                 {activeRoom === 'calendar' && <CalendarView />}

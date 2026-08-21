@@ -16,8 +16,10 @@ gamified or noisy:
   `rounded-2xl` tokens.
 - **Bigger, fewer choices.** A young child with ADHD needs a room, not a
   dashboard. Primary tap targets are at least 88 px; secondary text rows and
-  list cells clear 88 px in height. Every screen answers one question at a
-  time.
+  list cells clear 88 px in height. The 88 px floor is not a style preference —
+  it is the smallest touch target a fidgety or imprecise tap can reliably hit,
+  and it makes each row feel like one big decision rather than a line of small
+  text. Every screen answers one question at a time.
 - **Calm motion only.** Slow ambient drift and a tiny press-pop; nothing that
   competes with the child's own attention. Respects `prefers-reduced-motion`.
 
@@ -65,6 +67,11 @@ voice is plain, short, and spoken-aloud friendly.
   and undoable immediately (setback mistakes are common with ADHD).
 
 Every row control is always visible. There are no hover-only actions.
+
+When today is empty but tasks are scheduled for the future, the screen says
+"Free today" and offers a direct path to the Calendar room so the child can see
+what is coming. It never leaves the child to decode an empty-looking day on
+their own.
 
 Adding was previously an inline row on Today; it now lives in the dedicated
 **Add** room so the child faces one question per screen.
@@ -124,6 +131,27 @@ moves out of the playground and into production:
 - **Pulse rings** → parent-priority tasks in `TaskBubbleRow` (the focus star).
 - **Button pops / elastic pop** → `AddBubble` submit button and the `AddView`
   success confirmation.
+
+## Interaction principles
+
+These rules are deliberately written down because they are easy to forget in
+later passes, and they are the difference between a cute interface and one a
+child can actually use:
+
+1. **Never leave an action silent.** If a child presses something and nothing
+   happens, they cannot tell whether the app is broken or they are. Every action
+   must answer: trying, worked, or did not work. Examples carried into the face:
+   - `AddBubble` shakes when Enter is pressed on empty input.
+   - `LoadErrorView` shakes the retry button after a failed retry.
+   - The offline banner shows trying / synced / still-offline states.
+   - The scheduled-empty `TodayView` state offers a clear "See what's coming"
+     button instead of leaving the child staring at an empty-looking day.
+2. **Pulse rings mean priority.** The gentle expanding ring around a focus star
+   is reserved for parent-marked important tasks. It is the visual equivalent of
+   a calm "start here"; no other element may use it so the meaning stays clean.
+3. **Empty states are answers, not apologies.** A child with nothing today but
+   plenty this week is told "Free today" and given a way to see what is coming,
+   not left to read "Nothing" as "you have nothing to do."
 
 ## Verification floor
 
