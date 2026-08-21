@@ -117,7 +117,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
             overlayClassName="bg-background"
             panelClassName="fixed inset-0 max-h-none max-w-none rounded-none border-none shadow-none kidface-sheet-enter"
         >
-            <DialogHeader className="flex h-16 shrink-0 items-center px-3">
+            <DialogHeader className="flex min-h-22 shrink-0 items-center px-3">
                 <button
                     type="button"
                     onClick={onClose}
@@ -188,7 +188,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                                         role="checkbox"
                                         aria-checked={item.isCompleted}
                                         onClick={() => void onToggleChecklistItem(task.id, item.id)}
-                                        className="flex shrink-0 items-center justify-center rounded-full transition-colors active:scale-90"
+                                        className="flex size-22 shrink-0 items-center justify-center rounded-full transition-colors active:scale-90"
                                         aria-label={item.title}
                                     >
                                         <span
@@ -221,7 +221,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                                         type="button"
                                         onClick={() => handleDeleteStep(item.id)}
                                         aria-label={deleteStepLabel.replace('{title}', item.title)}
-                                        className="flex size-14 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90"
+                                        className="flex size-22 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90"
                                     >
                                         <X className="size-7" strokeWidth={2.5} />
                                     </button>
@@ -236,7 +236,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                             placeholder={addStepPlaceholder}
                             aria-label={addStepPlaceholder}
                             className={cn(
-                                'h-14 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
+                                'min-h-22 flex-1 rounded-xl border border-input bg-background px-4 text-lg text-foreground placeholder:text-muted-foreground',
                                 'focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/50',
                             )}
                         />
@@ -244,7 +244,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                             type="submit"
                             disabled={!stepDraft.trim()}
                             className={cn(
-                                'flex min-h-14 items-center rounded-full bg-primary px-6 text-base font-bold text-primary-foreground shadow-sm transition-transform active:scale-90',
+                                'flex min-h-22 items-center rounded-full bg-primary px-6 text-base font-bold text-primary-foreground shadow-sm transition-transform active:scale-90',
                                 'disabled:opacity-50 disabled:active:scale-100',
                             )}
                         >

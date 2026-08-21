@@ -175,6 +175,24 @@ regression back to the lie.
 Every future copy correction should ship with this two-sided shape:
 `expect(new).toBeInTheDocument()` *and* `expect(old).not.toBeInTheDocument()`.
 
+## Raising the floor backwards
+
+The 88 px minimum was first applied to new surfaces, then swept back through
+surfaces that had already shipped. Fixes are pinned by tests that assert the new
+class and deny the old one:
+
+- `TodayView` undo-toast action.
+- `DoneView` trophy summary card.
+- `OpenTaskView` checklist controls, add-step bar, and sheet header.
+- `CalendarDaySheet` sheet header.
+- `SettingsView` theme buttons.
+- `KidNav` bottom-tab items and nav height.
+- `KidLayout` offline banner.
+
+The `22` spacing token (`5.5 rem`, 88 px) was added to the app Tailwind config so
+the floor can be expressed as `min-h-22` / `size-22` rather than arbitrary
+values, and existing `*-22` classes actually emit CSS.
+
 ## Verification floor
 
 Per `apps/desktop/KID-FACE-CONTRACT.md`: every pass runs

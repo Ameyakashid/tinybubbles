@@ -207,4 +207,34 @@ describe('OpenTaskView', () => {
         expect(trigger).toHaveFocus();
         trigger.remove();
     });
+
+    it('keeps checklist controls and the add-step bar on the 88px floor', () => {
+        const task: Task = {
+            ...baseTask,
+            checklist: [
+                { id: 'item-1', title: 'Get toothbrush', isCompleted: false },
+            ],
+        };
+        renderView({ task });
+
+        const stepCheckbox = screen.getByRole('checkbox', { name: 'Get toothbrush' });
+        expect(stepCheckbox).toHaveClass('size-22');
+        expect(stepCheckbox).not.toHaveClass('size-14');
+
+        const deleteStep = screen.getByRole('button', { name: 'Remove Get toothbrush' });
+        expect(deleteStep).toHaveClass('size-22');
+        expect(deleteStep).not.toHaveClass('size-14');
+
+        const addStepInput = screen.getByLabelText('Add a step');
+        expect(addStepInput).toHaveClass('min-h-22');
+        expect(addStepInput).not.toHaveClass('h-14');
+
+        const addStepButton = screen.getByRole('button', { name: 'Add step' });
+        expect(addStepButton).toHaveClass('min-h-22');
+        expect(addStepButton).not.toHaveClass('min-h-14');
+
+        const header = screen.getByRole('button', { name: 'Back' }).parentElement;
+        expect(header).toHaveClass('min-h-22');
+        expect(header).not.toHaveClass('h-16');
+    });
 });

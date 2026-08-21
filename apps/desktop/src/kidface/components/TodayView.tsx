@@ -161,7 +161,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
                         <button
                             type="button"
                             onClick={() => void handleToggle(recentlyCompletedTask)}
-                            className="flex min-h-14 items-center rounded-full bg-card px-6 text-base font-bold text-success shadow-sm active:scale-90"
+                            className="flex min-h-22 items-center rounded-full bg-card px-6 text-base font-bold text-success shadow-sm active:scale-90"
                         >
                             {undoAction}
                         </button>

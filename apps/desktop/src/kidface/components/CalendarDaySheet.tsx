@@ -58,7 +58,7 @@ export function CalendarDaySheet({ date, tasks, onClose }: CalendarDaySheetProps
             overlayClassName="bg-background"
             panelClassName="fixed inset-0 max-h-none max-w-none rounded-none border-none shadow-none kidface-sheet-enter"
         >
-            <DialogHeader className="flex h-16 shrink-0 items-center px-3">
+            <DialogHeader className="flex min-h-22 shrink-0 items-center px-3">
                 <button
                     type="button"
                     onClick={onClose}

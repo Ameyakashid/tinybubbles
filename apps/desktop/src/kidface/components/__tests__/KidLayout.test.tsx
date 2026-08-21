@@ -96,4 +96,11 @@ describe('KidLayout', () => {
         expect(banner).toBeEnabled();
         expect(banner).toHaveAttribute('aria-busy', 'false');
     });
+
+    it('keeps the offline banner on the 88px floor', () => {
+        renderLayout({ lastSyncError: 'offline' });
+
+        const banner = screen.getByRole('button', { name: /Offline — your changes are saved/ });
+        expect(banner).toHaveClass('min-h-22');
+    });
 });

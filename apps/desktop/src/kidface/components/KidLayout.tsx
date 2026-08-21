@@ -74,7 +74,7 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
                     aria-busy={bannerBusy}
                     aria-live="polite"
                     className={cn(
-                        'relative z-10 flex w-full items-center justify-center gap-2 px-4 py-3 text-center text-base font-medium transition-colors active:scale-[0.99] disabled:active:scale-100',
+                        'relative z-10 flex min-h-22 w-full items-center justify-center gap-2 px-4 py-3 text-center text-base font-medium transition-colors active:scale-[0.99] disabled:active:scale-100',
                         showSynced
                             ? 'bg-success text-success-foreground'
                             : 'bg-warning text-warning-foreground',

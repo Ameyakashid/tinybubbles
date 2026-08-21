@@ -240,4 +240,23 @@ describe('CalendarView', () => {
         expect(screen.getByRole('button', { name: 'Previous month' })).toHaveClass('size-22');
         expect(screen.getByRole('button', { name: 'Next month' })).toHaveClass('size-22');
     });
+
+    it('keeps the day sheet header on the 88px floor', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Swim practice', startTime: '2026-04-05' }),
+                ],
+            });
+        });
+
+        renderView();
+
+        fireEvent.click(document.querySelector('[data-calendar-day="2026-04-05"]') as HTMLElement);
+
+        const backButton = screen.getByRole('button', { name: 'Back to calendar' });
+        expect(backButton).toHaveClass('size-[88px]');
+        expect(backButton.parentElement).toHaveClass('min-h-22');
+        expect(backButton.parentElement).not.toHaveClass('h-16');
+    });
 });

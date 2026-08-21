@@ -92,4 +92,11 @@ describe('SettingsView', () => {
         expect(screen.getByRole('button', { name: 'Français' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: '日本語' })).toBeInTheDocument();
     });
+
+    it('keeps theme buttons on the 88px floor', () => {
+        renderView();
+
+        const darkButton = screen.getByRole('button', { name: 'Dark' });
+        expect(darkButton).toHaveClass('min-h-22');
+    });
 });

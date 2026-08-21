@@ -44,6 +44,9 @@ export default {
             },
             // Tiny Bubbles "Sunlit Rockpool" (see DESIGN.md): every corner in
             // the app gets rounder in one place. Class names are unchanged.
+            spacing: {
+                22: "5.5rem",
+            },
             borderRadius: {
                 md: "0.75rem",
                 lg: "1.125rem",

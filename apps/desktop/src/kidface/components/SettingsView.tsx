@@ -59,7 +59,7 @@ function ThemeButton({ theme, selected, label, onSelect }: ThemeButtonProps) {
             onClick={() => onSelect(theme)}
             aria-pressed={selected}
             className={cn(
-                'group relative flex flex-col items-center gap-2 rounded-2xl bg-card p-3 shadow-sm transition-all',
+                'group relative flex min-h-22 flex-col items-center justify-center gap-2 rounded-2xl bg-card p-3 shadow-sm transition-all',
                 'hover:shadow-md active:scale-[0.99]',
                 selected && 'ring-2 ring-primary',
             )}

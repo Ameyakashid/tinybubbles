@@ -125,4 +125,16 @@ describe('DoneView', () => {
         expect(screen.queryByText('Not done')).not.toBeInTheDocument();
         expect(screen.queryByText('Deleted')).not.toBeInTheDocument();
     });
+
+    it('keeps the trophy summary card on the 88px floor', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByTestId('trophy-summary')).toHaveClass('min-h-22');
+    });
 });

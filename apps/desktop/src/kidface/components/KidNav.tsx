@@ -30,7 +30,7 @@ function NavItem({ room, activeRoom, label, icon, onSelect, setItemRef }: NavIte
             onClick={() => onSelect(room)}
             aria-current={isActive ? 'page' : undefined}
             className={cn(
-                'relative z-10 flex flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors',
+                'relative z-10 flex min-h-22 flex-1 flex-col items-center justify-center gap-1 rounded-2xl py-2 transition-colors',
                 isActive
                     ? 'text-primary'
                     : 'text-muted-foreground hover:text-foreground active:bg-muted',
@@ -85,7 +85,7 @@ export function KidNav({ activeRoom, onChangeRoom }: KidNavProps) {
     return (
         <nav
             ref={navRef}
-            className="relative z-10 flex h-24 shrink-0 items-center gap-2 border-t border-border bg-card/80 px-4 pb-2 pt-2 backdrop-blur-sm"
+            className="relative z-10 flex h-28 shrink-0 items-center gap-2 border-t border-border bg-card/80 px-4 pb-2 pt-2 backdrop-blur-sm"
             aria-label="Kid rooms"
         >
             <span

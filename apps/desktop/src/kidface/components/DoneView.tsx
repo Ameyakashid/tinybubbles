@@ -166,7 +166,7 @@ export function DoneView() {
             </header>
 
             {groups.length > 0 && (
-                <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm kidface-slide-up">
+                <div data-testid="trophy-summary" className="flex min-h-22 items-center gap-3 rounded-2xl bg-card p-4 shadow-sm kidface-slide-up">
                     <div className="relative flex size-12 items-center justify-center overflow-hidden rounded-full bg-success/10">
                         <Trophy className="relative z-10 size-7 text-success" strokeWidth={2.5} />
                         <span

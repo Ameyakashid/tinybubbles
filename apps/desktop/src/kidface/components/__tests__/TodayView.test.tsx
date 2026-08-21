@@ -217,4 +217,22 @@ describe('TodayView', () => {
         expect(screen.getByText('Tap the big + below if something needs doing.')).toBeInTheDocument();
         expect(screen.queryByText('Tap the big + above if something needs doing.')).not.toBeInTheDocument();
     });
+
+    it('keeps the undo toast action on the 88px floor', async () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [buildTask({ id: 'task-1', title: 'Brush teeth' })],
+            });
+        });
+
+        renderView();
+
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Mark Brush teeth as done' }));
+
+        await waitFor(() => {
+            const undoButton = screen.getByRole('button', { name: 'Undo' });
+            expect(undoButton).toHaveClass('min-h-22');
+            expect(undoButton).not.toHaveClass('min-h-14');
+        });
+    });
 });
