@@ -49,7 +49,7 @@ describe('SettingsView', () => {
         expect(updateSettings).toHaveBeenCalledWith({ theme: 'sepia' });
     });
 
-    it('updates the language when a language button is pressed', () => {
+    it('asks for confirmation before changing language', () => {
         const updateSettings = vi.fn().mockResolvedValue(undefined);
         useTaskStore.setState({ updateSettings });
 
@@ -57,7 +57,26 @@ describe('SettingsView', () => {
 
         fireEvent.click(screen.getByRole('button', { name: 'Español' }));
 
+        expect(screen.getByRole('dialog', { name: 'Switch language?' })).toBeInTheDocument();
+        expect(screen.getByText('This will change the words in the app to Español.')).toBeInTheDocument();
+        expect(updateSettings).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Switch to Español' }));
+
         expect(updateSettings).toHaveBeenCalledWith({ language: 'es' });
+    });
+
+    it('keeps the current language when confirmation is cancelled', () => {
+        const updateSettings = vi.fn().mockResolvedValue(undefined);
+        useTaskStore.setState({ updateSettings });
+
+        renderView();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Español' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Keep English' }));
+
+        expect(updateSettings).not.toHaveBeenCalled();
+        expect(screen.queryByRole('dialog', { name: 'Switch language?' })).not.toBeInTheDocument();
     });
 
     it('shows the current language as selected', () => {

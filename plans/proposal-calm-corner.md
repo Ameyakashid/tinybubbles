@@ -8,11 +8,13 @@
 
 A single-room pause space the child can reach from the kid face when a task feels too big, a feeling is too loud, or they need a moment before trying again. It is not a task list, a game, or a new bottom-nav stop. It is a brief, guided pause with three beats:
 
-1. **Name it** — a small set of child-level feeling words (`Overwhelmed`, `Frustrated`, `Worried`, `Tired`, `I do not know`) presented as large tappable chips, not a diagnostic form.
+1. **Name it** — a small set of child-level feelings presented as large tappable **picture-first chips** with a short word label underneath. The picture carries the meaning so a child does not need to read to choose; the word is there for caregivers and for children who can read. Proposed set: a storm-cloud (`Overwhelmed`), a clenched fist (`Frustrated`), a rain-cloud (`Worried`), a bed (`Tired`), and a question mark (`I do not know`). This is not a diagnostic form.
 2. **Breathe with it** — a gentle visual breathing buddy that expands and contracts. A default 4-in / 6-out cadence, with optional haptic pulse on supported devices.
 3. **Get help** — a single, prominent help control whose only honest job is to start the adult-contact path the owner has already approved for the product.
 
 The room returns the child to Today when they choose to leave; it never dumps them into Settings or a parent workflow.
+
+The **Name it** chips are picture-first because a feelings check-in is exactly the moment when a child is least able to parse text. The kid face already keeps words spoken-aloud friendly and pairs labels with icons; Calm Corner extends that rule so the choice works whether or not the child can read the word.
 
 ## Why it belongs in the kid face
 
@@ -34,9 +36,10 @@ The existing rooms (Today, Add, Done, Calendar, Me) are all about doing. Calm Co
    - Does it trigger an OS-level share sheet / message to a configured caregiver contact?
    - Until this path is real, the help button must be disabled or absent; a placeholder button is a false promise.
 
-2. **Does the feelings wording need clinical or child-development review?**
-   - The proposed chips (`Overwhelmed`, `Frustrated`, `Worried`, `Tired`, `I do not know`) are plain-language labels, not clinical terms.
-   - Should a clinician or educator review them for age range and emotional safety?
+2. **Do the feelings pictures and wording need clinical or child-development review?**
+   - The proposed chips are picture-first with plain-language labels, not clinical terms.
+   - Should a clinician or educator review the pictures and words for age range and emotional safety?
+   - Should the artwork be custom illustrations, reused symbols, or emoji/Unicode glyphs? Who owns the asset decision?
    - Should the wording change by locale, and who owns the native-speaker check?
 
 3. **Should the breathing cadence be configurable?**

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Check } from 'lucide-react';
 import {
     SUPPORTED_LANGUAGES,
@@ -9,6 +10,7 @@ import {
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
 import { cn } from '@/lib/utils';
+import { Dialog, DialogBody, DialogHeader, DialogFooter } from '@/components/ui/Dialog';
 
 const THEME_ORDER: AppTheme[] = [
     'system',
@@ -118,6 +120,7 @@ export function SettingsView() {
     const { t, language, setLanguage } = useLanguage();
     const settings = useTaskStore((state) => state.settings);
     const updateSettings = useTaskStore((state) => state.updateSettings);
+    const [pendingLanguage, setPendingLanguage] = useState<Language | null>(null);
 
     const currentTheme = settings?.theme ?? 'system';
 
@@ -125,9 +128,25 @@ export function SettingsView() {
         void updateSettings({ theme });
     };
 
-    const handleLanguageChange = (nextLanguage: Language) => {
+    const applyLanguageChange = (nextLanguage: Language) => {
         setLanguage(nextLanguage);
         void updateSettings({ language: nextLanguage });
+    };
+
+    const requestLanguageChange = (nextLanguage: Language) => {
+        if (nextLanguage === language) return;
+        setPendingLanguage(nextLanguage);
+    };
+
+    const cancelLanguageChange = () => {
+        setPendingLanguage(null);
+    };
+
+    const confirmLanguageChange = () => {
+        if (pendingLanguage) {
+            applyLanguageChange(pendingLanguage);
+        }
+        setPendingLanguage(null);
     };
 
     const title = displayLabel(t, language, 'kidface.settings.title', 'Me');
@@ -142,6 +161,14 @@ export function SettingsView() {
         `kidface.settings.theme.${theme}`,
         theme.charAt(0).toUpperCase() + theme.slice(1).replace(/-/g, ' '),
     );
+
+    const confirmTitle = displayLabel(t, language, 'kidface.settings.languageConfirm.title', 'Switch language?');
+    const confirmMessage = displayLabel(t, language, 'kidface.settings.languageConfirm.message', 'This will change the words in the app to {target}.')
+        .replace('{target}', pendingLanguage ? languageNativeName(pendingLanguage) : '');
+    const keepLabel = displayLabel(t, language, 'kidface.settings.languageConfirm.keep', 'Keep {current}')
+        .replace('{current}', languageNativeName(language));
+    const switchLabel = displayLabel(t, language, 'kidface.settings.languageConfirm.switch', 'Switch to {target}')
+        .replace('{target}', pendingLanguage ? languageNativeName(pendingLanguage) : '');
 
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
@@ -176,12 +203,45 @@ export function SettingsView() {
                                 language={lang}
                                 selected={language === lang}
                                 label={languageNativeName(lang)}
-                                onSelect={handleLanguageChange}
+                                onSelect={requestLanguageChange}
                             />
                         ))}
                     </div>
                 </div>
             </section>
+
+            {pendingLanguage && (
+                <Dialog
+                    onClose={cancelLanguageChange}
+                    label={confirmTitle}
+                    closeOnBackdrop={false}
+                    overlayClassName="bg-black/30"
+                    panelClassName="max-w-sm rounded-2xl border bg-card text-card-foreground shadow-2xl"
+                >
+                    <DialogHeader className="px-5 pt-5">
+                        <h2 className="text-2xl font-extrabold text-foreground">{confirmTitle}</h2>
+                    </DialogHeader>
+                    <DialogBody className="px-5 pb-2">
+                        <p className="text-lg text-muted-foreground">{confirmMessage}</p>
+                    </DialogBody>
+                    <DialogFooter className="flex flex-col gap-3 p-5">
+                        <button
+                            type="button"
+                            onClick={confirmLanguageChange}
+                            className="flex min-h-[88px] items-center justify-center rounded-full bg-primary px-6 text-lg font-bold text-primary-foreground shadow-sm active:scale-[0.99]"
+                        >
+                            {switchLabel}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={cancelLanguageChange}
+                            className="flex min-h-[88px] items-center justify-center rounded-full bg-card px-6 text-lg font-semibold text-foreground shadow-sm active:scale-[0.99]"
+                        >
+                            {keepLabel}
+                        </button>
+                    </DialogFooter>
+                </Dialog>
+            )}
         </div>
     );
 }

@@ -30,8 +30,10 @@ test('kid face settings room renders and lets a child pick a theme', async ({ pa
     await page.waitForTimeout(400);
     await screenshot(page, 'settings-sepia');
 
-    // Switching languages should also be live.
+    // Switching languages requires confirmation so a child cannot trap themselves.
     await page.getByRole('button', { name: 'Español' }).click();
+    await expect(page.getByRole('dialog', { name: 'Switch language?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Switch to Español' }).click();
     await expect(page.getByRole('button', { name: 'Español' })).toHaveAttribute('aria-pressed', 'true');
     await page.waitForTimeout(400);
     await screenshot(page, 'settings-es');
