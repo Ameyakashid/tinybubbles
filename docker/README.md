@@ -19,7 +19,7 @@ TINYBUBBLES_CLOUD_AUTH_TOKENS=replace_with_a_token_at_least_20_characters_long
 TINYBUBBLES_CLOUD_CORS_ORIGIN=http://localhost:5173
 ```
 
-`TINYBUBBLES_CLOUD_CORS_ORIGIN` must be the exact address you open the PWA at in your browser, including scheme and port. `http://localhost:5173` only works when the browser runs on the Docker host itself. From any other machine, use the host's address, for example `http://192.168.1.20:5173`. Only one origin can be set.
+`TINYBUBBLES_CLOUD_CORS_ORIGIN` must contain the exact address where you open the PWA in your browser, including scheme and port. `http://localhost:5173` only works when the browser runs on the Docker host itself. From any other machine, use the host's address, for example `http://192.168.1.20:5173`. To authorize more than one app origin, provide a comma-separated list.
 
 Then pull and start the published images:
 
@@ -59,7 +59,7 @@ Edit `docker/.env.https.local`:
 ```dotenv
 TINYBUBBLES_CLOUD_DOMAIN=tinybubbles.example.com
 TINYBUBBLES_CLOUD_AUTH_TOKENS=your_long_random_token
-TINYBUBBLES_CLOUD_CORS_ORIGIN=https://tinybubbles.example.com
+TINYBUBBLES_CLOUD_CORS_ORIGIN=https://app.tinybubbles.example.com
 TINYBUBBLES_CADDYFILE=Caddyfile.https
 ```
 
@@ -83,13 +83,16 @@ https://tinybubbles.example.com
 
 Tiny Bubbles will automatically append `/v1/data`.
 
+The CORS value is the browser app's origin, not the Cloud API origin. If the app is served
+from more than one origin, list each origin separated by commas.
+
 ### LAN-only HTTPS
 
 For a hostname that only resolves on your home network, change:
 
 ```dotenv
 TINYBUBBLES_CLOUD_DOMAIN=tinybubbles.home.arpa
-TINYBUBBLES_CLOUD_CORS_ORIGIN=https://tinybubbles.home.arpa
+TINYBUBBLES_CLOUD_CORS_ORIGIN=https://app.tinybubbles.home.arpa
 TINYBUBBLES_CADDYFILE=Caddyfile.local-https
 ```
 
