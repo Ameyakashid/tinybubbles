@@ -3,6 +3,7 @@ import { createSyncOrchestrator, resolveSyncFailureCooldownMs } from '@tinybubbl
 type SyncResult = {
     success: boolean;
     error?: string;
+    remoteWriteDeferred?: boolean;
 };
 
 type DesktopAutoSyncControllerOptions = {
@@ -198,15 +199,16 @@ export const createDesktopAutoSyncController = (
             const result = await options.performSync();
             trace('Auto sync run complete', {
                 success: String(result.success),
+                remoteWriteDeferred: String(Boolean(result.remoteWriteDeferred)),
                 error: result.error ?? '',
             });
-            if (result.success) {
+            if (result.success && !result.remoteWriteDeferred) {
                 autoSyncRetryAfter = 0;
                 consecutiveAutoSyncFailures = 0;
                 // A manual run can recover before a scheduled automatic retry.
                 // Its successful cycle already includes the pending local work.
                 clearSyncThrottle();
-            } else {
+            } else if (!result.success) {
                 // CloudKit answers a throttle with the delay it wants; honour it
                 // rather than retrying on a fixed 60s that keeps tripping the
                 // same limit. Arm the retry now instead of waiting for another

@@ -15,6 +15,7 @@ import { createDesktopAutoSyncController } from '../lib/auto-sync-controller';
 import { canDesktopAutoSync } from '../lib/desktop-auto-sync-eligibility';
 import { resolveVisibilitySyncAction } from '../lib/desktop-sync-runtime';
 import { logError, logInfo } from '../lib/app-log';
+import { startDesktopNotifications, stopDesktopNotifications } from '../lib/notification-service';
 
 export type KidFaceRuntimeStatus = {
     hydrated: boolean;
@@ -25,16 +26,34 @@ export type KidFaceRuntimeStatus = {
      */
     loadError: string | null;
     lastSyncError: string | null;
-    requestSync: () => void;
+    syncPending: boolean;
+    persistError: string | null;
+    persistRetrying: boolean;
+    requestSync: () => Promise<void>;
+    retryPersistence: () => Promise<void>;
     retryLoad: () => void;
+};
+
+const readPersistedSyncState = () => {
+    const { settings } = useTaskStore.getState();
+    const persistedError = settings?.lastSyncError?.trim();
+    return {
+        lastSyncError: persistedError || null,
+        syncPending: Boolean(settings?.pendingRemoteWriteAt || settings?.pendingRemoteWriteRetryAt),
+    };
 };
 
 export function useKidFaceRuntime(): KidFaceRuntimeStatus {
     const fetchData = useTaskStore((state) => state.fetchData);
+    const persistenceFailure = useTaskStore((state) => state.persistenceFailure);
+    const retryPersistenceAction = useTaskStore((state) => state.retryPersistence);
     const [hydrated, setHydrated] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [lastSyncError, setLastSyncError] = useState<string | null>(null);
-    const [requestSyncFn, setRequestSyncFn] = useState<() => void>(() => () => undefined);
+    const [syncPending, setSyncPending] = useState(false);
+    const [requestSyncFn, setRequestSyncFn] = useState<() => Promise<void>>(
+        () => async () => undefined,
+    );
     const [retryLoadFn, setRetryLoadFn] = useState<() => void>(() => () => undefined);
 
     useEffect(() => {
@@ -45,20 +64,30 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
             void logError(error, { scope: 'kidface', step: label });
         };
 
+        startDesktopNotifications().catch((error) => reportError('Notifications failed', error));
+
         const controller = createDesktopAutoSyncController({
             canSync: () => canDesktopAutoSync(SyncService),
-            // A successful sync of any kind (focus, periodic, data-change,
-            // manual) clears the failure banner; only failures re-arm it
-            // (audit #9).
             performSync: async () => {
                 const result = await SyncService.performSync();
-                if (result.success && !disposed) setLastSyncError(null);
+                if (!disposed) {
+                    if (result.remoteWriteDeferred) {
+                        setSyncPending(true);
+                        if (result.error) setLastSyncError(result.error);
+                    } else if (result.success) {
+                        setSyncPending(false);
+                        setLastSyncError(null);
+                    }
+                }
                 return result;
             },
             flushPendingSave,
             reportError,
             onSyncFailure: (message: string) => {
-                if (!disposed) setLastSyncError(message);
+                if (!disposed) {
+                    setLastSyncError(message);
+                    setSyncPending(readPersistedSyncState().syncPending);
+                }
             },
             isRuntimeActive: () => !disposed,
             shouldPauseWindowSync: () => useTaskStore.getState().editLockCount > 0,
@@ -68,15 +97,21 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
             },
         });
 
-        setRequestSyncFn(() => () => {
-            setLastSyncError(null);
-            void controller.requestSync(0).catch((error) => reportError('Sync failed', error));
+        setRequestSyncFn(() => async () => {
+            await controller.requestSync(0).catch((error) => {
+                reportError('Sync failed', error);
+            });
         });
 
         const loadData = () => {
             void fetchData({ isResultStillRelevant: () => !disposed })
                 .then(() => {
-                    if (!disposed) setLoadError(null);
+                    if (!disposed) {
+                        const persistedSyncState = readPersistedSyncState();
+                        setLoadError(null);
+                        setLastSyncError(persistedSyncState.lastSyncError);
+                        setSyncPending(persistedSyncState.syncPending);
+                    }
                 })
                 .catch((error) => {
                     reportError('Load failed', error);
@@ -119,6 +154,7 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
         return () => {
             disposed = true;
             controller.dispose();
+            stopDesktopNotifications();
             storeUnsubscribe();
             window.removeEventListener('focus', focusListener);
             window.removeEventListener('blur', blurListener);
@@ -130,7 +166,11 @@ export function useKidFaceRuntime(): KidFaceRuntimeStatus {
         hydrated,
         loadError,
         lastSyncError,
+        syncPending,
+        persistError: persistenceFailure?.message ?? null,
+        persistRetrying: persistenceFailure?.retrying ?? false,
         requestSync: requestSyncFn,
+        retryPersistence: retryPersistenceAction,
         retryLoad: retryLoadFn,
     };
 }

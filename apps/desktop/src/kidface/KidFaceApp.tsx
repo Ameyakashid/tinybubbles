@@ -26,7 +26,17 @@ import './kidface.css';
 const ROOM_ORDER: KidRoom[] = ['today', 'add', 'done', 'calendar', 'settings'];
 
 export function KidFaceApp() {
-    const { hydrated, loadError, lastSyncError, requestSync, retryLoad } = useKidFaceRuntime();
+    const {
+        hydrated,
+        loadError,
+        lastSyncError,
+        syncPending,
+        persistError,
+        persistRetrying,
+        requestSync,
+        retryPersistence,
+        retryLoad,
+    } = useKidFaceRuntime();
     const { t, language } = useLanguage();
     useKidFaceTheme();
 
@@ -77,7 +87,14 @@ export function KidFaceApp() {
 
     return (
         <CelebrationProvider>
-            <KidLayout lastSyncError={resolvedLastSyncError} onRequestSync={requestSync}>
+            <KidLayout
+                lastSyncError={resolvedLastSyncError}
+                syncPending={syncPending}
+                persistError={persistError}
+                persistRetrying={persistRetrying}
+                onRequestSync={requestSync}
+                onRetryPersistence={retryPersistence}
+            >
                 <main
                     ref={mainRef}
                     tabIndex={-1}

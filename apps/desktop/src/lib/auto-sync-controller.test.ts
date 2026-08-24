@@ -320,6 +320,54 @@ describe('createDesktopAutoSyncController', () => {
         expect(performSync).toHaveBeenCalledTimes(2);
     });
 
+    it('keeps the automatic retry armed when a manual cycle defers the remote write (audit loop 08)', async () => {
+        const scheduler = createManualScheduler();
+        const performSync = vi.fn()
+            .mockResolvedValueOnce({
+                success: false,
+                error: 'CloudKit error: Request Rate Limited [retryAfter=180]',
+            })
+            .mockResolvedValueOnce({
+                success: true,
+                error: 'CloudKit error: Request Rate Limited [retryAfter=180]',
+                remoteWriteDeferred: true,
+            })
+            .mockResolvedValue({ success: true });
+        const controller = createDesktopAutoSyncController({
+            canSync: async () => true,
+            performSync,
+            flushPendingSave: async () => undefined,
+            reportError: vi.fn(),
+            isRuntimeActive: () => true,
+            now: scheduler.now,
+            setTimer: scheduler.setTimer,
+            clearTimer: scheduler.clearTimer,
+            minIntervalMs: 0,
+            periodicSyncIntervalMs: 0,
+        });
+
+        controller.handleDataChange();
+        await scheduler.advanceBy(2_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(1);
+        });
+        expect(scheduler.getTimerCount()).toBe(1);
+
+        await controller.requestSync(0);
+
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(2);
+        });
+        expect(scheduler.getTimerCount()).toBe(1);
+
+        await scheduler.advanceBy(180_000);
+        await waitForAssertion(() => {
+            expect(performSync).toHaveBeenCalledTimes(3);
+        });
+
+        controller.dispose();
+    });
+
     it('delays a queued auto follow-up when the in-flight sync enters failure cooldown', async () => {
         const scheduler = createManualScheduler();
         const logInfo = vi.fn();

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useTaskStore } from '@tinybubbles/core';
 import { LanguageProvider } from '@/contexts/language-context';
-import { useKidFaceRuntime } from './runtime';
+import { useKidFaceRuntime, type KidFaceRuntimeStatus } from './runtime';
 import { KidFaceApp } from './KidFaceApp';
 
 vi.mock('./runtime', () => ({
@@ -10,6 +10,21 @@ vi.mock('./runtime', () => ({
 }));
 
 const mockedUseKidFaceRuntime = vi.mocked(useKidFaceRuntime);
+
+const runtimeStatus = (
+    overrides: Partial<KidFaceRuntimeStatus> = {},
+): KidFaceRuntimeStatus => ({
+    hydrated: true,
+    loadError: null,
+    lastSyncError: null,
+    syncPending: false,
+    persistError: null,
+    persistRetrying: false,
+    requestSync: vi.fn(async () => undefined),
+    retryPersistence: vi.fn(async () => undefined),
+    retryLoad: vi.fn(),
+    ...overrides,
+});
 
 const renderApp = () => render(
     <LanguageProvider>
@@ -23,13 +38,9 @@ describe('KidFaceApp', () => {
     });
 
     it('shows a loading spinner while the runtime hydrates', () => {
-        mockedUseKidFaceRuntime.mockReturnValue({
+        mockedUseKidFaceRuntime.mockReturnValue(runtimeStatus({
             hydrated: false,
-            loadError: null,
-            lastSyncError: null,
-            requestSync: vi.fn(),
-            retryLoad: vi.fn(),
-        });
+        }));
 
         renderApp();
 
@@ -37,13 +48,9 @@ describe('KidFaceApp', () => {
     });
 
     it('renders a calm error screen when stored data fails to load', () => {
-        mockedUseKidFaceRuntime.mockReturnValue({
-            hydrated: true,
+        mockedUseKidFaceRuntime.mockReturnValue(runtimeStatus({
             loadError: 'disk unreadable',
-            lastSyncError: null,
-            requestSync: vi.fn(),
-            retryLoad: vi.fn(),
-        });
+        }));
 
         renderApp();
 
@@ -78,13 +85,7 @@ describe('KidFaceApp', () => {
     });
 
     it('moves focus to the main content when the room changes', () => {
-        mockedUseKidFaceRuntime.mockReturnValue({
-            hydrated: true,
-            loadError: null,
-            lastSyncError: null,
-            requestSync: vi.fn(),
-            retryLoad: vi.fn(),
-        });
+        mockedUseKidFaceRuntime.mockReturnValue(runtimeStatus());
 
         renderApp();
 
@@ -94,14 +95,11 @@ describe('KidFaceApp', () => {
     });
 
     it('shows a sync-error banner when the runtime reports a sync failure', () => {
-        const requestSync = vi.fn();
-        mockedUseKidFaceRuntime.mockReturnValue({
-            hydrated: true,
-            loadError: null,
+        const requestSync = vi.fn(async () => undefined);
+        mockedUseKidFaceRuntime.mockReturnValue(runtimeStatus({
             lastSyncError: 'offline',
             requestSync,
-            retryLoad: vi.fn(),
-        });
+        }));
 
         renderApp();
 
@@ -114,13 +112,7 @@ describe('KidFaceApp', () => {
     });
 
     it('navigates to the settings room and moves focus to it', () => {
-        mockedUseKidFaceRuntime.mockReturnValue({
-            hydrated: true,
-            loadError: null,
-            lastSyncError: null,
-            requestSync: vi.fn(),
-            retryLoad: vi.fn(),
-        });
+        mockedUseKidFaceRuntime.mockReturnValue(runtimeStatus());
 
         renderApp();
 

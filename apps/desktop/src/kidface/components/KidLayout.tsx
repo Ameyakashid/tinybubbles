@@ -7,12 +7,24 @@ import { cn } from '@/lib/utils';
 interface KidLayoutProps {
     children: ReactNode;
     lastSyncError: string | null;
-    onRequestSync: () => void;
+    syncPending?: boolean;
+    persistError?: string | null;
+    persistRetrying?: boolean;
+    onRequestSync: () => void | Promise<void>;
+    onRetryPersistence?: () => void | Promise<void>;
 }
 
 const SYNCED_FLASH_MS = 1200;
 
-export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutProps) {
+export function KidLayout({
+    children,
+    lastSyncError,
+    syncPending = false,
+    persistError = null,
+    persistRetrying = false,
+    onRequestSync,
+    onRetryPersistence = () => undefined,
+}: KidLayoutProps) {
     const { t, language } = useLanguage();
     const [isRetrying, setIsRetrying] = useState(false);
     const [showSynced, setShowSynced] = useState(false);
@@ -23,6 +35,10 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
     const offlineAction = displayLabel(t, language, 'kidface.offline.action', 'Try syncing');
     const tryingLabel = displayLabel(t, language, 'kidface.offline.trying', 'Trying to sync…');
     const syncedLabel = displayLabel(t, language, 'kidface.offline.synced', 'Synced!');
+    const pendingMessage = displayLabel(t, language, 'kidface.sync.pending', 'Still waiting to send your changes.');
+    const persistMessage = displayLabel(t, language, 'kidface.persistence.error', 'Your changes could not be saved on this device.');
+    const persistAction = displayLabel(t, language, 'kidface.persistence.retry', 'Try saving again');
+    const persistTrying = displayLabel(t, language, 'kidface.persistence.retrying', 'Trying to save...');
 
     useEffect(() => {
         return () => {
@@ -34,27 +50,36 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
 
     useEffect(() => {
         const previous = previousErrorRef.current;
-        if (previous && !lastSyncError && isRetrying) {
+        if (previous && !lastSyncError && !syncPending && !persistError && isRetrying) {
             setShowSynced(true);
             syncedTimeoutRef.current = window.setTimeout(() => {
                 setIsRetrying(false);
                 setShowSynced(false);
             }, SYNCED_FLASH_MS);
-        } else if (!previous && lastSyncError) {
+        } else if ((!previous && lastSyncError) || persistError) {
             setIsRetrying(false);
             setShowSynced(false);
+        } else if (isRetrying && syncPending) {
+            setIsRetrying(false);
         }
         previousErrorRef.current = lastSyncError;
-    }, [lastSyncError, isRetrying]);
+    }, [lastSyncError, syncPending, persistError, isRetrying]);
 
-    const handleRequestSync = () => {
+    const handleRequestSync = async () => {
         if (isRetrying) return;
         setIsRetrying(true);
-        onRequestSync();
+        try {
+            await onRequestSync();
+        } finally {
+            setIsRetrying(false);
+        }
     };
 
-    const bannerVisible = lastSyncError || isRetrying || showSynced;
-    const bannerBusy = isRetrying && !showSynced;
+    const bannerVisible = persistError || lastSyncError || syncPending || isRetrying || showSynced;
+    const bannerBusy = persistRetrying || (isRetrying && !showSynced);
+    const handleBannerAction = persistError
+        ? () => { void Promise.resolve(onRetryPersistence()).catch(() => undefined); }
+        : () => { void handleRequestSync(); };
 
     return (
         <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -69,7 +94,7 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
             {bannerVisible && (
                 <button
                     type="button"
-                    onClick={handleRequestSync}
+                    onClick={handleBannerAction}
                     disabled={bannerBusy}
                     aria-busy={bannerBusy}
                     aria-live="polite"
@@ -80,12 +105,29 @@ export function KidLayout({ children, lastSyncError, onRequestSync }: KidLayoutP
                             : 'bg-warning text-warning-foreground',
                     )}
                 >
-                    {showSynced ? (
+                    {persistError ? (
+                        persistRetrying ? (
+                            <>
+                                <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+                                <span>{persistTrying}</span>
+                            </>
+                        ) : (
+                            <>
+                                <span>{persistMessage}</span>
+                                <span className="underline">{persistAction}</span>
+                            </>
+                        )
+                    ) : showSynced ? (
                         <span>{syncedLabel}</span>
                     ) : bannerBusy ? (
                         <>
                             <Loader2 className="size-5 animate-spin" aria-hidden="true" />
                             <span>{tryingLabel}</span>
+                        </>
+                    ) : syncPending ? (
+                        <>
+                            <span>{pendingMessage}</span>
+                            <span className="underline">{offlineAction}</span>
                         </>
                     ) : (
                         <>

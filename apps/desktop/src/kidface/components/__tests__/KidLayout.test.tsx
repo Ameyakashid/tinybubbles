@@ -3,12 +3,23 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LanguageProvider } from '@/contexts/language-context';
 import { KidLayout } from '../KidLayout';
 
-function renderLayout(props: { lastSyncError?: string | null; onRequestSync?: () => void }) {
+function renderLayout(props: {
+    lastSyncError?: string | null;
+    syncPending?: boolean;
+    persistError?: string | null;
+    persistRetrying?: boolean;
+    onRequestSync?: () => void | Promise<void>;
+    onRetryPersistence?: () => void | Promise<void>;
+}) {
     return render(
         <LanguageProvider>
             <KidLayout
                 lastSyncError={props.lastSyncError ?? null}
+                syncPending={props.syncPending}
+                persistError={props.persistError}
+                persistRetrying={props.persistRetrying}
                 onRequestSync={props.onRequestSync ?? vi.fn()}
+                onRetryPersistence={props.onRetryPersistence}
             >
                 <div data-testid="kid-content">Today</div>
             </KidLayout>
@@ -30,6 +41,31 @@ describe('KidLayout', () => {
         const banner = screen.getByRole('button', { name: /Offline — your changes are saved/ });
         expect(banner).toBeInTheDocument();
         expect(banner).toHaveTextContent('Try syncing');
+    });
+
+    it('shows a pending message instead of claiming a deferred write synced', () => {
+        renderLayout({
+            lastSyncError: 'upload is backing off',
+            syncPending: true,
+        });
+
+        expect(screen.getByRole('button', { name: /Still waiting to send your changes/ })).toBeInTheDocument();
+        expect(screen.queryByText('Synced!')).not.toBeInTheDocument();
+    });
+
+    it('shows local persistence failure distinctly and retries the durable save', () => {
+        const onRetryPersistence = vi.fn(async () => undefined);
+        renderLayout({
+            persistError: 'disk full',
+            onRetryPersistence,
+        });
+
+        const banner = screen.getByRole('button', { name: /Your changes could not be saved on this device/ });
+        expect(banner).toHaveTextContent('Try saving again');
+        expect(banner).not.toHaveTextContent('your changes are saved');
+
+        fireEvent.click(banner);
+        expect(onRetryPersistence).toHaveBeenCalledTimes(1);
     });
 
     it('requests a sync and enters a busy state when the banner is pressed', () => {
