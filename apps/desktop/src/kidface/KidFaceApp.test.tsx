@@ -103,10 +103,10 @@ describe('KidFaceApp', () => {
 
         renderApp();
 
-        fireEvent.click(screen.getByRole('button', { name: /Offline — your changes are saved/ }));
+        fireEvent.click(screen.getByRole('button', { name: /You are offline — your changes are safe here/ }));
 
         expect(requestSync).toHaveBeenCalled();
-        const busyBanner = screen.getByRole('button', { name: 'Trying to sync…' });
+        const busyBanner = screen.getByRole('button', { name: 'Sending your changes…' });
         expect(busyBanner).toBeDisabled();
         expect(busyBanner).toHaveAttribute('aria-busy', 'true');
     });

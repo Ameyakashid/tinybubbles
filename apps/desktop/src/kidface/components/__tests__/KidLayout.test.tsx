@@ -38,9 +38,10 @@ describe('KidLayout', () => {
     it('shows the offline banner when the runtime reports a sync failure', () => {
         renderLayout({ lastSyncError: 'offline' });
 
-        const banner = screen.getByRole('button', { name: /Offline — your changes are saved/ });
+        const banner = screen.getByRole('button', { name: /You are offline — your changes are safe here/ });
         expect(banner).toBeInTheDocument();
-        expect(banner).toHaveTextContent('Try syncing');
+        expect(banner).toHaveTextContent('Try sending them');
+        expect(banner).not.toHaveTextContent('Offline — your changes are saved');
     });
 
     it('shows a pending message instead of claiming a deferred write synced', () => {
@@ -49,7 +50,8 @@ describe('KidLayout', () => {
             syncPending: true,
         });
 
-        expect(screen.getByRole('button', { name: /Still waiting to send your changes/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Your changes are still on their way/ })).toBeInTheDocument();
+        expect(screen.queryByText('All sent!')).not.toBeInTheDocument();
         expect(screen.queryByText('Synced!')).not.toBeInTheDocument();
     });
 
@@ -60,9 +62,10 @@ describe('KidLayout', () => {
             onRetryPersistence,
         });
 
-        const banner = screen.getByRole('button', { name: /Your changes could not be saved on this device/ });
+        const banner = screen.getByRole('button', { name: /We could not save your changes on this device/ });
         expect(banner).toHaveTextContent('Try saving again');
         expect(banner).not.toHaveTextContent('your changes are saved');
+        expect(banner).not.toHaveTextContent('Your changes could not be saved on this device');
 
         fireEvent.click(banner);
         expect(onRetryPersistence).toHaveBeenCalledTimes(1);
@@ -72,10 +75,10 @@ describe('KidLayout', () => {
         const onRequestSync = vi.fn();
         renderLayout({ lastSyncError: 'offline', onRequestSync });
 
-        fireEvent.click(screen.getByRole('button', { name: /Offline — your changes are saved/ }));
+        fireEvent.click(screen.getByRole('button', { name: /You are offline — your changes are safe here/ }));
 
         expect(onRequestSync).toHaveBeenCalled();
-        const busyBanner = screen.getByRole('button', { name: 'Trying to sync…' });
+        const busyBanner = screen.getByRole('button', { name: 'Sending your changes…' });
         expect(busyBanner).toBeDisabled();
         expect(busyBanner).toHaveAttribute('aria-busy', 'true');
     });
@@ -84,8 +87,8 @@ describe('KidLayout', () => {
         const onRequestSync = vi.fn();
         const { rerender } = renderLayout({ lastSyncError: 'offline', onRequestSync });
 
-        fireEvent.click(screen.getByRole('button', { name: /Offline — your changes are saved/ }));
-        expect(screen.getByRole('button', { name: 'Trying to sync…' })).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /You are offline — your changes are safe here/ }));
+        expect(screen.getByRole('button', { name: 'Sending your changes…' })).toBeInTheDocument();
 
         rerender(
             <LanguageProvider>
@@ -95,7 +98,7 @@ describe('KidLayout', () => {
             </LanguageProvider>,
         );
 
-        expect(screen.getByRole('button', { name: 'Synced!' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'All sent!' })).toBeInTheDocument();
 
         await waitFor(
             () => {
@@ -109,8 +112,8 @@ describe('KidLayout', () => {
         const onRequestSync = vi.fn();
         const { rerender } = renderLayout({ lastSyncError: 'offline', onRequestSync });
 
-        fireEvent.click(screen.getByRole('button', { name: /Offline — your changes are saved/ }));
-        expect(screen.getByRole('button', { name: 'Trying to sync…' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: /You are offline — your changes are safe here/ }));
+        expect(screen.getByRole('button', { name: 'Sending your changes…' })).toBeDisabled();
 
         rerender(
             <LanguageProvider>
@@ -128,7 +131,7 @@ describe('KidLayout', () => {
             </LanguageProvider>,
         );
 
-        const banner = screen.getByRole('button', { name: /Offline — your changes are saved/ });
+        const banner = screen.getByRole('button', { name: /You are offline — your changes are safe here/ });
         expect(banner).toBeEnabled();
         expect(banner).toHaveAttribute('aria-busy', 'false');
     });
@@ -136,7 +139,7 @@ describe('KidLayout', () => {
     it('keeps the offline banner on the 88px floor', () => {
         renderLayout({ lastSyncError: 'offline' });
 
-        const banner = screen.getByRole('button', { name: /Offline — your changes are saved/ });
+        const banner = screen.getByRole('button', { name: /You are offline — your changes are safe here/ });
         expect(banner).toHaveClass('min-h-22');
     });
 });

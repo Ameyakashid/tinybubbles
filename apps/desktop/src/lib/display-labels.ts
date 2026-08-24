@@ -86,10 +86,14 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.calendar.nextMonth': 'Next month',
     'kidface.calendar.today': 'Today',
     // Offline reassurance.
-    'kidface.offline.message': 'Offline — your changes are saved.',
-    'kidface.offline.action': 'Try syncing',
-    'kidface.offline.trying': 'Trying to sync…',
-    'kidface.offline.synced': 'Synced!',
+    'kidface.offline.message': 'You are offline — your changes are safe here.',
+    'kidface.offline.action': 'Try sending them',
+    'kidface.offline.trying': 'Sending your changes…',
+    'kidface.offline.synced': 'All sent!',
+    'kidface.sync.pending': 'Your changes are still on their way.',
+    'kidface.persistence.error': 'We could not save your changes on this device.',
+    'kidface.persistence.retry': 'Try saving again',
+    'kidface.persistence.retrying': 'Trying to save…',
     // Calendar day a11y + day sheet.
     'kidface.calendar.dayTaskCount.zero': 'nothing to do',
     'kidface.calendar.dayTaskCount.one': 'one thing',
