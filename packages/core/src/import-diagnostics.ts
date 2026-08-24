@@ -4,6 +4,7 @@ export type ImportDiagnosticCode =
     | 'adjusted-records'
     | 'archive-limit-exceeded'
     | 'backup-empty-active-records'
+    | 'backup-ai-endpoint-removed'
     | 'backup-newer-version'
     | 'backup-older-version'
     | 'backup-source-size-unknown'
@@ -133,6 +134,9 @@ export const formatImportDiagnostic = (
     }
     if (diagnostic.code === 'backup-empty-active-records') {
         return translate('settings.backupDiagnostics.noActiveRecords');
+    }
+    if (diagnostic.code === 'backup-ai-endpoint-removed') {
+        return translate('settings.backupDiagnostics.aiEndpointRemoved');
     }
     if (diagnostic.code === 'backup-newer-version') {
         return translate('settings.backupDiagnostics.newerVersion', diagnostic.params);

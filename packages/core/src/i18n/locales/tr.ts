@@ -1490,6 +1490,7 @@ export const trOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox, iCloud, WebDAV, Dosya Eşitleme ve kurtarma için kurulum notları.',
         'settings.importSetupGuideTitle': 'İçe aktarma kurulum kılavuzu',
         'settings.importSetupGuideDesc': 'Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple Anımsatıcılar ve yedekler için desteklenen içe aktarma yolları.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Özel AI uç noktaları bu yedekten kaldırıldı. Bunları AI ayarlarında yeniden girin.",
         'settings.backupDiagnostics.newerVersion': "Bu yedek daha yeni bir Tiny Bubbles sürümüyle ({{version}}) oluşturuldu.",
         'settings.backupDiagnostics.noActiveRecords': "Bu yedek etkin görev veya proje içermiyor.",
         'settings.backupDiagnostics.olderVersion': "Bu yedek daha eski bir Tiny Bubbles sürümüyle ({{version}}) oluşturuldu.",

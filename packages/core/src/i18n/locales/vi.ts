@@ -2296,6 +2296,7 @@ export const viOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Ghi chú thiết lập cho Dropbox, iCloud, WebDAV, Đồng bộ tệp và khôi phục.',
         'settings.importSetupGuideTitle': 'Hướng dẫn thiết lập nhập',
         'settings.importSetupGuideDesc': 'Các đường dẫn nhập được hỗ trợ: Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple Reminders và bản sao lưu.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Các điểm cuối AI tùy chỉnh đã bị xóa khỏi bản sao lưu này. Hãy nhập lại trong cài đặt AI.",
         'settings.backupDiagnostics.newerVersion': "Bản sao lưu này được tạo bằng phiên bản Tiny Bubbles mới hơn ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Bản sao lưu này không chứa tác vụ hoặc dự án đang hoạt động nào.",
         'settings.backupDiagnostics.olderVersion': "Bản sao lưu này được tạo bằng phiên bản Tiny Bubbles cũ hơn ({{version}}).",

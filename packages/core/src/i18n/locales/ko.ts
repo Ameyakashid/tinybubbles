@@ -2321,6 +2321,7 @@ export const koOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox, iCloud, WebDAV, 파일 동기화 및 복구 설정 안내입니다.',
         'settings.importSetupGuideTitle': '가져오기 설정 가이드',
         'settings.importSetupGuideDesc': 'Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple 미리 알림 및 백업 가져오기를 지원합니다.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "사용자 지정 AI 엔드포인트가 이 백업에서 제거되었습니다. AI 설정에서 다시 입력하세요.",
         'settings.backupDiagnostics.newerVersion': "이 백업은 더 최신 Tiny Bubbles 버전({{version}})에서 생성되었습니다.",
         'settings.backupDiagnostics.noActiveRecords': "이 백업에는 활성 작업이나 프로젝트가 없습니다.",
         'settings.backupDiagnostics.olderVersion': "이 백업은 이전 Tiny Bubbles 버전({{version}})에서 생성되었습니다.",

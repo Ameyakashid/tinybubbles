@@ -2368,6 +2368,7 @@ export const en: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Setup notes for Dropbox, iCloud, WebDAV, File Sync, and recovery.',
         'settings.importSetupGuideTitle': 'Import setup guide',
         'settings.importSetupGuideDesc': 'Supported Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple Reminders, and backup import paths.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Custom AI endpoints were removed from this backup. Re-enter them explicitly in AI settings.",
         'settings.backupDiagnostics.newerVersion': "This backup was created by a newer Tiny Bubbles version ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "This backup does not contain any active tasks or projects.",
         'settings.backupDiagnostics.olderVersion': "This backup was created by an older Tiny Bubbles version ({{version}}).",

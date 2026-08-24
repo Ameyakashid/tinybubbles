@@ -397,7 +397,25 @@ export const validateBackupJson = (
         };
     }
 
-    const normalized = document.data;
+    let normalized = document.data;
+    const backupAi = normalized.settings.ai;
+    const hasAiBaseUrl = typeof backupAi?.baseUrl === 'string' && backupAi.baseUrl.trim().length > 0;
+    const hasSpeechBaseUrl = typeof backupAi?.speechToText?.baseUrl === 'string'
+        && backupAi.speechToText.baseUrl.trim().length > 0;
+    if (backupAi && (hasAiBaseUrl || hasSpeechBaseUrl)) {
+        const safeAi = { ...backupAi };
+        delete safeAi.baseUrl;
+        if (safeAi.speechToText) {
+            safeAi.speechToText = { ...safeAi.speechToText };
+            delete safeAi.speechToText.baseUrl;
+        }
+        normalized = {
+            ...normalized,
+            settings: { ...normalized.settings, ai: safeAi },
+        };
+        warnings.push('Custom AI endpoints were removed from this backup. Re-enter them explicitly in AI settings.');
+        diagnostics.push({ code: 'backup-ai-endpoint-removed', params: {}, severity: 'warning' });
+    }
     const dataErrors = validateMergedSyncData(normalized);
     if (dataErrors.length > 0) {
         return {

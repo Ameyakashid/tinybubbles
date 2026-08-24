@@ -579,6 +579,7 @@ export const nlOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Instellingsnotities voor Dropbox, iCloud, WebDAV, bestandssynchronisatie en herstel.',
         'settings.importSetupGuideTitle': 'Handleiding voor importinstellingen',
         'settings.importSetupGuideDesc': 'Ondersteunde importroutes voor Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple Herinneringen en back-ups.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Aangepaste AI-eindpunten zijn uit deze back-up verwijderd. Voer ze opnieuw in bij de AI-instellingen.",
         'settings.backupDiagnostics.newerVersion': "Deze back-up is gemaakt met een nieuwere versie van Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Deze back-up bevat geen actieve taken of projecten.",
         'settings.backupDiagnostics.olderVersion': "Deze back-up is gemaakt met een oudere versie van Tiny Bubbles ({{version}}).",

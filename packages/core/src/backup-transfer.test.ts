@@ -91,6 +91,44 @@ describe('backup transfer', () => {
         expect(result.warnings).toEqual([]);
     });
 
+    it('removes custom AI endpoints from restored backup data and surfaces a warning', () => {
+        const data = buildAppData();
+        data.settings.ai = {
+            enabled: true,
+            provider: 'openai',
+            model: 'local-model',
+            baseUrl: 'http://backup-host:11434/v1',
+            speechToText: {
+                enabled: true,
+                provider: 'openai',
+                model: 'whisper-1',
+                baseUrl: 'http://backup-host:8080/v1',
+            },
+        };
+
+        const result = validateBackupJson(serializeBackupData(data));
+
+        expect(result.valid).toBe(true);
+        expect(result.data?.settings.ai).toEqual({
+            enabled: true,
+            provider: 'openai',
+            model: 'local-model',
+            speechToText: {
+                enabled: true,
+                provider: 'openai',
+                model: 'whisper-1',
+            },
+        });
+        expect(result.warnings).toContain(
+            'Custom AI endpoints were removed from this backup. Re-enter them explicitly in AI settings.',
+        );
+        expect(result.diagnostics).toContainEqual({
+            code: 'backup-ai-endpoint-removed',
+            params: {},
+            severity: 'warning',
+        });
+    });
+
     it('removes permanently deleted content from backup tombstones', () => {
         const purgedAt = '2026-03-31T12:00:00.000Z';
         const data = buildAppData();

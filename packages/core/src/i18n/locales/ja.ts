@@ -1444,6 +1444,7 @@ export const jaOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox、iCloud、WebDAV、ファイル同期、復元のセットアップ手順。',
         'settings.importSetupGuideTitle': 'インポートのセットアップガイド',
         'settings.importSetupGuideDesc': 'Todoist、TickTick、DGT GTD、OmniFocus、Tiny Bubbles CSV、Appleリマインダー、バックアップからのインポートに対応しています。',
+        'settings.backupDiagnostics.aiEndpointRemoved': "カスタムAIエンドポイントはこのバックアップから削除されました。AI設定で明示的に再入力してください。",
         'settings.backupDiagnostics.newerVersion': "このバックアップは新しいバージョンのTiny Bubbles（{{version}}）で作成されました。",
         'settings.backupDiagnostics.noActiveRecords': "このバックアップには有効なタスクまたはプロジェクトが含まれていません。",
         'settings.backupDiagnostics.olderVersion': "このバックアップは古いバージョンのTiny Bubbles（{{version}}）で作成されました。",

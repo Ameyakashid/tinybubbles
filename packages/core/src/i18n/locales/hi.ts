@@ -1444,6 +1444,7 @@ export const hiOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox, iCloud, WebDAV, फ़ाइल सिंक और पुनर्प्राप्ति के लिए सेटअप नोट्स।',
         'settings.importSetupGuideTitle': 'इंपोर्ट सेटअप गाइड',
         'settings.importSetupGuideDesc': 'Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple रिमाइंडर और बैकअप के समर्थित इंपोर्ट तरीके।',
+        'settings.backupDiagnostics.aiEndpointRemoved': "इस बैकअप से कस्टम AI एंडपॉइंट हटा दिए गए हैं। उन्हें AI सेटिंग में दोबारा दर्ज करें।",
         'settings.backupDiagnostics.newerVersion': "यह बैकअप Tiny Bubbles के नए संस्करण ({{version}}) से बनाया गया था।",
         'settings.backupDiagnostics.noActiveRecords': "इस बैकअप में कोई सक्रिय कार्य या प्रोजेक्ट नहीं है।",
         'settings.backupDiagnostics.olderVersion': "यह बैकअप Tiny Bubbles के पुराने संस्करण ({{version}}) से बनाया गया था।",

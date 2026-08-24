@@ -2330,6 +2330,7 @@ export const faOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'نکات راه‌اندازی برای Dropbox، iCloud، WebDAV، همگام‌سازی فایل و بازیابی.',
         'settings.importSetupGuideTitle': 'راهنمای راه‌اندازی واردکردن',
         'settings.importSetupGuideDesc': 'روش‌های واردکردن پشتیبانی‌شده برای Todoist، TickTick، DGT GTD، OmniFocus، Tiny Bubbles CSV، یادآورهای Apple و نسخه‌های پشتیبان.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "نقاط پایانی سفارشی هوش مصنوعی از این نسخه پشتیبان حذف شدند. آن‌ها را دوباره در تنظیمات هوش مصنوعی وارد کنید.",
         'settings.backupDiagnostics.newerVersion': "این نسخه پشتیبان با نسخه جدیدتری از Tiny Bubbles ({{version}}) ساخته شده است.",
         'settings.backupDiagnostics.noActiveRecords': "این نسخه پشتیبان هیچ کار یا پروژه فعالی ندارد.",
         'settings.backupDiagnostics.olderVersion': "این نسخه پشتیبان با نسخه قدیمی‌تری از Tiny Bubbles ({{version}}) ساخته شده است.",

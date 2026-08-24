@@ -1471,6 +1471,7 @@ export const arOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'ملاحظات إعداد Dropbox وiCloud وWebDAV ومزامنة الملفات والاسترداد.',
         'settings.importSetupGuideTitle': 'دليل إعداد الاستيراد',
         'settings.importSetupGuideDesc': 'مسارات الاستيراد المدعومة لـ Todoist وTickTick وDGT GTD وOmniFocus وTiny Bubbles CSV وتذكيرات Apple والنسخ الاحتياطية.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "أُزيلت نقاط نهاية الذكاء الاصطناعي المخصصة من هذه النسخة الاحتياطية. أعد إدخالها صراحةً في إعدادات الذكاء الاصطناعي.",
         'settings.backupDiagnostics.newerVersion': "أُنشئت هذه النسخة الاحتياطية باستخدام إصدار أحدث من Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "لا تحتوي هذه النسخة الاحتياطية على أي مهام أو مشاريع نشطة.",
         'settings.backupDiagnostics.olderVersion': "أُنشئت هذه النسخة الاحتياطية باستخدام إصدار أقدم من Tiny Bubbles ({{version}}).",

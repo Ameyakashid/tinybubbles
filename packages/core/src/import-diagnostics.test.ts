@@ -5,6 +5,7 @@ import { createImportDiagnostic, formatImportDiagnostic } from './import-diagnos
 describe('import diagnostics', () => {
     it.each([
         ['backup-empty-active-records', 'warning', 'settings.backupDiagnostics.noActiveRecords'],
+        ['backup-ai-endpoint-removed', 'warning', 'settings.backupDiagnostics.aiEndpointRemoved'],
         ['backup-newer-version', 'warning', 'settings.backupDiagnostics.newerVersion'],
         ['backup-older-version', 'warning', 'settings.backupDiagnostics.olderVersion'],
         ['backup-source-size-unknown', 'error', 'settings.backupDiagnostics.unknownSize'],

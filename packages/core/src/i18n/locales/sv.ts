@@ -2329,6 +2329,7 @@ export const svOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Inställningsanteckningar för Dropbox, iCloud, WebDAV, filsynkronisering och återställning.',
         'settings.importSetupGuideTitle': 'Guide för importinställning',
         'settings.importSetupGuideDesc': 'Importvägar som stöds för Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple Påminnelser och säkerhetskopior.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Anpassade AI-slutpunkter togs bort från säkerhetskopian. Ange dem igen i AI-inställningarna.",
         'settings.backupDiagnostics.newerVersion': "Den här säkerhetskopian skapades med en nyare version av Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Den här säkerhetskopian innehåller inga aktiva uppgifter eller projekt.",
         'settings.backupDiagnostics.olderVersion': "Den här säkerhetskopian skapades med en äldre version av Tiny Bubbles ({{version}}).",

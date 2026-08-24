@@ -1467,6 +1467,7 @@ export const plOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Uwagi dotyczące konfiguracji Dropbox, iCloud, WebDAV, synchronizacji plików i odzyskiwania.',
         'settings.importSetupGuideTitle': 'Przewodnik konfiguracji importu',
         'settings.importSetupGuideDesc': 'Obsługiwane ścieżki importu z Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Przypomnień Apple i kopii zapasowych.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Niestandardowe punkty końcowe AI zostały usunięte z tej kopii zapasowej. Wprowadź je ponownie w ustawieniach AI.",
         'settings.backupDiagnostics.newerVersion': "Ta kopia zapasowa została utworzona w nowszej wersji Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Ta kopia zapasowa nie zawiera aktywnych zadań ani projektów.",
         'settings.backupDiagnostics.olderVersion': "Ta kopia zapasowa została utworzona w starszej wersji Tiny Bubbles ({{version}}).",

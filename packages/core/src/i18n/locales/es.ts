@@ -1388,6 +1388,7 @@ export const esOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Notas de configuración para Dropbox, iCloud, WebDAV, sincronización de archivos y recuperación.',
         'settings.importSetupGuideTitle': 'Guía de configuración de importación',
         'settings.importSetupGuideDesc': 'Rutas de importación compatibles para Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Recordatorios de Apple y copias de seguridad.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Los endpoints de IA personalizados se eliminaron de esta copia de seguridad. Vuelve a introducirlos en los ajustes de IA.",
         'settings.backupDiagnostics.newerVersion': "Esta copia de seguridad se creó con una versión más reciente de Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Esta copia de seguridad no contiene tareas ni proyectos activos.",
         'settings.backupDiagnostics.olderVersion': "Esta copia de seguridad se creó con una versión anterior de Tiny Bubbles ({{version}}).",

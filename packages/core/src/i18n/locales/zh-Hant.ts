@@ -2301,6 +2301,7 @@ export const zhHant: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Dropbox、iCloud、WebDAV、檔案同步和還原的設定說明。',
         'settings.importSetupGuideTitle': '匯入設定指南',
         'settings.importSetupGuideDesc': '支援 Todoist、TickTick、DGT GTD、OmniFocus、Tiny Bubbles CSV、Apple 提醒事項和備份匯入路徑。',
+        'settings.backupDiagnostics.aiEndpointRemoved': "已從此備份中移除自訂 AI 端點。請在 AI 設定中重新輸入。",
         'settings.backupDiagnostics.newerVersion': "此備份由較新版本的 Tiny Bubbles（{{version}}）建立。",
         'settings.backupDiagnostics.noActiveRecords': "此備份不包含任何使用中的工作或專案。",
         'settings.backupDiagnostics.olderVersion': "此備份由較舊版本的 Tiny Bubbles（{{version}}）建立。",

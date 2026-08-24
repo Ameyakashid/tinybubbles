@@ -2249,6 +2249,7 @@ export const csOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Poznámky k nastavení Dropboxu, iCloudu, WebDAV, synchronizace souborů a obnovení.',
         'settings.importSetupGuideTitle': 'Průvodce nastavením importu',
         'settings.importSetupGuideDesc': 'Podporované cesty importu pro Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Apple Připomínky a zálohy.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Vlastní koncové body AI byly z této zálohy odstraněny. Zadejte je znovu v nastavení AI.",
         'settings.backupDiagnostics.newerVersion': "Tato záloha byla vytvořena novější verzí Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Tato záloha neobsahuje žádné aktivní úkoly ani projekty.",
         'settings.backupDiagnostics.olderVersion': "Tato záloha byla vytvořena starší verzí Tiny Bubbles ({{version}}).",

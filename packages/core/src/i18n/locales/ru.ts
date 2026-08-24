@@ -1444,6 +1444,7 @@ export const ruOverrides: Record<string, string> = {
         'settings.syncSetupGuideDesc': 'Примечания по настройке Dropbox, iCloud, WebDAV, синхронизации файлов и восстановления.',
         'settings.importSetupGuideTitle': 'Руководство по настройке импорта',
         'settings.importSetupGuideDesc': 'Поддерживаемые способы импорта из Todoist, TickTick, DGT GTD, OmniFocus, Tiny Bubbles CSV, Напоминаний Apple и резервных копий.',
+        'settings.backupDiagnostics.aiEndpointRemoved': "Пользовательские конечные точки ИИ удалены из этой резервной копии. Введите их заново в настройках ИИ.",
         'settings.backupDiagnostics.newerVersion': "Эта резервная копия создана в более новой версии Tiny Bubbles ({{version}}).",
         'settings.backupDiagnostics.noActiveRecords': "Эта резервная копия не содержит активных задач или проектов.",
         'settings.backupDiagnostics.olderVersion': "Эта резервная копия создана в более старой версии Tiny Bubbles ({{version}}).",
