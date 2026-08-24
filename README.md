@@ -29,10 +29,15 @@ device.
 
 > ### ⚠️ Status: early
 >
-> Tiny Bubbles does not yet publish binaries. There is no App Store, Play Store, Flathub,
-> F-Droid, Snap or Microsoft Store listing for it, and no installer to download. To try it
-> you must build from source. The only currently released work is a rebrand of upstream —
-> the features below are inherited from Mindwtr and behave as they do there.
+> Tiny Bubbles is a working Mindwtr fork under active development. It has two directed
+> experiences in the shared desktop/web codebase: a parent flavour selected with
+> `VITE_TINYBUBBLES_FLAVOUR=parent`, and a kid shell whose rebuilt face is currently gated
+> behind `?face=next`. Parent and kid clients can share tasks through `apps/cloud/` using the
+> same self-hosted URL and token. Donetick is not part of the product.
+>
+> The workspace-level `OWNER-PROMPTS.md` is the product and process specification. Under its
+> entry 15, Codex executes implementation work under owner direction; it does not set product
+> direction. Tiny Bubbles does not yet publish binaries, so build it from source.
 
 ---
 
@@ -164,10 +169,10 @@ stdio MCP server is built from source in this repo.
 
 ```bash
 bun install
-bun run dev
+bun run desktop:web
 ```
 
-### Parent (admin) flavour
+**Parent (admin) flavour.**
 
 One codebase ships two apps. Built with `VITE_TINYBUBBLES_FLAVOUR=parent`, the desktop app
 becomes **Tiny Bubbles Parent**: the full UI with a Parent identity that opens on a Family
@@ -185,6 +190,13 @@ VITE_TINYBUBBLES_FLAVOUR=parent bunx vite   # parent web app (dev)
 
 Serving browsers on more than one origin from one sync server: give
 `TINYBUBBLES_CLOUD_CORS_ORIGIN` a comma-separated origin list.
+
+**Kid shell.**
+
+The kid experience uses the same task store and sync engine as the parent flavour. Its
+rebuilt kidface is available at `/?face=next`; the root URL continues to open the stock shell
+while that rebuild remains gated. Start the web app with `bun run desktop:web`, then open the
+`?face=next` URL.
 
 See [`docs/`](docs/) for the inherited build and deployment guides, and
 [`docker/README.md`](docker/README.md) for the Docker setup.
