@@ -14,7 +14,6 @@ import {
     parseAllowedAuthTokens,
     parseTrustedProxyIps,
     resolveAllowedAuthTokensFromEnv,
-    toRateLimitRoute,
     tokenToKey,
 } from './server-auth';
 import {
@@ -64,6 +63,8 @@ import {
     startCloudServer,
     type CloudRequestCompletion,
 } from './server';
+import { withNamespace } from './server-request';
+import { createRateLimiter } from './server-rate-limit';
 
 const expireFileForOrphanGc = (path: string): void => {
     const staleTime = new Date(Date.now() - 10 * 60 * 1000);
@@ -798,12 +799,6 @@ describe('cloud server utils', () => {
             },
         });
         expect(invalidAttempts.ok).toBe(false);
-    });
-
-    test('normalizes rate limit routes for task item endpoints', () => {
-        expect(toRateLimitRoute('/v1/tasks/abc')).toBe('/v1/tasks/:id');
-        expect(toRateLimitRoute('/v1/tasks/abc/complete')).toBe('/v1/tasks/:id/:action');
-        expect(toRateLimitRoute('/v1/tasks')).toBe('/v1/tasks');
     });
 
     test('enforces JSON body size limit without relying on content-length', async () => {
@@ -1713,6 +1708,36 @@ describe('cloud server namespace mode', () => {
         } finally {
             server.stop();
             rmSync(tempDataDir, { recursive: true, force: true });
+        }
+    });
+
+    test('collapses dynamic entity ids into one rate-limit route bucket', async () => {
+        const token = 'rate-cardinality-probe-token-1234567890';
+        for (const entityRoute of ['projects', 'sections', 'areas']) {
+            const rateLimiter = createRateLimiter({ windowMs: 60_000, maxKeys: 100 });
+            const config = {
+                allowedAuthTokens: parseAllowedAuthTokens(token),
+                dataDir: 'unused-for-read-route',
+                maxAnyTokenNamespaces: 0,
+                rateLimiter,
+                maxPerWindow: 2,
+                canonicalCloudRoute,
+                unauthorizedResponse: () => new Response(null, { status: 401 }),
+                initializeNamespace: () => undefined,
+                runWithNamespaceAdmission: async <T>(handler: () => Promise<T>) => handler(),
+            };
+            const statuses: number[] = [];
+            for (const entityId of ['entity-one', 'entity-two', 'entity-three']) {
+                const url = new URL(`http://localhost/v1/${entityRoute}/${entityId}`);
+                const response = await withNamespace(
+                    new Request(url, { headers: { Authorization: `Bearer ${token}` } }),
+                    url,
+                    config,
+                    async () => new Response(null, { status: 404 }),
+                );
+                statuses.push(response?.status ?? 0);
+            }
+            expect(statuses).toEqual([404, 404, 429]);
         }
     });
 });

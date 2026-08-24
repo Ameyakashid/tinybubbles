@@ -4,7 +4,6 @@ import {
     getToken,
     isAuthorizedToken,
     tokenToKey,
-    toRateLimitRoute,
     type AllowedAuthTokens,
 } from './server-auth';
 import { errorResponse } from './server-config';
@@ -36,6 +35,7 @@ export type ServerConfig = {
     maxAnyTokenNamespaces: number;
     rateLimiter: RateLimiter;
     maxPerWindow: number;
+    canonicalCloudRoute: (pathname: string) => string;
     unauthorizedResponse: (req: Request, token?: string | null) => Response;
     /**
      * Reserves a new namespace while admission is locked. Routes that cannot
@@ -98,7 +98,7 @@ export async function withNamespace(
     if (!isAuthorizedToken(token, cfg.allowedAuthTokens)) return cfg.unauthorizedResponse(req, token);
     const key = tokenToKey(token);
     const pathname = normalizeRequestPathname(url);
-    const rateKey = `${key}:${req.method}:${toRateLimitRoute(pathname)}`;
+    const rateKey = `${key}:${req.method}:${cfg.canonicalCloudRoute(pathname)}`;
     const rateLimitResponse = cfg.rateLimiter.check(rateKey, cfg.maxPerWindow);
     if (rateLimitResponse) return rateLimitResponse;
     const guardMethods = cfg.guardMethods ?? defaultGuardMethods;

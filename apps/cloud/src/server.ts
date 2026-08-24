@@ -989,6 +989,7 @@ export async function startCloudServer(options: CloudServerOptions = {}): Promis
         maxAnyTokenNamespaces,
         rateLimiter,
         maxPerWindow,
+        canonicalCloudRoute,
         unauthorizedResponse,
         initializeNamespace: (filePath) => {
             if (!existsSync(filePath)) writeCloudData(filePath, createEmptyCloudData());

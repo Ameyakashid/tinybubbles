@@ -209,16 +209,3 @@ export function isAuthorizedToken(token: string, allowedTokens: AllowedAuthToken
     }
     return authorized;
 }
-
-export function toRateLimitRoute(pathname: string): string {
-    if (/^\/v1\/attachments\/.+/.test(pathname)) {
-        return '/v1/attachments/:path';
-    }
-    if (/^\/v1\/tasks\/[^/]+\/(complete|archive)$/.test(pathname)) {
-        return '/v1/tasks/:id/:action';
-    }
-    if (/^\/v1\/tasks\/[^/]+$/.test(pathname)) {
-        return '/v1/tasks/:id';
-    }
-    return pathname;
-}
