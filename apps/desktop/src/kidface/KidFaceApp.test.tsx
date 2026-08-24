@@ -122,4 +122,20 @@ describe('KidFaceApp', () => {
         expect(screen.getByRole('main', { name: 'Me' })).toHaveFocus();
         expect(screen.getByRole('heading', { name: 'Your settings' })).toBeInTheDocument();
     });
+
+    it('opens Calm Corner from Today and returns to Today on close', () => {
+        mockedUseKidFaceRuntime.mockReturnValue(runtimeStatus());
+
+        renderApp();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Calm Corner' }));
+
+        expect(screen.getByRole('region', { name: 'Calm Corner' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Calm Corner' })).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
+
+        expect(screen.queryByRole('region', { name: 'Calm Corner' })).not.toBeInTheDocument();
+        expect(screen.getByRole('main', { name: 'Today' })).toBeInTheDocument();
+    });
 });

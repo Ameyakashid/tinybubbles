@@ -21,6 +21,7 @@ const renderView = (props: {
     onClose?: () => void;
     onToggleTask?: (task: Task) => void;
     onToggleChecklistItem?: (taskId: string, itemId: string) => void;
+    onOpenCalmCorner?: () => void;
 }) => render(
     <LanguageProvider>
         <CelebrationProvider>
@@ -29,6 +30,7 @@ const renderView = (props: {
                 onClose={props.onClose ?? vi.fn()}
                 onToggleTask={props.onToggleTask ?? vi.fn()}
                 onToggleChecklistItem={props.onToggleChecklistItem ?? vi.fn()}
+                onOpenCalmCorner={props.onOpenCalmCorner}
             />
         </CelebrationProvider>
     </LanguageProvider>
@@ -236,5 +238,20 @@ describe('OpenTaskView', () => {
         const header = screen.getByRole('button', { name: 'Back' }).parentElement;
         expect(header).toHaveClass('min-h-22');
         expect(header).not.toHaveClass('h-16');
+    });
+
+    it('offers Calm Corner from the task sheet when a handler is provided', () => {
+        const onOpenCalmCorner = vi.fn();
+        renderView({ onOpenCalmCorner });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Calm Corner' }));
+
+        expect(onOpenCalmCorner).toHaveBeenCalled();
+    });
+
+    it('does not show the Calm Corner button when no handler is provided', () => {
+        renderView({});
+
+        expect(screen.queryByRole('button', { name: 'Calm Corner' })).not.toBeInTheDocument();
     });
 });

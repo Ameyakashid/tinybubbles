@@ -19,12 +19,13 @@ function buildTask(overrides: Partial<Task> & { id: string; title: string }): Ta
     };
 }
 
-const renderView = (props: { onSeeAllDone?: () => void; onSeeCalendar?: () => void } = {}) => render(
+const renderView = (props: { onSeeAllDone?: () => void; onSeeCalendar?: () => void; onOpenCalmCorner?: () => void } = {}) => render(
     <LanguageProvider>
         <CelebrationProvider>
             <TodayView
                 onSeeAllDone={props.onSeeAllDone ?? vi.fn()}
                 onSeeCalendar={props.onSeeCalendar ?? vi.fn()}
+                onOpenCalmCorner={props.onOpenCalmCorner}
             />
         </CelebrationProvider>
     </LanguageProvider>,
@@ -264,5 +265,34 @@ describe('TodayView', () => {
         });
 
         unmount();
+    });
+
+    it('shows a gentle celebration banner when a milestone is reached', () => {
+        act(() => {
+            useTaskStore.setState({
+                _allTasks: [
+                    buildTask({ id: 'task-1', title: 'Brush teeth', status: 'done', completedAt: new Date().toISOString() }),
+                ],
+            });
+        });
+
+        renderView();
+
+        expect(screen.getByText('You finished your first thing!')).toBeInTheDocument();
+    });
+
+    it('opens Calm Corner when the wind affordance is pressed', () => {
+        const onOpenCalmCorner = vi.fn();
+        renderView({ onOpenCalmCorner });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Calm Corner' }));
+
+        expect(onOpenCalmCorner).toHaveBeenCalled();
+    });
+
+    it('does not show the Calm Corner affordance when no handler is provided', () => {
+        renderView();
+
+        expect(screen.queryByRole('button', { name: 'Calm Corner' })).not.toBeInTheDocument();
     });
 });

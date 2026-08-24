@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
-import { Trophy, RotateCcw, Sparkles } from 'lucide-react';
+import { Trophy, RotateCcw, Sparkles, PartyPopper } from 'lucide-react';
 import { useTaskStore, type Task, type Language } from '@tinybubbles/core';
 import { AmbientField } from './AmbientField';
 import { Pebble } from './Pebble';
 import { cn } from '@/lib/utils';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
+import { useKidFaceCelebrations } from '../useKidFaceCelebrations';
 
 function isSameDay(a: string, b: Date): boolean {
     const date = new Date(a);
@@ -116,6 +117,8 @@ export function DoneView() {
     const updateTask = useTaskStore((state) => state.updateTask);
 
     const groups = useMemo(() => groupDoneTasks(tasks), [tasks]);
+    const { items: celebrations } = useKidFaceCelebrations();
+    const celebration = celebrations[0];
 
     const handleUndo = async (task: Task) => {
         await updateTask(task.id, { status: 'next', completedAt: undefined });
@@ -179,6 +182,16 @@ export function DoneView() {
                         <span className="text-lg font-bold text-foreground">{todaySummary}</span>
                         <span className="text-sm text-muted-foreground">{totalSummary}</span>
                     </div>
+                </div>
+            )}
+
+            {celebration && (
+                <div
+                    className="flex min-h-22 items-center gap-3 rounded-2xl bg-primary/10 px-4 py-3 kidface-slide-up"
+                    aria-live="polite"
+                >
+                    <PartyPopper className="size-6 shrink-0 text-primary" strokeWidth={2.5} aria-hidden="true" />
+                    <span className="text-base font-semibold text-foreground">{celebration}</span>
                 </div>
             )}
 

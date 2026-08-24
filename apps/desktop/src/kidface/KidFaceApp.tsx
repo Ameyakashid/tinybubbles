@@ -17,6 +17,7 @@ import { DoneView } from './components/DoneView';
 import { CalendarView } from './components/CalendarView';
 import { SettingsView } from './components/SettingsView';
 import { MotionPlayground } from './components/MotionPlayground';
+import { CalmCornerView } from './components/CalmCornerView';
 import { KidNav, type KidRoom } from './components/KidNav';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
@@ -47,6 +48,7 @@ export function KidFaceApp() {
     const resolvedLastSyncError = forceOffline ? 'forced offline' : lastSyncError;
     const [activeRoom, setActiveRoom] = useState<KidRoom>('today');
     const [roomDirection, setRoomDirection] = useState<'left' | 'right'>('right');
+    const [isCalmCornerOpen, setIsCalmCornerOpen] = useState(false);
     const mainRef = useRef<HTMLElement>(null);
     const activeRoomRef = useRef<KidRoom>(activeRoom);
 
@@ -63,6 +65,9 @@ export function KidFaceApp() {
         setRoomDirection(nextIndex > currentIndex ? 'right' : 'left');
         setActiveRoom(room);
     };
+
+    const openCalmCorner = () => setIsCalmCornerOpen(true);
+    const closeCalmCorner = () => setIsCalmCornerOpen(false);
 
     useEffect(() => {
         mainRef.current?.focus({ preventScroll: true });
@@ -116,6 +121,7 @@ export function KidFaceApp() {
                                     <TodayView
                                         onSeeAllDone={() => changeRoom('done')}
                                         onSeeCalendar={() => changeRoom('calendar')}
+                                        onOpenCalmCorner={openCalmCorner}
                                     />
                                 )}
                                 {activeRoom === 'add' && <AddView />}
@@ -126,6 +132,7 @@ export function KidFaceApp() {
                             <KidNav activeRoom={activeRoom} onChangeRoom={changeRoom} />
                         </>
                     )}
+                    {isCalmCornerOpen && <CalmCornerView onClose={closeCalmCorner} />}
                 </main>
             </KidLayout>
         </CelebrationProvider>

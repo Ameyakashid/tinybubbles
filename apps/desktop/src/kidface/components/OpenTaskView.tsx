@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowLeft, Star, Check, X } from 'lucide-react';
+import { ArrowLeft, Star, Check, X, Wind } from 'lucide-react';
 import { useTaskStore, type Task, generateUUID } from '@tinybubbles/core';
 import { BubbleCheckbox } from './BubbleCheckbox';
 import { useCelebration } from './CelebrationContext';
@@ -13,13 +13,14 @@ interface OpenTaskViewProps {
     onClose: () => void;
     onToggleTask: (task: Task) => void | Promise<void>;
     onToggleChecklistItem: (taskId: string, itemId: string) => void | Promise<void>;
+    onOpenCalmCorner?: () => void;
 }
 
 function isTaskFinished(task: Task): boolean {
     return task.status === 'done' || task.status === 'archived';
 }
 
-export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistItem }: OpenTaskViewProps) {
+export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistItem, onOpenCalmCorner }: OpenTaskViewProps) {
     const { t, language } = useLanguage();
     const celebrate = useCelebration();
 
@@ -38,6 +39,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const addStepAction = displayLabel(t, language, 'kidface.task.addStepAction', 'Add step');
     const deleteStepLabel = displayLabel(t, language, 'kidface.task.deleteStepLabel', 'Remove {title}');
     const titleLabel = displayLabel(t, language, 'kidface.task.titleLabel', 'Task title');
+    const calmCornerLabel = displayLabel(t, language, 'calmCorner.title', 'Calm Corner');
     const checklistEmpty = displayLabel(t, language, 'kidface.task.checklistEmpty', 'Nothing to check off — just do it.');
     const markDoneLabel = displayLabel(t, language, 'kidface.task.markDone', 'Mark {title} as done').replace('{title}', task.title);
     const markNotDoneLabel = displayLabel(t, language, 'kidface.task.markNotDone', 'Mark {title} as not done').replace('{title}', task.title);
@@ -117,7 +119,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
             overlayClassName="bg-background"
             panelClassName="fixed inset-0 max-h-none max-w-none rounded-none border-none shadow-none kidface-sheet-enter"
         >
-            <DialogHeader className="flex min-h-22 shrink-0 items-center px-3">
+            <DialogHeader className="flex min-h-22 shrink-0 items-center justify-between px-3">
                 <button
                     type="button"
                     onClick={onClose}
@@ -126,6 +128,16 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                 >
                     <ArrowLeft className="size-8" strokeWidth={2.5} />
                 </button>
+                {onOpenCalmCorner && (
+                    <button
+                        type="button"
+                        onClick={onOpenCalmCorner}
+                        className="flex size-14 items-center justify-center rounded-full bg-card text-primary shadow-sm active:scale-90"
+                        aria-label={calmCornerLabel}
+                    >
+                        <Wind className="size-7" strokeWidth={2.5} aria-hidden="true" />
+                    </button>
+                )}
             </DialogHeader>
 
             <DialogBody className="flex flex-1 flex-col gap-6 overflow-y-auto px-5 pb-8 pt-2">

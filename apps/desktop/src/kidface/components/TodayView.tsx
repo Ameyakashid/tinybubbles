@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RotateCcw, ChevronRight } from 'lucide-react';
+import { RotateCcw, ChevronRight, Wind, Sparkles } from 'lucide-react';
 import { useTaskStore, type Task } from '@tinybubbles/core';
 import { TaskBubbleRow } from './TaskBubbleRow';
 import { OpenTaskView } from './OpenTaskView';
@@ -8,6 +8,7 @@ import { Pebble } from './Pebble';
 import { selectTodayTasks } from './today-task-filter';
 import { displayLabel } from '@/lib/display-labels';
 import { useLanguage } from '@/contexts/language-context';
+import { useKidFaceCelebrations } from '../useKidFaceCelebrations';
 import { cn } from '@/lib/utils';
 
 const RECENT_DONE_LIMIT = 3;
@@ -32,9 +33,10 @@ function greetingKeyForHour(hour: number): string {
 interface TodayViewProps {
     onSeeAllDone: () => void;
     onSeeCalendar: () => void;
+    onOpenCalmCorner?: () => void;
 }
 
-export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
+export function TodayView({ onSeeAllDone, onSeeCalendar, onOpenCalmCorner }: TodayViewProps) {
     const { t, language } = useLanguage();
     const tasks = useTaskStore((state) => state.tasks);
     const updateTask = useTaskStore((state) => state.updateTask);
@@ -70,6 +72,9 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
         () => tasks.find((task) => task.id === openTaskId) ?? null,
         [tasks, openTaskId],
     );
+
+    const { items: celebrations } = useKidFaceCelebrations();
+    const celebration = celebrations[0];
 
     const clearJustCompletedTimeout = (taskId: string) => {
         const id = justCompletedTimeoutsRef.current.get(taskId);
@@ -140,6 +145,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
     );
     const seeAllDoneTemplate = displayLabel(t, language, 'kidface.today.seeAllDone', 'See all {count} done');
     const undoTaskLabelTemplate = displayLabel(t, language, 'kidface.today.undo.label', 'Undo {title}');
+    const calmCornerLabel = displayLabel(t, language, 'calmCorner.title', 'Calm Corner');
 
     const headerSubtitle = (() => {
         if (openTasks.length > 0) {
@@ -163,18 +169,39 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
 
     return (
         <div className="flex h-full flex-col gap-6 px-5 pb-8 pt-6">
-            <header className="flex flex-col gap-1">
-                <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                    {toDoLabel}
-                </p>
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-                    {greeting}
-                </h1>
-                <p className="text-lg text-muted-foreground">{headerSubtitle}</p>
+            <header className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                    <p className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                        {toDoLabel}
+                    </p>
+                    <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+                        {greeting}
+                    </h1>
+                    <p className="text-lg text-muted-foreground">{headerSubtitle}</p>
+                </div>
+                {onOpenCalmCorner && (
+                    <button
+                        type="button"
+                        onClick={onOpenCalmCorner}
+                        className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-primary shadow-sm active:scale-90"
+                        aria-label={calmCornerLabel}
+                    >
+                        <Wind className="size-7" strokeWidth={2.5} aria-hidden="true" />
+                    </button>
+                )}
             </header>
 
             <section className="flex min-h-0 flex-1 flex-col gap-3">
                 <h2 className="sr-only">{toDoLabel}</h2>
+                {celebration && (
+                    <div
+                        className="flex min-h-22 items-center gap-3 rounded-2xl bg-success/10 px-4 py-3 kidface-slide-up"
+                        aria-live="polite"
+                    >
+                        <Sparkles className="size-6 shrink-0 text-success" strokeWidth={2.5} aria-hidden="true" />
+                        <span className="text-base font-semibold text-success">{celebration}</span>
+                    </div>
+                )}
                 {recentlyCompletedTask && (
                     <div
                         className="flex items-center justify-between gap-3 rounded-2xl bg-success/10 p-4 kidface-joy-bounce"
@@ -291,6 +318,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar }: TodayViewProps) {
                     onClose={() => setOpenTaskId(null)}
                     onToggleTask={handleToggle}
                     onToggleChecklistItem={handleToggleChecklistItem}
+                    onOpenCalmCorner={onOpenCalmCorner}
                 />
             )}
         </div>
