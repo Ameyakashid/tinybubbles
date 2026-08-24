@@ -198,6 +198,14 @@ describe('KeybindingProvider (vim)', () => {
     it('triggers quick add with Ctrl+Alt+M', () => {
         const quickAddListener = vi.fn();
         window.addEventListener('tinybubbles:quick-add', quickAddListener);
+        // Windows intentionally defaults the OS-level shortcut to disabled.
+        // This test exercises the explicitly enabled binding on every host.
+        useTaskStore.setState((state) => ({
+            settings: {
+                ...state.settings,
+                globalQuickAddShortcut: 'Control+Alt+M',
+            },
+        }));
 
         render(
             <LanguageProvider>

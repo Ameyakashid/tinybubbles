@@ -137,7 +137,8 @@ let coreImporters: Set<string> | null = null;
 const filesImportingCore = (): Set<string> => (coreImporters ??= new Set(
     collectSourcePaths()
         .filter((path) => readFileSync(path, 'utf8').includes(CORE_MODULE_SPECIFIER))
-        .map((path) => relative(DESKTOP_SRC, path)),
+        // Keep the ratchet's repo-relative keys stable on Windows too.
+        .map((path) => relative(DESKTOP_SRC, path).replace(/\\/g, '/')),
 ));
 
 describe('tauri invoke seam ratchet', () => {

@@ -82,6 +82,15 @@ Buckets, rows and the sync line are Fable's; the paint is:
 - **Sync strip** — a pill: status dot (kelp connected / amber not connected /
   ember error, `role="alert"` when broken), the sync line, and the CTA as a
   small solid pill. The CTA remains the parent flavour's only onboarding.
+- **Resolved sync conflicts stay amber.** A later successful sync does not paint
+  recorded loss as healthy: conflict history keeps the strip in the "needs a
+  look" register and opens an evidence card. Each retained ID is paired with
+  its task title when the store still has one, the losing side's timestamp when
+  the latest conflict sample has it, and a plain account of the fields involved.
+  The merge record currently stores hashes and field names rather than either
+  discarded task body, so the card says that plainly and offers no pretend
+  restore action. A restore control belongs here only if a future record carries
+  the discarded task values needed for an ordinary store update.
 - **Finished feed rows** — `FamilyCompletedRow`, not the stock read-only task
   row: a settled kelp check-bubble, the title readable (not struck through —
   done here means *accomplished*, not cancelled), the project name, and the

@@ -17,6 +17,7 @@ import {
     DONE_LOOKBACK_DAYS,
     UPCOMING_WINDOW_DAYS,
 } from '../../lib/family-dashboard-buckets';
+import { buildFamilyConflictSummary } from '../../lib/family-dashboard-conflicts';
 import { StoreTaskItem } from './list/StoreTaskItem';
 
 /**
@@ -200,15 +201,28 @@ export function FamilyDashboardView({ onOpenSyncSettings }: { onOpenSyncSettings
     const lastSyncAt = useTaskStore((state) => state.settings?.lastSyncAt);
     const lastSyncStatus = useTaskStore((state) => state.settings?.lastSyncStatus);
     const lastSyncError = useTaskStore((state) => state.settings?.lastSyncError);
+    const lastSyncStats = useTaskStore((state) => state.settings?.lastSyncStats);
+    const lastSyncHistory = useTaskStore((state) => state.settings?.lastSyncHistory);
+    const allTasks = useTaskStore((state) => state._allTasks);
 
     const buckets = useMemo(() => {
         const projectMap = new Map(projects.map((project) => [project.id, project]));
         return buildFamilyDashboardBuckets(tasks, projectMap, new Date());
     }, [tasks, projects]);
 
+    const conflictSummary = useMemo(() => buildFamilyConflictSummary({
+        lastSyncAt,
+        lastSyncStatus,
+        lastSyncStats,
+        lastSyncHistory,
+    }, allTasks), [allTasks, lastSyncAt, lastSyncHistory, lastSyncStats, lastSyncStatus]);
+
     const isSyncError = lastSyncStatus === 'error';
+    const needsConflictReview = conflictSummary.notices.length > 0 || conflictSummary.undisclosedCount > 0;
     const syncLine = isSyncError
         ? `${tFallback(t, 'familyDashboard.syncProblem', 'Sync problem')}: ${lastSyncError ?? ''}`
+        : needsConflictReview
+            ? tFallback(t, 'familyDashboard.syncNeedsReview', 'Sync needs a look — some changes were resolved automatically.')
         : lastSyncAt
             ? `${tFallback(t, 'familyDashboard.lastSync', 'Last sync')}: ${safeFormatDate(lastSyncAt, 'Pp', lastSyncAt)}`
             : tFallback(
@@ -272,6 +286,8 @@ export function FamilyDashboardView({ onOpenSyncSettings }: { onOpenSyncSettings
                             'flex w-fit max-w-full flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-2xl border py-1.5 pl-3.5 pr-1.5 text-[13px] sm:rounded-full',
                             isSyncError
                                 ? 'border-destructive/40 bg-destructive/5 text-destructive'
+                                : needsConflictReview
+                                    ? 'border-warning/50 bg-warning/[0.06] text-warning'
                                 : 'border-border/70 bg-card text-muted-foreground',
                         )}
                         role={isSyncError ? 'alert' : undefined}
@@ -280,13 +296,15 @@ export function FamilyDashboardView({ onOpenSyncSettings }: { onOpenSyncSettings
                             <span
                                 className={cn(
                                     'h-2 w-2 shrink-0 rounded-full',
-                                    isSyncError ? 'bg-destructive' : lastSyncAt ? 'bg-success' : 'bg-warning',
+                                    isSyncError || needsConflictReview
+                                        ? isSyncError ? 'bg-destructive' : 'bg-warning'
+                                        : lastSyncAt ? 'bg-success' : 'bg-warning',
                                 )}
                                 aria-hidden="true"
                             />
                             <span className="min-w-0">{syncLine}</span>
                         </span>
-                        {onOpenSyncSettings && (isSyncError || !lastSyncAt) && (
+                        {onOpenSyncSettings && (isSyncError || needsConflictReview || !lastSyncAt) && (
                             <button
                                 type="button"
                                 onClick={onOpenSyncSettings}
@@ -294,11 +312,57 @@ export function FamilyDashboardView({ onOpenSyncSettings }: { onOpenSyncSettings
                             >
                                 {isSyncError
                                     ? tFallback(t, 'familyDashboard.fixSync', 'Check sync settings')
+                                    : needsConflictReview
+                                        ? tFallback(t, 'familyDashboard.reviewConflicts', 'Review sync details')
                                     : tFallback(t, 'familyDashboard.connectNow', 'Connect now')}
                             </button>
                         )}
                     </div>
                 </header>
+
+                {needsConflictReview && (
+                    <section
+                        aria-labelledby="family-conflicts-title"
+                        className="overflow-hidden rounded-2xl border border-warning/50 bg-warning/[0.04]"
+                    >
+                        <header className="flex items-start gap-3 border-b border-warning/25 px-4 py-3.5">
+                            <span className="mt-0.5 rounded-full bg-warning/15 p-2 text-warning" aria-hidden="true">
+                                <AlertTriangle className="h-4 w-4" />
+                            </span>
+                            <div className="min-w-0">
+                                <h3 id="family-conflicts-title" className="text-sm font-semibold text-warning">
+                                    {tFallback(t, 'familyDashboard.conflictsTitle', 'Changes that need a look')}
+                                </h3>
+                                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                                    {tFallback(
+                                        t,
+                                        'familyDashboard.conflictsIntro',
+                                        'Two devices changed the same item. Tiny Bubbles kept one version; here is the recovery evidence the sync record retained.',
+                                    )}
+                                </p>
+                            </div>
+                        </header>
+                        <div className="divide-y divide-warning/20">
+                            {conflictSummary.notices.map((notice) => (
+                                <article key={notice.key} className="space-y-1 px-4 py-3">
+                                    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                        <h4 className="text-sm font-medium text-foreground">{notice.title}</h4>
+                                        <time className="text-xs tabular-nums text-muted-foreground" dateTime={notice.at}>
+                                            {safeFormatDate(notice.at, 'PPp', notice.at)}
+                                        </time>
+                                    </div>
+                                    <p className="text-xs leading-relaxed text-muted-foreground">{notice.detail}</p>
+                                </article>
+                            ))}
+                            {conflictSummary.undisclosedCount > 0 && (
+                                <p className="px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                                    {conflictSummary.undisclosedCount} additional {conflictSummary.undisclosedCount === 1 ? 'conflict was' : 'conflicts were'} recorded,
+                                    but the engine did not retain {conflictSummary.undisclosedCount === 1 ? 'its' : 'their'} item IDs or discarded contents.
+                                </p>
+                            )}
+                        </div>
+                    </section>
+                )}
 
                 <div
                     className="grid grid-cols-1 gap-3 sm:grid-cols-3"
