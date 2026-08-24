@@ -478,14 +478,17 @@ export class SqliteAdapter {
         await this.ensurePeopleTable();
         await this.ensureSavedFilterTable();
         if (this.client.exec) {
-            await this.client.exec(SQLITE_FTS_SCHEMA);
             await this.client.exec(SQLITE_INDEX_SCHEMA);
         } else {
-            await this.client.run(SQLITE_FTS_SCHEMA);
             await this.client.run(SQLITE_INDEX_SCHEMA);
         }
         // FTS operations are optional - don't block startup if they fail
         try {
+            if (this.client.exec) {
+                await this.client.exec(SQLITE_FTS_SCHEMA);
+            } else {
+                await this.client.run(SQLITE_FTS_SCHEMA);
+            }
             const schemaChanged = await this.ensureFtsSchema();
             const triggersChanged = await this.ensureFtsTriggers(schemaChanged);
             await this.ensureFtsPopulated(schemaChanged || triggersChanged);

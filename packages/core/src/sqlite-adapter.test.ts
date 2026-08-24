@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 import { SqliteAdapter, type SqliteClient } from './sqlite-adapter';
+import { computeGlobalSearchResults } from './global-search-filter';
 import { consoleLogger, setLogger, type LogPayload } from './logger';
 import { SQLITE_BASE_SCHEMA, SQLITE_FTS_SCHEMA } from './sqlite-schema';
 import type { AppData } from './types';
@@ -115,6 +116,59 @@ describeSqlite('SqliteAdapter', () => {
 
     afterEach(() => {
         db.close();
+    });
+
+    it('keeps SQLite usable and falls back to JavaScript search when FTS5 is unavailable', async () => {
+        const client = createClient(db);
+        const exec = client.exec;
+        if (!exec) throw new Error('Expected test SQLite client to support exec');
+        client.exec = async (sql: string) => {
+            if (sql === SQLITE_FTS_SCHEMA) {
+                throw new Error('no such module: fts5');
+            }
+            await exec(sql);
+        };
+        adapter = new SqliteAdapter(client);
+
+        await expect(adapter.ensureSchema()).resolves.toBeUndefined();
+
+        const now = new Date().toISOString();
+        await adapter.saveTask({
+            id: 'task-without-fts',
+            title: 'Reachable without FTS',
+            status: 'next',
+            contexts: [],
+            tags: [],
+            createdAt: now,
+            updatedAt: now,
+        });
+        const data = await adapter.getData();
+        expect(data.tasks.map((task) => task.id)).toContain('task-without-fts');
+
+        const ftsResults = await adapter.searchAll('reachable');
+        expect(ftsResults).toEqual({ tasks: [], projects: [] });
+
+        const results = computeGlobalSearchResults({
+            query: 'reachable',
+            tasks: data.tasks,
+            projects: data.projects,
+            areas: data.areas,
+            includeCompleted: false,
+            includeReference: true,
+            hideFutureTasks: false,
+            selectedStatuses: [],
+            selectedArea: 'all',
+            selectedTokens: [],
+            duePreset: 'any',
+            scope: 'all',
+            ftsResults,
+        });
+        expect(results.results).toEqual([
+            expect.objectContaining({
+                type: 'task',
+                item: expect.objectContaining({ id: 'task-without-fts' }),
+            }),
+        ]);
     });
 
     it('round-trips tasks, projects, areas, people, and settings', async () => {
