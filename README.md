@@ -13,6 +13,42 @@ device.
 
 ---
 
+## For agents: how this repository is shaped
+
+Read this before touching anything.
+
+**One repository, two applications, two branches:**
+
+| Branch | Application | Checkout on the build machine |
+|---|---|---|
+| `main` | **Parent app** — full Mindwtr surface + Family dashboard (flavour flag `VITE_TINYBUBBLES_FLAVOUR=parent`) | `tinybubbles-parent/` (a git worktree of the same repo) |
+| `kids/shell` | **Child app** — simplified shell, plus the ground-up kid face at `apps/desktop/src/kidface/` (reached at `/?face=next`; `/` serves the stock shell until the owner flips) | `tinybubbles/` |
+
+Both branches share one engine: `packages/core`. **The engine is frozen.**
+Every authorized change to it is recorded in
+`../fable-workspace/ENGINE-CHANGES.md` (on the build machine) with
+justification; if you think you need an engine change, stop and ask.
+
+**The governing documents, in authority order:**
+1. `OWNER-PROMPTS.md` (project root, build machine) — the owner's directives
+   verbatim. The specification. Later entries supersede earlier ones.
+2. `PLAN.md` (project root) — what is being built and what was rejected.
+3. `apps/desktop/KID-FACE-CONTRACT.md` (kids/shell) — the kid face's rules,
+   runtime contract, and per-pass verification floor.
+4. `apps/desktop/src/kidface/DESIGN.md` (kids/shell) and
+   `apps/desktop/DESIGN.md` (both) — design records. Append, never rewrite.
+
+**Sync:** both apps are clients of `apps/cloud` (token-namespaced document
+sync). A task made in the parent app reaches the child app and back. Parent
+control is currently cooperative, not enforced (audit 007) — do not claim
+otherwise in anything you build or write.
+
+**House rules that bind every agent here:** small committed steps; green is
+a property of the commit, not the working tree; a "live look" means a
+rendered page you actually saw, not an HTTP 200; report the observable, not
+the inference; never report an action as done that you did not watch
+succeed; stopping to ask is a completed unit of work.
+
 > ### 🫧 This is a fork
 >
 > Tiny Bubbles is a modified version of **[Mindwtr](https://github.com/dongdongbh/Mindwtr)**
