@@ -53,4 +53,16 @@ describe('BubbleCheckbox', () => {
 
         expect(screen.getByRole('checkbox')).not.toHaveClass('kidface-celebrate');
     });
+
+    it('shows a soft bubble hint when unchecked', () => {
+        renderCheckbox();
+
+        expect(screen.getByTestId('bubble-hint')).toBeInTheDocument();
+    });
+
+    it('hides the bubble hint when checked', () => {
+        renderCheckbox({ checked: true });
+
+        expect(screen.queryByTestId('bubble-hint')).not.toBeInTheDocument();
+    });
 });

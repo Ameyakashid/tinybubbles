@@ -138,6 +138,7 @@ const EN_OVERRIDES: Record<string, string> = {
     'kidface.done.undo.label': 'Put {title} back on the list',
     // Calm Corner — quiet room for big feelings.
     'calmCorner.title': 'Calm Corner',
+    'calmCorner.button': 'Calm',
     'calmCorner.hint': 'Pick the one that feels closest.',
     'calmCorner.feelingOverwhelmed': 'Overwhelmed',
     'calmCorner.feelingFrustrated': 'Frustrated',

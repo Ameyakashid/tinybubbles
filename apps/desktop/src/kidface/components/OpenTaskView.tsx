@@ -40,6 +40,7 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
     const deleteStepLabel = displayLabel(t, language, 'kidface.task.deleteStepLabel', 'Remove {title}');
     const titleLabel = displayLabel(t, language, 'kidface.task.titleLabel', 'Task title');
     const calmCornerLabel = displayLabel(t, language, 'calmCorner.title', 'Calm Corner');
+    const calmCornerButtonLabel = displayLabel(t, language, 'calmCorner.button', 'Calm');
     const checklistEmpty = displayLabel(t, language, 'kidface.task.checklistEmpty', 'Nothing to check off — just do it.');
     const markDoneLabel = displayLabel(t, language, 'kidface.task.markDone', 'Mark {title} as done').replace('{title}', task.title);
     const markNotDoneLabel = displayLabel(t, language, 'kidface.task.markNotDone', 'Mark {title} as not done').replace('{title}', task.title);
@@ -132,10 +133,11 @@ export function OpenTaskView({ task, onClose, onToggleTask, onToggleChecklistIte
                     <button
                         type="button"
                         onClick={onOpenCalmCorner}
-                        className="flex size-14 items-center justify-center rounded-full bg-card text-primary shadow-sm active:scale-90"
+                        className="flex min-h-22 items-center gap-2 rounded-full bg-card px-5 text-primary shadow-sm active:scale-90"
                         aria-label={calmCornerLabel}
                     >
                         <Wind className="size-7" strokeWidth={2.5} aria-hidden="true" />
+                        <span className="text-sm font-bold">{calmCornerButtonLabel}</span>
                     </button>
                 )}
             </DialogHeader>

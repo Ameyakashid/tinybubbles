@@ -244,7 +244,9 @@ describe('OpenTaskView', () => {
         const onOpenCalmCorner = vi.fn();
         renderView({ onOpenCalmCorner });
 
-        fireEvent.click(screen.getByRole('button', { name: 'Calm Corner' }));
+        const calmButton = screen.getByRole('button', { name: 'Calm Corner' });
+        expect(calmButton).toHaveClass('min-h-22');
+        fireEvent.click(calmButton);
 
         expect(onOpenCalmCorner).toHaveBeenCalled();
     });

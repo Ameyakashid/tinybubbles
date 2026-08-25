@@ -146,6 +146,7 @@ export function TodayView({ onSeeAllDone, onSeeCalendar, onOpenCalmCorner }: Tod
     const seeAllDoneTemplate = displayLabel(t, language, 'kidface.today.seeAllDone', 'See all {count} done');
     const undoTaskLabelTemplate = displayLabel(t, language, 'kidface.today.undo.label', 'Undo {title}');
     const calmCornerLabel = displayLabel(t, language, 'calmCorner.title', 'Calm Corner');
+    const calmCornerButtonLabel = displayLabel(t, language, 'calmCorner.button', 'Calm');
 
     const headerSubtitle = (() => {
         if (openTasks.length > 0) {
@@ -183,10 +184,11 @@ export function TodayView({ onSeeAllDone, onSeeCalendar, onOpenCalmCorner }: Tod
                     <button
                         type="button"
                         onClick={onOpenCalmCorner}
-                        className="flex size-14 shrink-0 items-center justify-center rounded-full bg-card text-primary shadow-sm active:scale-90"
+                        className="flex min-h-22 shrink-0 items-center gap-2 self-center rounded-full bg-card px-5 text-primary shadow-sm active:scale-90"
                         aria-label={calmCornerLabel}
                     >
                         <Wind className="size-7" strokeWidth={2.5} aria-hidden="true" />
+                        <span className="text-sm font-bold">{calmCornerButtonLabel}</span>
                     </button>
                 )}
             </header>

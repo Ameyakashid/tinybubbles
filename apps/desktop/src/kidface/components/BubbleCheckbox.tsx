@@ -67,6 +67,17 @@ export const BubbleCheckbox = forwardRef<HTMLButtonElement, BubbleCheckboxProps>
                 </span>
             )}
 
+            {/* Soft bubble hint inside the empty circle so the unchecked state
+                still reads as a bubble waiting to be popped, not a missing icon. */}
+            {!checked && (
+                <span
+                    className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center"
+                    aria-hidden="true"
+                >
+                    <span data-testid="bubble-hint" className="size-4 rounded-full bg-muted-foreground/40" />
+                </span>
+            )}
+
             <Check
                 className={cn(
                     'relative z-10 size-10 transition-transform duration-200',
